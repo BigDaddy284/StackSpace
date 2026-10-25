@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
 
 import '../ai/chat_controller.dart';
@@ -6,6 +8,7 @@ import '../ai/workspace_tools.dart';
 import '../app/settings.dart';
 import '../app/theme.dart';
 import '../editor/page_editor_controller.dart';
+import '../import/appflowy_import.dart';
 import '../workspace/workspace.dart';
 import 'chat/chat_dock.dart';
 import 'dialogs.dart';
@@ -112,6 +115,47 @@ class _HomePageState extends State<HomePage> {
       _workspace.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _importAppFlowy({required bool folder}) async {
+    final String? source;
+    if (folder) {
+      source = await getDirectoryPath(confirmButtonText: 'Import');
+    } else {
+      final file = await openFile(acceptedTypeGroups: const [
+        XTypeGroup(label: 'AppFlowy export', extensions: ['zip']),
+      ]);
+      source = file?.path;
+    }
+    if (source == null || !mounted) return;
+    try {
+      final result = (await AppFlowyImporter.fromPath(source)).convert();
+      final name = p.basenameWithoutExtension(source).replaceAll(RegExp(r'_\d{4}-\d{2}-\d{2}_[\d-]+$'), '');
+      final target = await AppFlowyImporter.writeInto(_workspace, name.isEmpty ? 'AppFlowy import' : name, result);
+      await _editor.open(p.posix.join(target, result.pages.first.path));
+      if (!mounted) return;
+      final pages = '${result.pages.length} page${result.pages.length == 1 ? '' : 's'}';
+      if (result.warnings.isEmpty) {
+        showError(context, 'Imported $pages into "$target".');
+      } else {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Imported $pages into "$target"'),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                  child: Text('Some things need a look:\n\n${result.warnings.map((w) => '• $w').join('\n')}')),
+            ),
+            actions: [SsButton(label: 'OK', primary: true, onPressed: () => Navigator.pop(context))],
+          ),
+        );
+      }
+    } on FormatException catch (e) {
+      if (mounted) showError(context, e.message);
+    } on Exception catch (e) {
+      if (mounted) showError(context, 'Could not import: $e');
+    }
   }
 
   void _cycleTheme() {
@@ -237,16 +281,23 @@ class _HomePageState extends State<HomePage> {
           item('New folder', () => _sidebarKey.currentState?.newFolder(), icon: Icons.create_new_folder_outlined),
           item('Save', path == null ? null : _editor.flush, icon: Icons.save_outlined, shortcut: 'Ctrl+S'),
           const Divider(height: 8),
+          item('Import AppFlowy export (.zip)...', () => _importAppFlowy(folder: false), icon: Icons.archive_outlined),
+          item('Import AppFlowy export folder...', () => _importAppFlowy(folder: true),
+              icon: Icons.drive_folder_upload_outlined),
+          const Divider(height: 8),
           item('Settings...', _openSettings, icon: Icons.settings_outlined),
         ], style: barItem, child: const Text('File')),
         SubmenuButton(menuChildren: [
-          item('Rename page', path == null || _sidebarKey.currentState == null ? null : () => _sidebarKey.currentState!.rename(path),
+          item('Rename page',
+              path == null || _sidebarKey.currentState == null ? null : () => _sidebarKey.currentState!.rename(path),
               icon: Icons.drive_file_rename_outline, shortcut: 'F2'),
-          item('Delete page', path == null || _sidebarKey.currentState == null ? null : () => _sidebarKey.currentState!.delete(path),
+          item('Delete page',
+              path == null || _sidebarKey.currentState == null ? null : () => _sidebarKey.currentState!.delete(path),
               icon: Icons.delete_outline, shortcut: 'Del'),
         ], style: barItem, child: const Text('Edit')),
         SubmenuButton(menuChildren: [
-          item(_showSidebar ? 'Hide pages panel' : 'Show pages panel', () => setState(() => _showSidebar = !_showSidebar),
+          item(_showSidebar ? 'Hide pages panel' : 'Show pages panel',
+              () => setState(() => _showSidebar = !_showSidebar),
               icon: Icons.view_sidebar_outlined),
           item(_dock == DockMode.closed ? 'Show assistant' : 'Hide assistant', _toggleDock,
               icon: Icons.auto_awesome_outlined, shortcut: 'Ctrl+J'),
@@ -290,7 +341,8 @@ class _HomePageState extends State<HomePage> {
               width: 40,
               onPressed: _cycleTheme,
             ),
-            SsButton(compact: true, icon: Icons.settings_outlined, tooltip: 'Settings', width: 40, onPressed: _openSettings),
+            SsButton(
+                compact: true, icon: Icons.settings_outlined, tooltip: 'Settings', width: 40, onPressed: _openSettings),
           ]),
           ModePill(cells: [
             ModeCell(
@@ -317,7 +369,8 @@ class _HomePageState extends State<HomePage> {
     final path = _editor.path;
     final (line, column) = _editor.cursor;
     final sub = TextStyle(color: p.subText, fontSize: StackType.button);
-    Widget divider() => Container(width: 1, height: 18, margin: const EdgeInsets.symmetric(horizontal: 14), color: p.barBorder);
+    Widget divider() =>
+        Container(width: 1, height: 18, margin: const EdgeInsets.symmetric(horizontal: 14), color: p.barBorder);
     final status = switch (_chat.status) {
       OllamaStatus.connected => 'Ollama: ${_chat.model ?? 'no model'}',
       OllamaStatus.connecting => 'Ollama: connecting...',
