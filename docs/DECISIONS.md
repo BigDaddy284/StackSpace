@@ -263,6 +263,17 @@ an unedited table writes back exactly as read. Copying pictures in keeps a works
 and portable, which is what the AppFlowy export did too.
 **Status**: Done; `test/table_image_test.dart`.
 
+### Folding is view state, not a file format (Task 11)
+**Decision**: A heading folds the blocks up to the next heading of the same or a higher level. The
+folded state lives in the editor for the open page and is never written to the file; there is no
+`<details>` HTML or marker. A caret move into a folded block (arrows, undo, a drop) unfolds it, and
+dragging a folded heading moves only the heading.
+**Rationale**: AppFlowy and Notion toggles are a block type; in Markdown the closest thing is
+`<details>`, which would turn the section into raw HTML that no other tool edits well. Folding by
+heading gives the same reading experience on every page without changing what is stored. The cost is
+that the fold is forgotten when the page is closed, noted in KNOWN_ISSUES.md.
+**Status**: Done; `test/sections_drag_test.dart`.
+
 ### Captions live on the fence line
 **Decision**: A caption is stored after the language on the fence line (` ```python Download helper `),
 which CommonMark allows and GitHub ignores. A caption on a block with no language writes `text`

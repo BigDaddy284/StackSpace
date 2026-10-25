@@ -32,6 +32,10 @@ without decoding the file.
 - Raw HTML is edited as its text in a boxed field. Table cells hold one line each; a table with more
   columns than fit shows narrow cells (the text scrolls inside the cell) and there is no column
   width or alignment control yet (alignments in the file are kept).
+- A folded section is remembered only while the page is open: switching pages, reloading after an
+  assistant edit, or restarting the app unfolds everything. Folding is not written to the file.
+- Dragging a block to a point far down a long page scrolls the list while the pointer sits near its
+  bottom edge; there is no drop onto a folded section's hidden blocks (they unfold on the drop).
 - The sidebar lists every file in the workspace, so a picture copied into `images/` next to a page
   shows there too; opening it in the editor shows its bytes as text. Hiding non-text files is a
   small follow-up.

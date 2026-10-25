@@ -38,9 +38,9 @@ class BlockMetrics {
   static const minLineHeight = 24.0;
 
   /// Padding at the right of the list; at the left each row has a [gutter]
-  /// holding its handle instead.
+  /// holding its section chevron and its handle instead.
   static const listPadding = 22.0;
-  static const gutter = 24.0;
+  static const gutter = 50.0;
 
   /// Height of the empty row after the last block.
   static const tailHeight = 120.0;
@@ -104,7 +104,10 @@ class BlockMetrics {
                 ? EdgeInsets.only(top: block.level == 1 ? 10 : 6)
                 : EdgeInsets.zero;
     final markerWidth = isList ? 24.0 + 8.0 : 0.0;
-    final fieldWidth = math.max(0.0, width - padLeft - padding.horizontal - markerWidth);
+    // A text field keeps room for the caret at the right (RenderEditable's
+    // caret gap plus the cursor width), so its text wraps that much sooner.
+    const caretMargin = 1.0 + 2.0;
+    final fieldWidth = math.max(0.0, width - padLeft - padding.horizontal - markerWidth - caretMargin);
     final double field;
     if (fitsOneLine(block.text, style, fieldWidth)) {
       field = lineHeight(style);

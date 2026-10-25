@@ -1,20 +1,22 @@
 # PROJECT STATUS
 
-_Last updated: 2026-10-25 (Improvement Phase 1, Tasks 1-10 done)_
+_Last updated: 2026-10-25 (Improvement Phase 1, Tasks 1-11 done)_
 
 ## Current phase
 Improvement Phase 1: advanced editor, slash menu, code spaces. Working one task at a time.
 Test build 1 (v0.1.0-test.1) is published on GitHub and loads the user's AppFlowy workspace.
 
 ## Current task and scope
-Tasks 1-10 done: research, plan, the block editor, the slash menu, code spaces, formatting keys,
+Tasks 1-11 done: research, plan, the block editor, the slash menu, code spaces, formatting keys,
 the performance pass with its fix for long pages, the floating formatting toolbar and the block
-option menu, table editing and images.
-Next: Task 11, toggles and block drag-and-drop.
+option menu, table editing and images, folding sections and block drag-and-drop. The Phase 1 plan
+(EDITOR_FEATURE_RESEARCH.md §12) is complete except columns, which are deferred (see below).
+Final report: `docs/PHASE1_REPORT.md`.
 
 ## Task log (Phase 1)
 | Task | Status | Tests | Files |
 | --- | --- | --- | --- |
+| 11. Folding sections + drag-and-drop | Done 2026-10-25. Every heading has a chevron in the gutter (on hover or focus; always while folded) that folds the blocks up to the next heading of the same or a higher level; the block menu has Collapse / Expand section; folded rows take no space in the list; a caret move into a folded block (arrows, undo, a drop) unfolds it; folding changes nothing in the file. The block handle can be dragged: a chip with the block's first line follows the pointer, the source row is dimmed, a line shows where the block will land (upper half: above, lower half: below, the space after the last block: at the end), the list scrolls while the pointer is near its top or bottom edge, and the drop is one undo step. Also fixed on the way: row heights now account for the caret margin a text field keeps at its right, which a borderline-wrapping to-do item exposed at 1100 px / 150 %. | 132/132 (+4) + 21 timing tests | `lib/ui/editor/block_menu.dart`, `block_editor.dart`, `block_metrics.dart`, `test/sections_drag_test.dart`; screenshots 19-20 |
 | 10. Tables + images | Done 2026-10-25. A Markdown table is a grid of single-line cells under a header strip ("Table 4 × 3" and, on hover or focus, Add row / Add column / Delete row / Delete column / Delete table); Tab and Shift+Tab move between cells (Tab on the last cell adds a row), Enter moves down (and adds a row at the bottom), arrows leave at the edges; every change is written back as padded Markdown and each row / column change is its own undo step. `lib/editor/table_data.dart` reads and writes the lines (escaped pipes, alignments, ragged rows repaired). Images: the slash command opens a dialog with "Choose a file…" (system picker) or a typed path / link; a file from outside the workspace is copied to `images/` next to the page, a workspace file is referenced relative to the page, a link stays; a description field under every picture edits the alt text. | 128/128 (+8) + 21 timing tests | `lib/editor/table_data.dart`, `lib/ui/editor/table_block.dart`, `lib/ui/editor/image_dialog.dart`, `lib/ui/editor/header_button.dart`, `block_editor.dart`, `block_metrics.dart`, `slash_commands.dart`, `test/table_image_test.dart`; screenshots 17-18 |
 | 9. Formatting toolbar + block menu | Done 2026-10-25. A toolbar floats above (or below) a text selection with Bold / Italic / Strikethrough / Inline code / Link and a "Turn into" menu (Text, Heading 1-3, Bulleted, Numbered, To-do, Quote, Code block); it follows the selection, never takes focus, and closes on a collapsed caret, scroll or blur. Every row has a drag-handle button in a 24 px gutter (visible on hover or while the block has focus) that opens the block menu: Turn into, Duplicate, Move up / down (Ctrl+Shift+arrows), Delete. Also fixed on the way: markers hug the words when a selection drags in spaces; saves are serialised so a slow write can never land an older version over a newer one; text lines are at least 24 px so one-line blocks stay WCAG tap targets next to the handle. | 119/119 (+5) + 21 timing tests | `lib/ui/editor/format_toolbar.dart`, `lib/ui/editor/block_menu.dart`, `block_editor.dart`, `block_metrics.dart`, `page_editor_controller.dart`, `test/block_menu_test.dart`, `test/block_editor_test.dart`; screenshots 15-16 |
 | 1. Baseline + research | Done 2026-10-25. `flutter analyze` clean, `flutter test` 49 passed, Linux debug build OK, Git checkpoint on `main`. | 49/49 | `docs/EDITOR_FEATURE_RESEARCH.md`, docs copied into `docs/` |
@@ -49,6 +51,26 @@ Next: Task 11, toggles and block drag-and-drop.
 
 ## Files changed
 See `git log` in `windows_app/` (5 commits on `main`).
+
+## Tests executed and actual results (Task 11)
+- `flutter analyze`: no issues. `flutter test` (without the timing file): 132 passed, 2 skipped by
+  design. `test/performance_test.dart`: 21 timing tests passed.
+- New `test/sections_drag_test.dart` (4): the chevron folds a heading's section (the blocks are not
+  built, the rows take no space, the next heading of the same level stays, the file is unchanged),
+  Arrow Down from the folded heading unfolds it, Collapse section from the block menu and the chevron
+  unfold again; folding a section with the caret inside moves the caret to the heading; dragging a
+  handle onto the lower half of a row puts the block below it and saves, onto the upper half above it;
+  a block dropped where it was changes nothing (document version unchanged).
+- Regression found and fixed: with the wider gutter a to-do item that wrapped at the edge measured
+  two lines but rendered three at 1100 px / 150 % text, because a text field keeps 3 px for the
+  caret at its right; `BlockMetrics` now subtracts that margin.
+- Accessibility: the handle and the chevron are 24 x 24 px (the handle was 20 px tall, which the
+  guideline did not see while it sat at the list's edge); the four accessibility tests pass.
+- Live run (Linux release build, `docs/screenshots/19-folded-section-dark.png` and
+  `20-drag-block-dark.png`): Collapse section from the block menu folds "Planning" down to its
+  heading with a blue chevron, the chevron unfolds it; dragging "Budget review" by its handle shows
+  the chip and the insertion line under "Two risks are open." and the file on disk has the item
+  there after the drop.
 
 ## Tests executed and actual results (Task 10)
 - `flutter analyze`: no issues. `flutter test` (without the timing file): 128 passed, 2 skipped by
@@ -209,8 +231,10 @@ See KNOWN_ISSUES.md. Main ones: no real-model test yet; large files are read-onl
 Analyzer clean and tests green on Linux. `flutter build windows` not yet run.
 
 ## Next single task
-Task 11: toggle blocks (collapsible headings or `<details>` sections that stay Markdown) and block
-drag-and-drop with the handle, with tests and screenshots.
+Phase 1's plan is done. Suggested next task (Task 12): hide non-text files (images) from the sidebar
+and open them in the system viewer, then the Windows build on a Windows machine (`flutter build
+windows`) with a real Ollama model. Columns (side-by-side blocks) stay deferred: Markdown has no
+syntax for them, so they would need HTML in the page.
 
 ## Exact commands to resume
 ```bash

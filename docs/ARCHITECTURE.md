@@ -49,6 +49,13 @@ BlockEditor (lib/ui/editor/block_editor.dart)
    images: picture (or the path when the file is missing) plus a description field that edits
          the alt text; lib/ui/editor/image_dialog.dart asks for a file (system picker), path
          or link and copies outside files to images/ next to the page
+   folding: _collapsed holds the ids of folded headings; a hidden row (up to the next heading
+         of the same or a higher level) gets extent 0 and an empty widget; any caret move into
+         it unfolds the section; nothing is written to the file
+   drag-and-drop: the handle is a Draggable<int> (block id) with a chip as feedback; every row
+         and the tail are DragTargets that record where the block would land (upper / lower
+         half) and paint a line there; the list auto-scrolls near its edges; the drop is
+         PageDocument.move, one undo step
    block handle + menu (lib/ui/editor/block_menu.dart): 24 px gutter left of every row, a
          drag-handle button visible on hover or focus, popup with Turn into / Duplicate /
          Move up / Move down / Delete; edits go through PageDocument so undo covers them

@@ -78,6 +78,7 @@ class _BlockEditorState extends State<BlockEditor> {
 
   @override
   void dispose() {
+    _autoScroll?.cancel();
     _scroll.removeListener(_onScroll);
     for (final h in _hovers.values) {
       h.dispose();
@@ -161,7 +162,10 @@ class _BlockEditorState extends State<BlockEditor> {
 
   void _moveCaret(Caret? caret) {
     if (caret == null) return;
-    setState(() => _pending = caret);
+    setState(() {
+      _reveal(caret.block);
+      _pending = caret;
+    });
   }
 
   /// Applies [_pending] to the block that now owns it, after it has been built.
@@ -557,7 +561,165 @@ class _BlockEditorState extends State<BlockEditor> {
   double _extentsWidth = -1;
   TextScaler? _extentsScale;
   int _extentsOptions = -1;
-  int _options = 0; // bumped when wrap or caption state changes
+  int _options = 0; // bumped when wrap, caption or collapsed state changes
+
+  // ---- sections ---------------------------------------------------------------
+
+  /// Headings whose section is folded away (by block id).
+  final _collapsed = <int>{};
+  List<bool>? _hidden;
+  int _hiddenVersion = -1;
+  int _hiddenOptions = -1;
+
+  /// The index after the last block of the heading's section: everything up
+  /// to the next heading of the same or a higher level.
+  int _sectionEnd(int index) {
+    final level = doc[index].level;
+    var end = index + 1;
+    while (end < doc.length && !(doc[end].kind == BlockKind.heading && doc[end].level <= level)) {
+      end++;
+    }
+    return end;
+  }
+
+  /// Which rows are inside a folded section, per document version.
+  List<bool> _hiddenRows() {
+    if (_hidden != null &&
+        _hidden!.length == doc.length &&
+        _hiddenVersion == doc.version &&
+        _hiddenOptions == _options) {
+      return _hidden!;
+    }
+    final hidden = List<bool>.filled(doc.length, false);
+    if (_collapsed.isNotEmpty) {
+      for (var i = 0; i < doc.length; i++) {
+        if (doc[i].kind != BlockKind.heading || !_collapsed.contains(doc[i].id)) continue;
+        for (var j = i + 1; j < _sectionEnd(i); j++) {
+          hidden[j] = true;
+        }
+      }
+    }
+    _hidden = hidden;
+    _hiddenVersion = doc.version;
+    _hiddenOptions = _options;
+    return hidden;
+  }
+
+  bool _isHidden(int index) => _collapsed.isNotEmpty && index < doc.length && _hiddenRows()[index];
+
+  void _toggleSection(Block block) {
+    final index = doc.indexOf(block.id);
+    if (index < 0 || block.kind != BlockKind.heading) return;
+    setState(() {
+      if (!_collapsed.remove(block.id)) {
+        _collapsed.add(block.id);
+        // The caret cannot stay in a folded block.
+        final focused = widget.controller.focusedBlock;
+        if (focused > index && focused < _sectionEnd(index)) _pending = (block: index, offset: block.text.length);
+      }
+      _options++;
+    });
+  }
+
+  /// Unfolds every section that hides [index].
+  void _reveal(int index) {
+    if (_collapsed.isEmpty || !_isHidden(index)) return;
+    for (var i = index - 1; i >= 0; i--) {
+      if (doc[i].kind == BlockKind.heading && _collapsed.contains(doc[i].id) && _sectionEnd(i) > index) {
+        _collapsed.remove(doc[i].id);
+      }
+    }
+    _options++;
+  }
+
+  // ---- drag and drop ------------------------------------------------------------
+
+  /// The block being dragged by its handle, and where it would land.
+  int? _dragId;
+  ({int index, bool above})? _dropAt;
+  Timer? _autoScroll;
+
+  void _onDragStarted(Block block) {
+    final index = doc.indexOf(block.id);
+    if (index >= 0 && _collapsed.remove(block.id)) _options++; // a folded section moves as blocks, not as one
+    setState(() => _dragId = block.id);
+  }
+
+  /// Scrolls the list while the pointer is near its top or bottom edge.
+  void _onDragUpdate(Offset pointer) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !_scroll.hasClients) return;
+    final local = box.globalToLocal(pointer);
+    const zone = 48.0;
+    double speed = 0;
+    if (local.dy < zone) speed = -(zone - local.dy) / 3;
+    if (local.dy > box.size.height - zone) speed = (local.dy - (box.size.height - zone)) / 3;
+    if (speed == 0) {
+      _autoScroll?.cancel();
+      _autoScroll = null;
+      return;
+    }
+    _autoScroll ??= Timer.periodic(const Duration(milliseconds: 16), (_) {
+      if (!_scroll.hasClients) return;
+      final position = _scroll.position;
+      position.jumpTo((position.pixels + speed).clamp(0.0, position.maxScrollExtent));
+    });
+  }
+
+  void _onDragEnd() {
+    _autoScroll?.cancel();
+    _autoScroll = null;
+    if (!mounted) return;
+    setState(() {
+      _dragId = null;
+      _dropAt = null;
+    });
+  }
+
+  void _updateDrop(int index, Offset pointer, BuildContext rowContext) {
+    final box = rowContext.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final local = box.globalToLocal(pointer);
+    final at = (index: index, above: index < doc.length && local.dy < box.size.height / 2);
+    if (_dropAt != at) setState(() => _dropAt = at);
+  }
+
+  void _drop(int id, int index, bool above) {
+    final from = doc.indexOf(id);
+    if (from < 0) return;
+    var to = above ? index : index + 1;
+    if (to > from) to--;
+    to = to.clamp(0, doc.length - 1);
+    if (to != from) {
+      doc.move(from, to);
+      _moveCaret((block: to, offset: 0));
+    }
+    _onDragEnd();
+  }
+
+  /// What follows the pointer while a block is dragged: its first line.
+  Widget _dragFeedback(StackPalette palette, Block block) {
+    var text = block.text.split('\n').first.trim();
+    if (text.isEmpty) text = block.kind == BlockKind.image ? block.url : block.kind.name;
+    if (text.length > 60) text = '${text.substring(0, 60)}…';
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 360),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: palette.panel,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: palette.accentA),
+          boxShadow: [BoxShadow(color: Colors.black.withAlpha(60), blurRadius: 8, offset: const Offset(0, 3))],
+        ),
+        child: Text(text,
+            style: TextStyle(color: palette.text, fontSize: StackType.menu),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis),
+      ),
+    );
+  }
 
   Float64List _extentsFor(BlockMetrics metrics, double width) {
     if (_extents != null &&
@@ -569,8 +731,9 @@ class _BlockEditorState extends State<BlockEditor> {
       return _extents!;
     }
     final extents = Float64List(doc.length);
+    final hidden = _collapsed.isEmpty ? null : _hiddenRows();
     for (var i = 0; i < doc.length; i++) {
-      extents[i] = _rowHeight(metrics, i, width);
+      extents[i] = hidden != null && hidden[i] ? 0 : _rowHeight(metrics, i, width);
     }
     _extents = extents;
     _extentsVersion = doc.version;
@@ -915,8 +1078,10 @@ class _BlockEditorState extends State<BlockEditor> {
   Future<void> _openBlockMenu(Block block, Offset at) async {
     final index = doc.indexOf(block.id);
     if (index < 0) return;
-    final result =
-        await showBlockMenu(context, at, doc[index], canMoveUp: index > 0, canMoveDown: index + 1 < doc.length);
+    final result = await showBlockMenu(context, at, doc[index],
+        canMoveUp: index > 0,
+        canMoveDown: index + 1 < doc.length,
+        collapsed: doc[index].kind == BlockKind.heading ? _collapsed.contains(block.id) : null);
     if (result == null || !mounted) return;
     final i = doc.indexOf(block.id);
     if (i < 0) return;
@@ -933,6 +1098,8 @@ class _BlockEditorState extends State<BlockEditor> {
       case BlockAction.moveDown:
         doc.move(i, i + 1);
         _moveCaret((block: i + 1, offset: 0));
+      case BlockAction.collapse || BlockAction.expand:
+        _toggleSection(doc[i]);
       case BlockAction.delete:
         _moveCaret(doc.remove(i));
     }
@@ -1131,7 +1298,36 @@ class _BlockEditorState extends State<BlockEditor> {
   }
 
   /// Empty space under the last block: a click there adds or focuses a paragraph.
-  Widget _tail(StackPalette palette) => Semantics(
+  Widget _tail(StackPalette palette) => DragTarget<int>(
+      onWillAcceptWithDetails: (d) {
+        final at = (index: doc.length, above: true);
+        if (_dropAt != at) setState(() => _dropAt = at);
+        return true;
+      },
+      onLeave: (_) {
+        if (_dropAt?.index == doc.length) setState(() => _dropAt = null);
+      },
+      onAcceptWithDetails: (d) => _drop(d.data, doc.length - 1, false),
+      builder: (context, _, __) => Stack(children: [
+            _tailBody(palette),
+            if (_dropAt?.index == doc.length) _dropLine(palette, top: 0),
+          ]));
+
+  Widget _dropLine(StackPalette palette, {double? top, double? bottom}) => Positioned(
+        left: BlockMetrics.gutter,
+        right: 0,
+        top: top,
+        bottom: bottom,
+        child: IgnorePointer(
+          child: Container(
+            key: const ValueKey('drop-line'),
+            height: 3,
+            decoration: BoxDecoration(color: palette.accentA, borderRadius: BorderRadius.circular(2)),
+          ),
+        ),
+      );
+
+  Widget _tailBody(StackPalette palette) => Semantics(
       button: true,
       label: 'Add a paragraph at the end',
       child: GestureDetector(
@@ -1151,6 +1347,7 @@ class _BlockEditorState extends State<BlockEditor> {
       ));
 
   Widget _row(BuildContext context, StackPalette palette, int index, Block block) {
+    if (_isHidden(index)) return SizedBox.shrink(key: ValueKey('row-${block.id}'));
     _applyPending(index);
     final node = _focusFor(block);
     final Widget body;
@@ -1210,8 +1407,37 @@ class _BlockEditorState extends State<BlockEditor> {
         );
     }
     final gap = BlockMetrics.gapAbove(block, index > 0 ? doc[index - 1] : null);
-    return Padding(
+    final isHeading = block.kind == BlockKind.heading;
+    final collapsed = isHeading && _collapsed.contains(block.id);
+    final dropHere = _dropAt?.index == index ? _dropAt : null;
+    BuildContext? rowContext; // the row's own box, for the drop position
+    return DragTarget<int>(
       key: ValueKey('row-${block.id}'),
+      onWillAcceptWithDetails: (d) => d.data != block.id,
+      onMove: (d) {
+        if (rowContext != null && rowContext!.mounted) _updateDrop(index, d.offset, rowContext!);
+      },
+      onLeave: (_) {
+        if (_dropAt?.index == index) setState(() => _dropAt = null);
+      },
+      onAcceptWithDetails: (d) => _drop(d.data, index, _dropAt?.above ?? true),
+      builder: (context, _, __) {
+        rowContext = context;
+        return Stack(clipBehavior: Clip.none, children: [
+          // The block on its way somewhere else is dimmed where it was.
+          Opacity(
+            opacity: _dragId == block.id ? 0.35 : 1,
+            child: _rowBody(context, palette, index, block, node, body, gap, isHeading, collapsed),
+          ),
+          if (dropHere != null) dropHere.above ? _dropLine(palette, top: gap - 2) : _dropLine(palette, bottom: -1),
+        ]);
+      },
+    );
+  }
+
+  Widget _rowBody(BuildContext context, StackPalette palette, int index, Block block, FocusNode node, Widget body,
+      double gap, bool isHeading, bool collapsed) {
+    return Padding(
       padding: EdgeInsets.only(top: gap),
       // The row's slot has a fixed height; the body lays out at its natural
       // height, so a measurement that is off by a pixel can never squeeze a
@@ -1229,14 +1455,41 @@ class _BlockEditorState extends State<BlockEditor> {
               SizedBox(
                 width: BlockMetrics.gutter,
                 child: Padding(
-                  padding: EdgeInsets.only(top: block.kind == BlockKind.heading ? (block.level == 1 ? 14 : 8) : 2),
-                  child: BlockHandle(
-                    key: ValueKey('handle-${block.id}'),
-                    hover: _hoverFor(block),
-                    focusNode: node,
-                    label: 'Block options for block ${index + 1}',
-                    onOpen: (at) => _openBlockMenu(block, at),
-                  ),
+                  // Centred on the first line of the block.
+                  padding: EdgeInsets.only(
+                      top: isHeading
+                          ? (block.level == 1
+                              ? 17
+                              : block.level == 2
+                                  ? 10
+                                  : 7)
+                          : 0),
+                  child: Row(children: [
+                    if (isHeading)
+                      SectionToggle(
+                        key: ValueKey('toggle-${block.id}'),
+                        hover: _hoverFor(block),
+                        focusNode: node,
+                        collapsed: collapsed,
+                        hiddenCount: collapsed ? _sectionEnd(index) - index - 1 : 0,
+                        onToggle: () => _toggleSection(block),
+                      )
+                    else
+                      const SizedBox(width: SectionToggle.size),
+                    const SizedBox(width: 2),
+                    BlockHandle(
+                      key: ValueKey('handle-${block.id}'),
+                      hover: _hoverFor(block),
+                      focusNode: node,
+                      label: 'Block options for block ${index + 1}',
+                      onOpen: (at) => _openBlockMenu(block, at),
+                      dragData: widget.readOnly ? null : block.id,
+                      dragFeedback: _dragFeedback(palette, block),
+                      onDragStarted: () => _onDragStarted(block),
+                      onDragUpdate: _onDragUpdate,
+                      onDragEnd: _onDragEnd,
+                    ),
+                  ]),
                 ),
               ),
               Expanded(
