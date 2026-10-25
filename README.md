@@ -65,3 +65,10 @@ Building the Windows .exe needs a Windows machine with Visual Studio's
   still read and edit them through its tools.
 - No rich text, databases, tables or AppFlowy import yet. See `FEATURE_INVENTORY.md`.
 - `legacy/` holds the earlier prototype, which never compiled. It's not part of the build.
+
+## Licence and AppFlowy
+
+StackSpace is MIT licensed (see `LICENSE`). It is an independent app, not affiliated with or
+endorsed by AppFlowy. It contains no AppFlowy code: AppFlowy was used only as a reference for which
+features to offer. The importer reads AppFlowy's export file format so you can bring your own pages
+across. The `windows/` runner is Flutter's standard project template.
