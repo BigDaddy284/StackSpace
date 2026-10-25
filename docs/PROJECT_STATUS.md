@@ -61,7 +61,15 @@ See `git log` in `windows_app/` (5 commits on `main`).
   `home_page_test.dart` pumps the app with `cover.png`, `images/shot.jpg`, `docs/pic.gif` and
   `docs/readme.md` and checks the sidebar shows `hello.py`, `docs` and `readme.md` and none of the
   pictures or the `images` folder.
-- The Windows build itself runs on GitHub Actions for the tag (analyze, test, build, zip, release).
+- GitHub Actions (windows-latest): the suite had failed on Windows since Task 6 for two reasons that
+  never showed on Linux: temp-folder deletion raced the autosave still holding the file
+  (`PathAccessException`), and tests read the saved file before the slower Windows write finished.
+  Fixed with `test/support/temp.dart` (`deleteTemp` retries, `waitSaved` waits for `dirty` to clear);
+  the workflow now turns failing tests into annotations so the cause is visible without the log.
+  Run 40244110488 on commit 0a41d24: analyze, 134 tests, build all green.
+- Test build 2 was published from that commit with the workflow's manual `release_tag` input
+  (`gh workflow run windows-build.yml -f release_tag=v0.2.0-test.1`): a plain tag push is blocked
+  from this environment, so the release's tag was created by the release action on the same commit.
 
 ## Tests executed and actual results (Task 11)
 - `flutter analyze`: no issues. `flutter test` (without the timing file): 132 passed, 2 skipped by

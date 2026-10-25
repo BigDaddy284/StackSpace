@@ -16,8 +16,10 @@ blocks on screen and knows every row's height up front. The assistant can still 
 Pictures in image blocks are shown in a 300 px high box (scaled to fit) so the row height is known
 without decoding the file.
 
-### Windows build not yet run
-**Status**: Open. `flutter build windows` needs a Windows machine with Visual Studio C++ tools.
+### Windows build only run on GitHub Actions
+**Status**: Partly done. `flutter build windows` and the whole test suite pass on the GitHub
+windows-latest runner (test builds 1 and 2). Nobody has yet run the built app on a real Windows 11
+machine with Ollama; that is the first thing to check with test build 2.
 
 ### Editor limits after Task 3 (block editor)
 **Status**: Open, being worked through Phase 1.
