@@ -112,6 +112,7 @@ void main() {
       expect(editor.document[0].text, '');
       expect(tester.widget<TextField>(field).controller!.text, '');
       await settle(tester);
+      await waitSaved(tester, editor);
       expect(File('${dir.path}/page.md').readAsStringSync(), '## \n');
     });
 
@@ -201,6 +202,7 @@ void main() {
       expect(doc[2].kind, BlockKind.paragraph);
       expect(tester.binding.focusManager.primaryFocus?.debugLabel, contains('block ${doc[2].id}'));
       await settle(tester);
+      await waitSaved(tester, editor);
       expect(File('${dir.path}/page.md').readAsStringSync(), 'Intro \n\n---\n\n\n');
     });
 
@@ -232,6 +234,7 @@ void main() {
       expect(doc[0].url, 'pics/cat.png', reason: 'a path that leads nowhere is kept as typed');
       expect(doc[0].alt, 'cat');
       await settle(tester);
+      await waitSaved(tester, editor);
       expect(File('${dir.path}/page.md').readAsStringSync(), '![cat](pics/cat.png)\n\n\n');
     });
 

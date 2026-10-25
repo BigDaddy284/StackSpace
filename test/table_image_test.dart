@@ -134,6 +134,7 @@ void main() {
       await tester.pump();
       expect(editor.document[1].text, '| Name | Count |\n| ---- | ----- |\n| a    | 10    |\n| b    | 2     |');
       await settle(tester);
+      await waitSaved(tester, editor);
       expect(saved(), '# T\n\n| Name | Count |\n| ---- | ----- |\n| a    | 10    |\n| b    | 2     |\n\nAfter\n');
     });
 
@@ -196,6 +197,7 @@ void main() {
       await tapButton(tester, 'Delete table');
       expect(editor.document.length, 2);
       await settle(tester);
+      await waitSaved(tester, editor);
       expect(saved(), '# T\n\nAfter\n');
     });
 
@@ -217,6 +219,7 @@ void main() {
       await tester.enterText(cell(0, 0), 'Task');
       await tester.pump();
       await settle(tester);
+      await waitSaved(tester, editor);
       expect(saved(), '# T\n\n| Task | Column 2 |\n| ---- | -------- |\n|      |          |\n');
     });
 
@@ -237,6 +240,7 @@ void main() {
       expect(editor.document[2].kind, BlockKind.paragraph);
       expect(editor.focusedBlock, 2);
       await settle(tester);
+      await waitSaved(tester, editor);
       expect(saved(), '# T\n\n![A cat](pic.png)\n\n\n');
     });
 

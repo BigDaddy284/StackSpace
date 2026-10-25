@@ -94,6 +94,7 @@ void main() {
       await tester.pump();
       expect(find.byType(FormatToolbar), findsNothing);
       await settle(tester);
+      await waitSaved(tester, editor);
       expect(saved(), 'make this **`[bold](url)`**\n');
     });
 
@@ -111,6 +112,7 @@ void main() {
       expect(doc[0].text, 'a line');
       expect(doc.length, 2);
       await settle(tester);
+      await waitSaved(tester, editor);
       expect(saved(), '## a line\n\nsecond\n');
     });
 
@@ -182,6 +184,7 @@ void main() {
       expect(doc.length, 4);
       expect(doc[doc.length - 1].text, 'b');
       await settle(tester);
+      await waitSaved(tester, editor);
       expect(saved(), '# T\n\n- a\n- a\n- b\n');
     });
 
@@ -205,6 +208,7 @@ void main() {
       expect(doc[1].kind, BlockKind.code);
       expect(doc[1].text, 'item');
       await settle(tester);
+      await waitSaved(tester, editor);
       expect(saved(), '```\nitem\n```\n\n```\nitem\n```\n');
     });
   });

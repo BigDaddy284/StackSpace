@@ -131,6 +131,7 @@ void main() {
         ['One', 'One point one', 'under one point one', 'Two', 'under two', 'under one']);
     expect(find.byKey(const ValueKey('drop-line')), findsNothing);
     await settle(tester);
+    await waitSaved(tester, editor);
     expect(saved(), '# One\n\n## One point one\n\nunder one point one\n\n# Two\n\nunder two\n\nunder one\n');
 
     // Upper half of a row puts the block above it.
