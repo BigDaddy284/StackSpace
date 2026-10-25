@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../ai/chat_controller.dart';
 import '../ai/workspace_tools.dart';
 import '../app/settings.dart';
+import '../app/theme.dart';
 import '../editor/page_editor_controller.dart';
 import '../workspace/workspace.dart';
 import 'chat/chat_dock.dart';
@@ -11,6 +12,7 @@ import 'dialogs.dart';
 import 'editor_pane.dart';
 import 'settings_dialog.dart';
 import 'sidebar.dart';
+import 'widgets/controls.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.settings, this.chatFactory});
@@ -30,6 +32,8 @@ class _HomePageState extends State<HomePage> {
   late PageEditorController _editor;
   late ChatController _chat;
   DockMode _dock = DockMode.closed;
+  bool _showSidebar = true;
+  final _sidebarKey = GlobalKey<SidebarState>();
   bool _ready = false;
 
   AppSettings get settings => widget.settings;
@@ -110,9 +114,42 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
+  void _cycleTheme() {
+    settings.themeMode = switch (settings.themeMode) {
+      ThemeMode.system => ThemeMode.light,
+      ThemeMode.light => ThemeMode.dark,
+      ThemeMode.dark => ThemeMode.system,
+    };
+    setState(() {});
+  }
+
+  String get _themeTooltip => switch (settings.themeMode) {
+        ThemeMode.system => 'Theme: follow Windows. Click for light',
+        ThemeMode.light => 'Theme: light. Click for dark',
+        ThemeMode.dark => 'Theme: dark. Click to follow Windows',
+      };
+
+  void _showShortcuts() => showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Keyboard shortcuts'),
+          content: const Text('Ctrl+N  New page\nCtrl+S  Save now\nCtrl+J  Show or hide the assistant\n'
+              'F2  Rename the selected page\nDelete  Delete the selected page\n'
+              'Enter  Send a message\nShift+Enter  New line in a message'),
+          actions: [SsButton(label: 'Close', primary: true, onPressed: () => Navigator.pop(context))],
+        ),
+      );
+
+  void _showAbout() => showAboutDialog(
+        context: context,
+        applicationName: 'StackSpace',
+        applicationLegalese: 'A local notes and code workspace with an Ollama assistant.',
+      );
+
   @override
   Widget build(BuildContext context) {
     if (!_ready) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    final p = StackColors.of(context);
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyJ, control: true): _toggleDock,
@@ -122,42 +159,189 @@ class _HomePageState extends State<HomePage> {
       child: Focus(
         autofocus: true,
         child: Scaffold(
-          body: Row(
-            children: [
-              SizedBox(
-                width: 260,
-                child: Sidebar(
-                  workspace: _workspace,
-                  editor: _editor,
-                  onNewPage: _newPage,
-                  onOpenSettings: _openSettings,
-                  settings: settings,
-                ),
-              ),
-              const VerticalDivider(width: 1),
-              Expanded(
-                child: ListenableBuilder(
-                  listenable: _chat,
-                  builder: (context, _) => ChatDockLayout(
-                    mode: _dock,
-                    height: settings.dockHeight,
-                    onHeightChanged: (h) => settings.dockHeight = h,
-                    onModeChanged: (mode) => setState(() => _dock = mode),
-                    content: EditorPane(controller: _editor, locked: _chat.busy, onNewPage: _newPage),
-                    dock: ChatPanel(
-                      chat: _chat,
-                      editor: _editor,
-                      mode: _dock,
-                      onModeChanged: (mode) => setState(() => _dock = mode),
-                      onOpenSettings: _openSettings,
-                    ),
+          backgroundColor: p.window,
+          body: ListenableBuilder(
+            listenable: Listenable.merge([_chat, _editor]),
+            builder: (context, _) => Column(
+              children: [
+                _topBar(p),
+                Expanded(
+                  child: Row(
+                    children: [
+                      if (_showSidebar) ...[
+                        SizedBox(
+                          width: 260,
+                          child: Sidebar(key: _sidebarKey, workspace: _workspace, editor: _editor, onNewPage: _newPage),
+                        ),
+                        Container(width: 1, color: p.barBorder),
+                      ],
+                      Expanded(
+                        child: ChatDockLayout(
+                          mode: _dock,
+                          height: settings.dockHeight,
+                          onHeightChanged: (h) => setState(() => settings.dockHeight = h),
+                          content: EditorPane(controller: _editor, locked: _chat.busy, onNewPage: _newPage),
+                          dock: ChatPanel(
+                            chat: _chat,
+                            editor: _editor,
+                            mode: _dock,
+                            onModeChanged: (mode) => setState(() => _dock = mode),
+                            onOpenSettings: _openSettings,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
+                _statusBar(p),
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _topBar(StackPalette p) {
+    final path = _editor.path;
+    MenuItemButton item(String label, VoidCallback? onPressed, {IconData? icon, String? shortcut}) => MenuItemButton(
+          leadingIcon: Icon(icon, size: 17),
+          trailingIcon: shortcut == null
+              ? null
+              : Padding(
+                  padding: const EdgeInsets.only(left: 24),
+                  child: Text(shortcut, style: TextStyle(color: p.subText, fontSize: StackType.hint)),
+                ),
+          onPressed: onPressed,
+          child: Text(label),
+        );
+    MenuItemButton themeItem(String label, ThemeMode mode) => MenuItemButton(
+          leadingIcon: Icon(settings.themeMode == mode ? Icons.check : null, size: 17, color: p.accentA),
+          onPressed: () => setState(() => settings.themeMode = mode),
+          child: Text(label),
+        );
+    const barItem = ButtonStyle(
+      minimumSize: WidgetStatePropertyAll(Size(0, 34)),
+      padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 12)),
+      shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(8)))),
+    );
+    final menus = MenuBar(
+      style: const MenuStyle(
+        backgroundColor: WidgetStatePropertyAll(Colors.transparent),
+        elevation: WidgetStatePropertyAll(0),
+        padding: WidgetStatePropertyAll(EdgeInsets.zero),
+      ),
+      children: [
+        SubmenuButton(menuChildren: [
+          item('New page', _newPage, icon: Icons.note_add_outlined, shortcut: 'Ctrl+N'),
+          item('New folder', () => _sidebarKey.currentState?.newFolder(), icon: Icons.create_new_folder_outlined),
+          item('Save', path == null ? null : _editor.flush, icon: Icons.save_outlined, shortcut: 'Ctrl+S'),
+          const Divider(height: 8),
+          item('Settings...', _openSettings, icon: Icons.settings_outlined),
+        ], style: barItem, child: const Text('File')),
+        SubmenuButton(menuChildren: [
+          item('Rename page', path == null || _sidebarKey.currentState == null ? null : () => _sidebarKey.currentState!.rename(path),
+              icon: Icons.drive_file_rename_outline, shortcut: 'F2'),
+          item('Delete page', path == null || _sidebarKey.currentState == null ? null : () => _sidebarKey.currentState!.delete(path),
+              icon: Icons.delete_outline, shortcut: 'Del'),
+        ], style: barItem, child: const Text('Edit')),
+        SubmenuButton(menuChildren: [
+          item(_showSidebar ? 'Hide pages panel' : 'Show pages panel', () => setState(() => _showSidebar = !_showSidebar),
+              icon: Icons.view_sidebar_outlined),
+          item(_dock == DockMode.closed ? 'Show assistant' : 'Hide assistant', _toggleDock,
+              icon: Icons.auto_awesome_outlined, shortcut: 'Ctrl+J'),
+          const Divider(height: 8),
+          themeItem('Follow Windows', ThemeMode.system),
+          themeItem('Light', ThemeMode.light),
+          themeItem('Dark', ThemeMode.dark),
+        ], style: barItem, child: const Text('View')),
+        SubmenuButton(menuChildren: [
+          item('Keyboard shortcuts', _showShortcuts, icon: Icons.keyboard_outlined),
+          item('About StackSpace', _showAbout, icon: Icons.info_outline),
+        ], style: barItem, child: const Text('Help')),
+      ],
+    );
+    final dockOpen = _dock != DockMode.closed;
+    return Container(
+      height: 60,
+      decoration: BoxDecoration(color: p.bar, border: Border(bottom: BorderSide(color: p.barBorder))),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Row(children: [
+            ShaderMask(
+              shaderCallback: (r) => p.accentGradient.createShader(r),
+              child: const Icon(Icons.layers_rounded, size: 22, color: Colors.white),
+            ),
+            const SizedBox(width: 8),
+            Text('StackSpace', style: StackType.display(15, p.text)),
+            const SizedBox(width: 12),
+            menus,
+            const Spacer(),
+            SsButton(
+              compact: true,
+              icon: switch (settings.themeMode) {
+                ThemeMode.system => Icons.brightness_auto_outlined,
+                ThemeMode.light => Icons.light_mode_outlined,
+                ThemeMode.dark => Icons.dark_mode_outlined,
+              },
+              tooltip: _themeTooltip,
+              width: 40,
+              onPressed: _cycleTheme,
+            ),
+            SsButton(compact: true, icon: Icons.settings_outlined, tooltip: 'Settings', width: 40, onPressed: _openSettings),
+          ]),
+          ModePill(cells: [
+            ModeCell(
+              icon: Icons.description_outlined,
+              label: 'Pages',
+              selected: _showSidebar,
+              tooltip: _showSidebar ? 'Hide the pages panel' : 'Show the pages panel',
+              onTap: () => setState(() => _showSidebar = !_showSidebar),
+            ),
+            ModeCell(
+              icon: Icons.auto_awesome_outlined,
+              label: 'Assistant',
+              selected: dockOpen,
+              tooltip: dockOpen ? 'Hide the assistant (Ctrl+J)' : 'Open the assistant (Ctrl+J)',
+              onTap: _toggleDock,
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusBar(StackPalette p) {
+    final path = _editor.path;
+    final (line, column) = _editor.cursor;
+    final sub = TextStyle(color: p.subText, fontSize: StackType.button);
+    Widget divider() => Container(width: 1, height: 18, margin: const EdgeInsets.symmetric(horizontal: 14), color: p.barBorder);
+    final status = switch (_chat.status) {
+      OllamaStatus.connected => 'Ollama: ${_chat.model ?? 'no model'}',
+      OllamaStatus.connecting => 'Ollama: connecting...',
+      OllamaStatus.offline => 'Ollama: offline',
+      OllamaStatus.unknown => 'Ollama: not connected',
+    };
+    return Container(
+      height: 46,
+      decoration: BoxDecoration(color: p.bar, border: Border(top: BorderSide(color: p.barBorder))),
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      child: Row(children: [
+        Expanded(
+          child: Text(
+            path == null ? _workspace.root : (_editor.isLarge ? path : '$path   ·   Ln $line, Col $column'),
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: p.text, fontSize: StackType.menu),
+          ),
+        ),
+        if (path != null) ...[
+          Text(_editor.error != null ? 'Not saved' : (_editor.dirty ? 'Unsaved changes' : 'Saved'), style: sub),
+          divider(),
+        ],
+        Text(status, style: sub),
+      ]),
     );
   }
 }

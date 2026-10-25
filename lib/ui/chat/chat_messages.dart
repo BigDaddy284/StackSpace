@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../ai/chat_controller.dart';
-import '../editor_pane.dart' show monoFont, monoFallback;
+import '../../app/theme.dart';
+import '../widgets/controls.dart';
 
 const _maxWidth = 780.0;
+
+TextStyle _mono(StackPalette p, double size) =>
+    TextStyle(fontFamily: 'Cascadia Mono', fontFamilyFallback: StackType.mono, fontSize: size, color: p.text);
 
 class ChatMessages extends StatelessWidget {
   const ChatMessages({super.key, required this.chat, required this.onOpenSettings});
@@ -14,7 +18,24 @@ class ChatMessages extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (chat.items.isEmpty) return _EmptyState(chat: chat, onOpenSettings: onOpenSettings);
+    if (chat.items.isEmpty) {
+      final offline = chat.status == OllamaStatus.offline;
+      return EmptyState(
+        icon: offline ? Icons.cloud_off_outlined : Icons.auto_awesome,
+        title: offline ? "Can't reach Ollama" : 'Ask about this page',
+        detail: offline
+            ? (chat.statusMessage ?? 'Start Ollama, then try again.')
+            : chat.statusMessage ??
+                'Ask a question, or ask me to create, edit, rename or delete pages.\n'
+                    'Select text in the editor to point me at a specific snippet.',
+        actions: [
+          if (offline) ...[
+            SsButton(icon: Icons.refresh, label: 'Retry', primary: true, onPressed: chat.connect),
+            SsButton(icon: Icons.settings_outlined, label: 'Settings', onPressed: onOpenSettings),
+          ],
+        ],
+      );
+    }
     final items = chat.items.reversed.toList();
     // reverse: true keeps the list pinned to the newest message while it streams.
     // One SelectionArea lets you select and copy across the whole conversation.
@@ -43,58 +64,13 @@ class ChatMessages extends StatelessWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.chat, required this.onOpenSettings});
-  final ChatController chat;
-  final VoidCallback onOpenSettings;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final offline = chat.status == OllamaStatus.offline;
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(offline ? Icons.cloud_off_outlined : Icons.auto_awesome_outlined,
-                  size: 30, color: theme.colorScheme.primary),
-              const SizedBox(height: 10),
-              Text(
-                offline
-                    ? (chat.statusMessage ?? "Can't reach Ollama.")
-                    : chat.statusMessage ??
-                        'Ask about the open page, or ask me to create, edit, rename or delete pages. '
-                            'Select text in the editor to point me at a specific snippet.',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium,
-              ),
-              if (offline) ...[
-                const SizedBox(height: 12),
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  FilledButton.tonal(onPressed: chat.connect, child: const Text('Retry')),
-                  const SizedBox(width: 8),
-                  TextButton(onPressed: onOpenSettings, child: const Text('Settings')),
-                ]),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _UserBubble extends StatelessWidget {
   const _UserBubble({required this.item});
   final UserItem item;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final p = StackColors.of(context);
     return Align(
       alignment: Alignment.centerRight,
       child: ConstrainedBox(
@@ -105,21 +81,12 @@ class _UserBubble extends StatelessWidget {
             if (item.contextLabels.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
-                child: Wrap(
-                  spacing: 6,
-                  children: [
-                    for (final label in item.contextLabels)
-                      Text(label, style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.outline)),
-                  ],
-                ),
+                child: Text(item.contextLabels.join('  ·  '), style: TextStyle(color: p.subText, fontSize: 12)),
               ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Text(item.text),
+              decoration: BoxDecoration(color: p.control, borderRadius: BorderRadius.circular(12)),
+              child: Text(item.text, style: TextStyle(color: p.text, fontSize: StackType.menu)),
             ),
           ],
         ),
@@ -142,41 +109,40 @@ class _AssistantMessageState extends State<_AssistantMessage> {
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
-    final theme = Theme.of(context);
-    final muted = theme.colorScheme.onSurfaceVariant;
+    final p = StackColors.of(context);
     final thinkingNow = item.streaming && item.content.isEmpty;
     final hasThinking = item.thinking.isNotEmpty;
+    final label = thinkingNow
+        ? 'Thinking...'
+        : item.thoughtFor != null
+            ? 'Thought for ${_seconds(item.thoughtFor!)}'
+            : 'Thoughts';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (hasThinking || thinkingNow)
-          InkWell(
-            borderRadius: BorderRadius.circular(6),
-            onTap: hasThinking ? () => setState(() => _showThinking = !_showThinking) : null,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.psychology_outlined, size: 16, color: muted),
-                const SizedBox(width: 6),
-                Text(
-                  thinkingNow
-                      ? 'Thinking...'
-                      : item.thoughtFor != null
-                          ? 'Thought for ${_seconds(item.thoughtFor!)}'
-                          : 'Thoughts',
-                  style: theme.textTheme.labelMedium?.copyWith(color: muted),
-                ),
-                if (hasThinking) Icon(_showThinking ? Icons.expand_less : Icons.expand_more, size: 16, color: muted),
-              ]),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: SsButton(
+              compact: true,
+              height: 30,
+              icon: Icons.psychology_outlined,
+              iconSize: 16,
+              label: label,
+              fontSize: 12.7,
+              semanticLabel: hasThinking ? '$label. ${_showThinking ? 'Hide' : 'Show'} thoughts' : label,
+              trailing: hasThinking
+                  ? Icon(_showThinking ? Icons.expand_less : Icons.expand_more, size: 16, color: p.subText)
+                  : null,
+              onPressed: hasThinking ? () => setState(() => _showThinking = !_showThinking) : null,
             ),
           ),
         if (_showThinking && hasThinking)
           Container(
-            margin: const EdgeInsets.only(bottom: 6),
+            margin: const EdgeInsets.only(bottom: 6, left: 10),
             padding: const EdgeInsets.only(left: 12),
-            decoration:
-                BoxDecoration(border: Border(left: BorderSide(color: theme.colorScheme.outlineVariant, width: 2))),
-            child: Text(item.thinking.toString().trim(), style: theme.textTheme.bodySmall?.copyWith(color: muted)),
+            decoration: BoxDecoration(border: Border(left: BorderSide(color: p.pillSep, width: 2))),
+            child: Text(item.thinking.toString().trim(), style: TextStyle(color: p.subText, fontSize: 12.7)),
           ),
         if (item.content.isNotEmpty) MessageBody(text: item.content.toString()),
       ],
@@ -195,20 +161,22 @@ class MessageBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = StackColors.of(context);
+    final style = TextStyle(color: p.text, fontSize: StackType.menu, height: 1.45);
     final parts = <Widget>[];
     var last = 0;
     for (final m in _fence.allMatches(text)) {
       final before = text.substring(last, m.start).trim();
-      if (before.isNotEmpty) parts.add(Text(before));
+      if (before.isNotEmpty) parts.add(Text(before, style: style));
       parts.add(_CodeBlock(language: m.group(1) ?? '', code: (m.group(2) ?? '').trimRight()));
       last = m.end;
     }
     final rest = text.substring(last).trim();
-    if (rest.isNotEmpty) parts.add(Text(rest));
+    if (rest.isNotEmpty) parts.add(Text(rest, style: style));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final p in parts) Padding(padding: const EdgeInsets.symmetric(vertical: 3), child: p),
+        for (final part in parts) Padding(padding: const EdgeInsets.symmetric(vertical: 3), child: part),
       ],
     );
   }
@@ -221,35 +189,35 @@ class _CodeBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final p = StackColors.of(context);
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(10),
+        color: p.canvas,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: p.barBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.only(left: 12, right: 4),
+            padding: const EdgeInsets.only(left: 12, right: 4, top: 2),
             child: Row(children: [
-              Text(language.isEmpty ? 'code' : language, style: theme.textTheme.labelSmall),
+              Text((language.isEmpty ? 'code' : language).toUpperCase(),
+                  style: TextStyle(color: p.subText, fontSize: StackType.section, fontWeight: FontWeight.w700)),
               const Spacer(),
-              IconButton(
-                tooltip: 'Copy',
+              SsButton(
+                compact: true,
+                icon: Icons.copy,
                 iconSize: 15,
-                visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.copy),
+                tooltip: 'Copy code',
+                width: 32,
+                height: 30,
                 onPressed: () => Clipboard.setData(ClipboardData(text: code)),
               ),
             ]),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: Text(code,
-                style: const TextStyle(fontFamily: monoFont, fontFamilyFallback: monoFallback, fontSize: 13)),
-          ),
+          Padding(padding: const EdgeInsets.fromLTRB(12, 0, 12, 12), child: Text(code, style: _mono(p, 13))),
         ],
       ),
     );
@@ -271,34 +239,34 @@ class _ToolCardState extends State<_ToolCard> {
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final p = StackColors.of(context);
     final icon = switch (item.status) {
-      ToolStatus.running => const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
-      ToolStatus.done => Icon(_iconFor(item.name), size: 16, color: scheme.primary),
-      ToolStatus.failed => Icon(Icons.error_outline, size: 16, color: scheme.error),
+      ToolStatus.running =>
+        SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: p.accentA)),
+      ToolStatus.done => Icon(_iconFor(item.name), size: 16, color: p.text),
+      ToolStatus.failed => Icon(Icons.error_outline, size: 16, color: p.error),
     };
     final edit = item.edit;
+    final summary = item.status == ToolStatus.running ? 'Running ${item.name}...' : item.summary;
     return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(10),
-      ),
+      decoration: BoxDecoration(color: p.control, borderRadius: BorderRadius.circular(8)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(10),
+          SsRow(
+            height: 38,
             onTap: () => setState(() => _expanded = !_expanded),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.only(left: 12, right: 6),
               child: Row(children: [
                 icon,
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    item.status == ToolStatus.running ? 'Running ${item.name}...' : item.summary,
-                    style: theme.textTheme.bodySmall?.copyWith(
+                    summary,
+                    style: TextStyle(
+                      color: p.text,
+                      fontSize: StackType.button,
                       decoration: edit?.reverted == true ? TextDecoration.lineThrough : null,
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -306,14 +274,21 @@ class _ToolCardState extends State<_ToolCard> {
                 ),
                 if (edit != null)
                   edit.reverted
-                      ? Text('Undone', style: theme.textTheme.labelSmall?.copyWith(color: scheme.outline))
-                      : TextButton.icon(
-                          style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Text('Undone', style: TextStyle(color: p.subText, fontSize: 12.7)),
+                        )
+                      : SsButton(
+                          icon: Icons.undo,
+                          iconSize: 15,
+                          label: 'Undo',
+                          height: 28,
+                          fontSize: 12.7,
+                          semanticLabel: 'Undo: $summary',
                           onPressed: widget.onUndo,
-                          icon: const Icon(Icons.undo, size: 15),
-                          label: const Text('Undo'),
                         ),
-                Icon(_expanded ? Icons.expand_less : Icons.expand_more, size: 16, color: scheme.outline),
+                const SizedBox(width: 4),
+                Icon(_expanded ? Icons.expand_less : Icons.expand_more, size: 16, color: p.subText),
               ]),
             ),
           ),
@@ -322,7 +297,7 @@ class _ToolCardState extends State<_ToolCard> {
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
               child: Text(
                 '${item.name}(${item.arguments.entries.map((e) => '${e.key}: ${_short(e.value)}').join(', ')})\n\n${_short(item.result, 1500)}',
-                style: const TextStyle(fontFamily: monoFont, fontFamilyFallback: monoFallback, fontSize: 12),
+                style: _mono(p, 12),
               ),
             ),
         ],
@@ -351,14 +326,18 @@ class _ErrorBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final p = StackColors.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(color: scheme.errorContainer, borderRadius: BorderRadius.circular(10)),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: p.control,
+        borderRadius: BorderRadius.circular(8),
+        border: Border(left: BorderSide(color: p.error, width: 3)),
+      ),
       child: Row(children: [
-        Icon(Icons.error_outline, size: 16, color: scheme.onErrorContainer),
+        Icon(Icons.error_outline, size: 16, color: p.error),
         const SizedBox(width: 8),
-        Expanded(child: Text(message, style: TextStyle(color: scheme.onErrorContainer))),
+        Expanded(child: Text(message, style: TextStyle(color: p.text, fontSize: StackType.button))),
       ]),
     );
   }

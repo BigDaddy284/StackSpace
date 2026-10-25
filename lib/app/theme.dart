@@ -1,150 +1,160 @@
 import 'package:flutter/material.dart';
 
-/// Colours shared with Stills & Reels: deep navy surfaces, a bright blue accent
-/// and a blue-to-violet gradient for the "hero" controls. Every text colour here
-/// is checked against the surfaces it sits on in `test/theme_contrast_test.dart`
-/// (WCAG AA: 4.5:1 for text, 3:1 for borders and icons).
+/// The Stills & Reels palette, copied value for value from its `src/Theme.cs`
+/// (github.com/BigDaddy284/Stills-and-Reels). Field names match that file so
+/// the two apps can be kept in step.
+///
+/// One accessibility rule on top: [muted] fails WCAG AA for text (3.9:1 dark,
+/// 3.0:1 light), so it's only used for disabled controls. Small text uses [text]
+/// or [subText]. `test/theme_contrast_test.dart` checks this.
 class StackPalette {
   const StackPalette({
-    required this.brightness,
+    required this.dark,
+    required this.window,
+    required this.bar,
+    required this.barBorder,
     required this.canvas,
     required this.panel,
-    required this.dock,
-    required this.raised,
-    required this.control,
-    required this.controlHigh,
-    required this.selected,
-    required this.onSelected,
     required this.text,
-    required this.textMuted,
-    required this.textSubtle,
-    required this.accent,
-    required this.onAccent,
-    required this.accentText,
-    required this.violet,
-    required this.divider,
-    required this.inputBorder,
+    required this.subText,
+    required this.muted,
+    required this.hover,
+    required this.pressed,
+    required this.pill,
+    required this.pillSep,
+    required this.accentA,
+    required this.accentB,
+    required this.selectedText,
+    required this.control,
+    required this.controlBorder,
     required this.warning,
-    required this.success,
+    required this.glow,
     required this.error,
-    required this.errorContainer,
-    required this.onErrorContainer,
+    required this.success,
   });
 
-  final Brightness brightness;
+  final bool dark;
 
-  /// Editor background.
+  /// Form background.
+  final Color window;
+
+  /// Top bar, status bar, toolbars.
+  final Color bar;
+
+  /// Hairlines between bars and content.
+  final Color barBorder;
+
+  /// The editing area.
   final Color canvas;
 
-  /// Sidebar and status bar.
+  /// Sidebars, pop-outs, menus, tooltips, the assistant dock.
   final Color panel;
-
-  /// Chat dock background.
-  final Color dock;
-
-  /// Cards, popup menus and dialogs.
-  final Color raised;
-
-  /// Button and chip fills, user chat bubbles.
-  final Color control;
-
-  /// Code blocks.
-  final Color controlHigh;
-
-  /// Selected sidebar row and context chips.
-  final Color selected;
-  final Color onSelected;
-
   final Color text;
+  final Color subText;
 
-  /// Secondary text: hints, labels.
-  final Color textMuted;
+  /// Disabled text and icons only.
+  final Color muted;
+  final Color hover;
+  final Color pressed;
 
-  /// Least important text that still has to be readable (counters, separators).
-  final Color textSubtle;
+  /// Inside of the gradient-bordered pill (mode toolbar, message box).
+  final Color pill;
+  final Color pillSep;
 
-  /// Fill for primary buttons (white text on top).
-  final Color accent;
-  final Color onAccent;
+  /// Gradient start (blue).
+  final Color accentA;
 
-  /// Accent used as text or icon colour on dark/light surfaces.
-  final Color accentText;
-  final Color violet;
-  final Color divider;
+  /// Gradient end (purple).
+  final Color accentB;
+  final Color selectedText;
 
-  /// Border of text inputs; must reach 3:1 against the dock.
-  final Color inputBorder;
+  /// Button fills, slider tracks, inactive fills.
+  final Color control;
+  final Color controlBorder;
   final Color warning;
-  final Color success;
+
+  /// Ambient glow behind empty states.
+  final Color glow;
+
+  // Not in Stills & Reels, which has no error or success states; chosen to sit with the palette.
   final Color error;
-  final Color errorContainer;
-  final Color onErrorContainer;
+  final Color success;
 
-  LinearGradient get gradient => LinearGradient(colors: [accent, violet]);
+  Brightness get brightness => dark ? Brightness.dark : Brightness.light;
 
-  /// Surfaces that text can sit on, for the contrast test.
-  Map<String, Color> get surfaces => {
-        'canvas': canvas,
-        'panel': panel,
-        'dock': dock,
-        'raised': raised,
-        'control': control,
-      };
+  LinearGradient get accentGradient => LinearGradient(colors: [accentA, accentB]);
 
-  static const dark = StackPalette(
-    brightness: Brightness.dark,
-    canvas: Color(0xFF0B0F1F),
-    panel: Color(0xFF0E1325),
-    dock: Color(0xFF0D1224),
-    raised: Color(0xFF161C33),
-    control: Color(0xFF1A2140),
-    controlHigh: Color(0xFF202846),
-    selected: Color(0xFF1F2B55),
-    onSelected: Color(0xFFDCE4FF),
-    text: Color(0xFFE8EBF5),
-    textMuted: Color(0xFFA3ABC6),
-    textSubtle: Color(0xFF8C95B3),
-    accent: Color(0xFF2F6BF5),
-    onAccent: Color(0xFFFFFFFF),
-    accentText: Color(0xFF7AA2FF),
-    violet: Color(0xFF8B5CF6),
-    divider: Color(0xFF232B47),
-    inputBorder: Color(0xFF5C6894),
-    warning: Color(0xFFF2B451),
-    success: Color(0xFF4CC38A),
-    error: Color(0xFFFF6B7A),
-    errorContainer: Color(0xFF3A1520),
-    onErrorContainer: Color(0xFFFFC9CF),
+  /// The selected cell in the mode toolbar: a vertical blue gradient.
+  LinearGradient get selectedGradient => LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        // Stills & Reels lightens the bottom towards (90,150,255), which leaves its
+        // white label at 3.6:1. Darkening it slightly keeps the label at 4.5:1 or better.
+        colors: [Color.lerp(accentA, Colors.black, 0.04)!, Color.lerp(accentA, Colors.black, 0.2)!],
+      );
+
+  /// The "checked" button fill: the accent gradient at low opacity.
+  LinearGradient get checkedGradient => LinearGradient(colors: [
+        accentA.withAlpha(dark ? 70 : 40),
+        accentB.withAlpha(dark ? 70 : 40),
+      ]);
+
+  /// Surfaces text sits on, for the contrast test.
+  Map<String, Color> get surfaces =>
+      {'window': window, 'bar': bar, 'canvas': canvas, 'panel': panel, 'pill': pill, 'control': control, 'hover': hover};
+
+  static const darkPalette = StackPalette(
+    dark: true,
+    window: Color.fromARGB(255, 10, 13, 26),
+    bar: Color.fromARGB(255, 13, 17, 33),
+    barBorder: Color.fromARGB(255, 30, 37, 62),
+    canvas: Color.fromARGB(255, 9, 12, 24),
+    panel: Color.fromARGB(255, 14, 19, 37),
+    text: Color.fromARGB(255, 234, 238, 250),
+    subText: Color.fromARGB(255, 172, 182, 210),
+    muted: Color.fromARGB(255, 104, 114, 146),
+    hover: Color.fromARGB(255, 26, 33, 62),
+    pressed: Color.fromARGB(255, 34, 43, 80),
+    pill: Color.fromARGB(255, 12, 18, 44),
+    pillSep: Color.fromARGB(255, 62, 74, 128),
+    accentA: Color.fromARGB(255, 38, 104, 255),
+    accentB: Color.fromARGB(255, 176, 72, 255),
+    selectedText: Color(0xFFFFFFFF),
+    control: Color.fromARGB(255, 32, 40, 70),
+    controlBorder: Color.fromARGB(255, 46, 56, 92),
+    warning: Color.fromARGB(255, 255, 190, 110),
+    glow: Color.fromARGB(255, 40, 70, 150),
+    error: Color.fromARGB(255, 255, 120, 140),
+    success: Color.fromARGB(255, 80, 200, 140),
   );
 
-  static const light = StackPalette(
-    brightness: Brightness.light,
-    canvas: Color(0xFFFFFFFF),
-    panel: Color(0xFFF2F4FA),
-    dock: Color(0xFFF8F9FD),
-    raised: Color(0xFFFFFFFF),
-    control: Color(0xFFE8EBF5),
-    controlHigh: Color(0xFFE1E5F0),
-    selected: Color(0xFFDDE5FF),
-    onSelected: Color(0xFF13235C),
-    text: Color(0xFF12162A),
-    textMuted: Color(0xFF4A5270),
-    textSubtle: Color(0xFF5A6280),
-    accent: Color(0xFF2C62E8),
-    onAccent: Color(0xFFFFFFFF),
-    accentText: Color(0xFF2556D1),
-    violet: Color(0xFF6A4BE8),
-    divider: Color(0xFFDDE1EC),
-    inputBorder: Color(0xFF7A829F),
-    warning: Color(0xFF8A5300),
-    success: Color(0xFF1C7A4C),
-    error: Color(0xFFC42B3B),
-    errorContainer: Color(0xFFFCE4E7),
-    onErrorContainer: Color(0xFF7A1020),
+  static const lightPalette = StackPalette(
+    dark: false,
+    window: Color.fromARGB(255, 244, 246, 251),
+    bar: Color.fromARGB(255, 255, 255, 255),
+    barBorder: Color.fromARGB(255, 221, 226, 238),
+    canvas: Color.fromARGB(255, 236, 240, 247),
+    panel: Color.fromARGB(255, 250, 251, 254),
+    text: Color.fromARGB(255, 20, 26, 45),
+    subText: Color.fromARGB(255, 74, 85, 112),
+    muted: Color.fromARGB(255, 138, 147, 168),
+    hover: Color.fromARGB(255, 232, 237, 249),
+    pressed: Color.fromARGB(255, 218, 226, 246),
+    pill: Color.fromARGB(255, 243, 245, 255),
+    pillSep: Color.fromARGB(255, 196, 204, 232),
+    accentA: Color.fromARGB(255, 37, 99, 245),
+    accentB: Color.fromARGB(255, 150, 62, 240),
+    selectedText: Color(0xFFFFFFFF),
+    control: Color.fromARGB(255, 222, 228, 242),
+    controlBorder: Color.fromARGB(255, 200, 208, 228),
+    warning: Color.fromARGB(255, 196, 98, 0),
+    glow: Color.fromARGB(255, 160, 185, 255),
+    error: Color.fromARGB(255, 190, 30, 60),
+    success: Color.fromARGB(255, 20, 120, 70),
   );
 }
 
-/// Extra colours the widgets need that ColorScheme has no slot for.
+/// Exposes the palette through the theme.
 class StackColors extends ThemeExtension<StackColors> {
   const StackColors(this.palette);
   final StackPalette palette;
@@ -152,7 +162,7 @@ class StackColors extends ThemeExtension<StackColors> {
   static StackPalette of(BuildContext context) {
     final theme = Theme.of(context);
     return theme.extension<StackColors>()?.palette ??
-        (theme.brightness == Brightness.dark ? StackPalette.dark : StackPalette.light);
+        (theme.brightness == Brightness.dark ? StackPalette.darkPalette : StackPalette.lightPalette);
   }
 
   @override
@@ -162,152 +172,162 @@ class StackColors extends ThemeExtension<StackColors> {
   StackColors lerp(StackColors? other, double t) => t < 0.5 || other == null ? this : other;
 }
 
+/// Font sizes from Stills & Reels, converted from points (at 96 DPI, 1pt = 4/3 px).
+class StackType {
+  static const fontFamily = 'Segoe UI Variable Text';
+  static const fontFallback = ['Segoe UI', 'Selawik', 'Noto Sans', 'DejaVu Sans'];
+  static const displayFamily = 'Segoe UI Variable Display';
+  static const displayFallback = ['Segoe UI Semibold', 'Segoe UI', 'Noto Sans', 'DejaVu Sans'];
+
+  static const button = 13.3; // UiFont(10)
+  static const menu = 14.0; // UiFont(10.5), status bar too
+  static const hint = 12.7; // UiFont(9.5), tooltips too
+  static const section = 11.3; // UiFont(8.5, Bold)
+  static const panelTitle = 17.3; // DisplayFont(13)
+  static const emptyTitle = 25.3; // DisplayFont(19)
+  static const emptyDetail = 14.0; // UiFont(10.5)
+  static const mono = ['Cascadia Mono', 'Consolas', 'DejaVu Sans Mono', 'monospace'];
+
+  static TextStyle display(double size, Color color) => TextStyle(
+        fontFamily: displayFamily,
+        fontFamilyFallback: displayFallback,
+        fontSize: size,
+        fontWeight: FontWeight.w700,
+        color: color,
+      );
+}
+
 ThemeData buildTheme(StackPalette p) {
   final scheme = ColorScheme(
     brightness: p.brightness,
-    primary: p.accent,
-    onPrimary: p.onAccent,
-    primaryContainer: p.selected,
-    onPrimaryContainer: p.onSelected,
-    secondary: p.violet,
-    onSecondary: p.onAccent,
-    secondaryContainer: p.selected,
-    onSecondaryContainer: p.onSelected,
+    primary: p.accentA,
+    onPrimary: p.selectedText,
+    primaryContainer: p.pressed,
+    onPrimaryContainer: p.text,
+    secondary: p.accentB,
+    onSecondary: p.selectedText,
+    secondaryContainer: p.pressed,
+    onSecondaryContainer: p.text,
     tertiary: p.warning,
-    onTertiary: p.canvas,
+    onTertiary: p.window,
     error: p.error,
-    onError: p.brightness == Brightness.dark ? p.canvas : p.onAccent,
-    errorContainer: p.errorContainer,
-    onErrorContainer: p.onErrorContainer,
+    onError: p.dark ? p.window : p.selectedText,
+    errorContainer: p.error.withAlpha(p.dark ? 40 : 28),
+    onErrorContainer: p.text,
     surface: p.canvas,
     onSurface: p.text,
-    onSurfaceVariant: p.textMuted,
-    surfaceContainerLowest: p.dock,
+    onSurfaceVariant: p.subText,
+    surfaceContainerLowest: p.panel,
     surfaceContainerLow: p.panel,
-    surfaceContainer: p.raised,
+    surfaceContainer: p.panel,
     surfaceContainerHigh: p.control,
-    surfaceContainerHighest: p.controlHigh,
-    outline: p.textSubtle,
-    outlineVariant: p.divider,
+    surfaceContainerHighest: p.pressed,
+    outline: p.subText,
+    outlineVariant: p.barBorder,
     shadow: Colors.black,
     inverseSurface: p.text,
-    onInverseSurface: p.canvas,
-    inversePrimary: p.accentText,
+    onInverseSurface: p.window,
+    inversePrimary: p.accentA,
   );
-  final radius = BorderRadius.circular(8);
-  final controlShape = RoundedRectangleBorder(borderRadius: radius);
+  final base = ThemeData(brightness: p.brightness, useMaterial3: true);
+  final textTheme = base.textTheme.apply(
+    fontFamily: StackType.fontFamily,
+    fontFamilyFallback: StackType.fontFallback,
+    bodyColor: p.text,
+    displayColor: p.text,
+  );
+  final radius8 = BorderRadius.circular(8);
   return ThemeData(
     colorScheme: scheme,
     useMaterial3: true,
     visualDensity: VisualDensity.compact,
-    scaffoldBackgroundColor: p.canvas,
+    fontFamily: StackType.fontFamily,
+    fontFamilyFallback: StackType.fontFallback,
+    textTheme: textTheme,
+    scaffoldBackgroundColor: p.window,
+    canvasColor: p.panel,
+    hoverColor: p.hover,
+    highlightColor: p.pressed,
+    splashFactory: NoSplash.splashFactory,
+    focusColor: p.accentA.withAlpha(50),
     extensions: [StackColors(p)],
-    dividerTheme: DividerThemeData(color: p.divider, space: 1, thickness: 1),
+    dividerTheme: DividerThemeData(color: p.barBorder, space: 1, thickness: 1),
     tooltipTheme: TooltipThemeData(
-      waitDuration: const Duration(milliseconds: 500),
-      decoration: BoxDecoration(color: p.text, borderRadius: BorderRadius.circular(6)),
-      textStyle: TextStyle(color: p.canvas, fontSize: 12),
+      waitDuration: const Duration(milliseconds: 450),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(color: p.panel, border: Border.all(color: p.controlBorder)),
+      textStyle: TextStyle(
+        color: p.text,
+        fontSize: StackType.hint,
+        fontFamily: StackType.fontFamily,
+        fontFamilyFallback: StackType.fontFallback,
+      ),
     ),
     textSelectionTheme: TextSelectionThemeData(
-      cursorColor: p.accentText,
-      selectionColor: p.accent.withValues(alpha: 0.35),
+      cursorColor: p.accentA,
+      selectionColor: p.accentA.withAlpha(p.dark ? 90 : 60),
     ),
-    iconButtonTheme: IconButtonThemeData(
-      style: IconButton.styleFrom(foregroundColor: p.textMuted, shape: controlShape),
+    iconTheme: IconThemeData(color: p.text, size: 18),
+    popupMenuTheme: PopupMenuThemeData(
+      color: p.panel,
+      surfaceTintColor: Colors.transparent,
+      elevation: 6,
+      shape: RoundedRectangleBorder(side: BorderSide(color: p.controlBorder)),
+      textStyle: TextStyle(color: p.text, fontSize: StackType.menu),
     ),
-    textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(foregroundColor: p.accentText, shape: controlShape),
-    ),
-    filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(shape: controlShape)),
-    outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(
-        foregroundColor: p.text,
-        backgroundColor: p.control,
-        side: BorderSide(color: p.divider),
-        shape: controlShape,
+    menuTheme: MenuThemeData(
+      style: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll(p.panel),
+        surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+        side: WidgetStatePropertyAll(BorderSide(color: p.controlBorder)),
+        shape: const WidgetStatePropertyAll(RoundedRectangleBorder()),
+        padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: 4)),
       ),
     ),
-    popupMenuTheme: PopupMenuThemeData(
-      color: p.raised,
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: radius, side: BorderSide(color: p.divider)),
+    menuButtonTheme: MenuButtonThemeData(
+      style: ButtonStyle(
+        foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.disabled) ? p.muted : p.text),
+        backgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.pressed)
+            ? p.pressed
+            : s.contains(WidgetState.hovered) || s.contains(WidgetState.focused)
+                ? p.hover
+                : Colors.transparent),
+        overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+        shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(5))),
+        textStyle: const WidgetStatePropertyAll(TextStyle(fontSize: StackType.menu)),
+        minimumSize: const WidgetStatePropertyAll(Size(180, 34)),
+        padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 14)),
+      ),
     ),
     dialogTheme: DialogThemeData(
-      backgroundColor: p.raised,
+      backgroundColor: p.panel,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: p.divider)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: p.controlBorder)),
+      titleTextStyle: StackType.display(StackType.panelTitle, p.text),
+      contentTextStyle: TextStyle(color: p.subText, fontSize: StackType.menu),
     ),
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: p.text,
-      contentTextStyle: TextStyle(color: p.canvas),
+      backgroundColor: p.panel,
+      contentTextStyle: TextStyle(color: p.text, fontSize: StackType.menu),
       behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: radius8, side: BorderSide(color: p.controlBorder)),
     ),
     inputDecorationTheme: InputDecorationTheme(
-      labelStyle: TextStyle(color: p.textMuted),
-      hintStyle: TextStyle(color: p.textMuted),
-    ),
-    switchTheme: SwitchThemeData(
-      trackOutlineColor: WidgetStatePropertyAll(p.inputBorder),
+      filled: true,
+      fillColor: p.control,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      labelStyle: TextStyle(color: p.subText),
+      floatingLabelStyle: TextStyle(color: p.subText),
+      hintStyle: TextStyle(color: p.subText),
+      border: OutlineInputBorder(borderRadius: radius8, borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(borderRadius: radius8, borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(borderRadius: radius8, borderSide: BorderSide(color: p.accentA, width: 1.4)),
     ),
     scrollbarTheme: ScrollbarThemeData(
-      thumbColor: WidgetStatePropertyAll(p.textSubtle.withValues(alpha: 0.5)),
+      thumbColor: WidgetStatePropertyAll(p.controlBorder),
       radius: const Radius.circular(4),
+      thickness: const WidgetStatePropertyAll(6),
     ),
   );
-}
-
-/// Small uppercase heading used for sidebar sections, like "TOOLS" in Stills & Reels.
-class SectionLabel extends StatelessWidget {
-  const SectionLabel(this.text, {super.key});
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = StackColors.of(context);
-    return Semantics(
-      header: true,
-      child: Text(
-        text.toUpperCase(),
-        style: TextStyle(color: p.textMuted, fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 0.6),
-      ),
-    );
-  }
-}
-
-/// A rounded pill with the blue-to-violet gradient border, used for the
-/// Assistant button and the focused message box.
-class GradientBorder extends StatelessWidget {
-  const GradientBorder({
-    super.key,
-    required this.child,
-    this.radius = 999,
-    this.width = 1.5,
-    this.glow = false,
-    this.active = true,
-  });
-
-  final Widget child;
-  final double radius;
-  final double width;
-  final bool glow;
-
-  /// When false, draws a plain input border instead of the gradient.
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = StackColors.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        gradient: active ? p.gradient : null,
-        color: active ? null : p.inputBorder,
-        borderRadius: BorderRadius.circular(radius),
-        boxShadow: glow
-            ? [BoxShadow(color: p.violet.withValues(alpha: 0.35), blurRadius: 18, spreadRadius: -2)]
-            : null,
-      ),
-      padding: EdgeInsets.all(active ? width : 1),
-      child: ClipRRect(borderRadius: BorderRadius.circular(radius - width), child: child),
-    );
-  }
 }

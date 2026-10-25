@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'widgets/controls.dart';
+
 Future<bool> confirmDialog(
   BuildContext context, {
   required String title,
@@ -7,18 +9,18 @@ Future<bool> confirmDialog(
   String confirmLabel = 'OK',
   bool destructive = false,
 }) async {
-  final scheme = Theme.of(context).colorScheme;
   final result = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
       title: Text(title),
       content: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 420), child: Text(message)),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-        FilledButton(
-          style: destructive ? FilledButton.styleFrom(backgroundColor: scheme.error, foregroundColor: scheme.onError) : null,
+        SsButton(label: 'Cancel', onPressed: () => Navigator.pop(context, false)),
+        SsButton(
+          label: confirmLabel,
+          icon: destructive ? Icons.delete_outline : null,
+          primary: true,
           onPressed: () => Navigator.pop(context, true),
-          child: Text(confirmLabel),
         ),
       ],
     ),
@@ -51,8 +53,8 @@ Future<String?> promptDialog(
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: Text(confirmLabel)),
+        SsButton(label: 'Cancel', onPressed: () => Navigator.pop(context)),
+        SsButton(label: confirmLabel, primary: true, onPressed: () => Navigator.pop(context, controller.text)),
       ],
     ),
   ).whenComplete(controller.dispose);

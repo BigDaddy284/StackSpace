@@ -1,34 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../app/settings.dart';
 import '../app/theme.dart';
 import '../editor/page_editor_controller.dart';
 import '../workspace/workspace.dart';
 import 'dialogs.dart';
+import 'widgets/controls.dart';
 
-/// The page tree on the left.
+/// The left panel, laid out like Stills & Reels' "Edit picture" panel: a
+/// title, a hint, then labelled sections.
 class Sidebar extends StatefulWidget {
-  const Sidebar({
-    super.key,
-    required this.workspace,
-    required this.editor,
-    required this.onNewPage,
-    required this.onOpenSettings,
-    required this.settings,
-  });
+  const Sidebar({super.key, required this.workspace, required this.editor, required this.onNewPage});
 
-  final AppSettings settings;
   final Workspace workspace;
   final PageEditorController editor;
   final Future<void> Function([String folder]) onNewPage;
-  final VoidCallback onOpenSettings;
 
   @override
-  State<Sidebar> createState() => _SidebarState();
+  State<Sidebar> createState() => SidebarState();
 }
 
-class _SidebarState extends State<Sidebar> {
+class SidebarState extends State<Sidebar> {
   final Set<String> _collapsed = {};
 
   Workspace get ws => widget.workspace;
@@ -48,27 +40,28 @@ class _SidebarState extends State<Sidebar> {
     };
   }
 
-  Future<void> _rename(WorkspaceEntry e) async {
-    final name =
-        await promptDialog(context, title: 'Rename', label: 'New path', initial: e.path, confirmLabel: 'Rename');
-    if (name == null || name.trim().isEmpty || name.trim() == e.path) return;
+  Future<void> rename(String path) async {
+    final name = await promptDialog(context, title: 'Rename', label: 'New path', initial: path, confirmLabel: 'Rename');
+    if (name == null || name.trim().isEmpty || name.trim() == path) return;
     try {
-      await ws.rename(e.path, name.trim());
+      await ws.rename(path, name.trim());
     } on WorkspaceException catch (err) {
       if (mounted) showError(context, err.message);
     }
   }
 
-  Future<void> _delete(WorkspaceEntry e) async {
+  Future<void> delete(String path) async {
+    final folder = await ws.isFolder(path);
+    if (!mounted) return;
     final ok = await confirmDialog(context,
-        title: 'Delete ${e.isFolder ? 'folder' : 'page'}?',
-        message: '"${e.path}" will be moved to the workspace trash (.trash folder).',
+        title: 'Delete ${folder ? 'folder' : 'page'}?',
+        message: '"$path" will be moved to the workspace trash (.trash folder).',
         confirmLabel: 'Delete',
         destructive: true);
-    if (ok) await ws.delete(e.path);
+    if (ok) await ws.delete(path);
   }
 
-  Future<void> _newFolder() async {
+  Future<void> newFolder() async {
     final name = await promptDialog(context, title: 'New folder', label: 'Name', initial: 'New folder');
     if (name == null || name.trim().isEmpty) return;
     try {
@@ -80,123 +73,84 @@ class _SidebarState extends State<Sidebar> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return Material(
-      color: scheme.surfaceContainerLow,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 8, 6),
-            child: Row(
-              children: [
-                Icon(Icons.layers_outlined, size: 20, color: StackColors.of(context).accentText),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Tooltip(
-                    message: ws.root,
-                    child: Text(ws.name, style: theme.textTheme.titleSmall, overflow: TextOverflow.ellipsis),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'New page (Ctrl+N)',
-                  icon: const Icon(Icons.note_add_outlined, size: 20),
-                  onPressed: () => widget.onNewPage(),
-                ),
-                IconButton(
-                  tooltip: 'New folder',
-                  icon: const Icon(Icons.create_new_folder_outlined, size: 20),
-                  onPressed: _newFolder,
-                ),
-              ],
-            ),
-          ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 6),
-            child: SectionLabel('Pages'),
-          ),
-          Expanded(
-            child: ListenableBuilder(
-              listenable: Listenable.merge([ws, widget.editor]),
-              builder: (context, _) {
-                final entries = _visible(ws.entries);
-                if (entries.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text('No pages yet. Create one, or ask the assistant to.',
-                        style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
+    final p = StackColors.of(context);
+    return ColoredBox(
+      color: p.panel,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Tooltip(message: ws.root, child: PanelTitle(ws.name)),
+            const SizedBox(height: 6),
+            const HintText('Every text file in this folder is a page. Right-click a page, or press F2 or Delete, '
+                'to rename or remove it.'),
+            const SizedBox(height: 14),
+            const SectionLabel('Pages'),
+            const SizedBox(height: 6),
+            Expanded(
+              child: ListenableBuilder(
+                listenable: Listenable.merge([ws, widget.editor]),
+                builder: (context, _) {
+                  final entries = _visible(ws.entries);
+                  if (entries.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: HintText('No pages yet. Create one below, or ask the assistant to.'),
+                    );
+                  }
+                  return ListView.builder(
+                    itemCount: entries.length,
+                    itemBuilder: (context, i) => _row(entries[i]),
                   );
-                }
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  itemCount: entries.length,
-                  itemBuilder: (context, i) => _row(entries[i]),
-                );
-              },
+                },
+              ),
             ),
-          ),
-          const Divider(),
-          Row(
-            children: [
-              Expanded(
-                child: ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.settings_outlined, size: 20),
-                  title: const Text('Settings'),
-                  onTap: widget.onOpenSettings,
-                ),
-              ),
-              ValueListenableBuilder(
-                valueListenable: widget.settings.themeModeListenable,
-                builder: (context, mode, _) => IconButton(
-                  tooltip: switch (mode) {
-                    ThemeMode.system => 'Theme: follow Windows. Click for light',
-                    ThemeMode.light => 'Theme: light. Click for dark',
-                    ThemeMode.dark => 'Theme: dark. Click to follow Windows',
-                  },
-                  icon: Icon(
-                      switch (mode) {
-                        ThemeMode.system => Icons.brightness_auto_outlined,
-                        ThemeMode.light => Icons.light_mode_outlined,
-                        ThemeMode.dark => Icons.dark_mode_outlined,
-                      },
-                      size: 20),
-                  onPressed: () => widget.settings.themeMode = switch (mode) {
-                    ThemeMode.system => ThemeMode.light,
-                    ThemeMode.light => ThemeMode.dark,
-                    ThemeMode.dark => ThemeMode.system,
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-            ],
-          ),
-        ],
+            const SizedBox(height: 10),
+            const SectionLabel('Create'),
+            const SizedBox(height: 6),
+            SsButton(
+              icon: Icons.note_add_outlined,
+              label: 'New page',
+              tooltip: 'New page (Ctrl+N)',
+              alignLeft: true,
+              width: double.infinity,
+              onPressed: () => widget.onNewPage(),
+            ),
+            const SizedBox(height: 8),
+            SsButton(
+              icon: Icons.create_new_folder_outlined,
+              label: 'New folder',
+              alignLeft: true,
+              width: double.infinity,
+              onPressed: newFolder,
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _row(WorkspaceEntry e) {
-    final scheme = Theme.of(context).colorScheme;
+    final p = StackColors.of(context);
     final collapsed = _collapsed.contains(e.path);
     final selected = !e.isFolder && widget.editor.path == e.path;
-    return Semantics(
-      selected: selected,
-      expanded: e.isFolder ? !collapsed : null,
-      hint: 'F2 to rename, Delete to delete, or right-click for more',
-      child: CallbackShortcuts(
-        bindings: {
-          const SingleActivator(LogicalKeyboardKey.f2): () => _rename(e),
-          const SingleActivator(LogicalKeyboardKey.delete): () => _delete(e),
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 1),
-          child: Material(
-            color: selected ? scheme.secondaryContainer : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(6),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: MergeSemantics(
+        child: Semantics(
+          label: selected && widget.editor.dirty ? '${e.name}, unsaved changes' : e.name,
+          button: true,
+          selected: selected,
+          expanded: e.isFolder ? !collapsed : null,
+          hint: 'F2 to rename, Delete to delete, or right-click for more',
+          child: CallbackShortcuts(
+            bindings: {
+              const SingleActivator(LogicalKeyboardKey.f2): () => rename(e.path),
+              const SingleActivator(LogicalKeyboardKey.delete): () => delete(e.path),
+            },
+            child: SsRow(
+              selected: selected,
               onTap: () {
                 if (e.isFolder) {
                   setState(() => collapsed ? _collapsed.remove(e.path) : _collapsed.add(e.path));
@@ -205,29 +159,29 @@ class _SidebarState extends State<Sidebar> {
                 }
               },
               onSecondaryTapDown: (details) => _showMenu(e, details.globalPosition),
-              child: SizedBox(
-                height: 30,
-                child: Row(
-                  children: [
-                    SizedBox(width: 8.0 + e.depth * 14),
-                    Icon(_iconFor(e, collapsed), size: 17, color: scheme.onSurfaceVariant),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(e.name,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: selected ? scheme.onSecondaryContainer : scheme.onSurface)),
-                    ),
-                    if (selected && widget.editor.dirty)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: Tooltip(
-                          message: 'Unsaved changes',
-                          child: Icon(Icons.circle,
-                              size: 7, color: StackColors.of(context).accentText, semanticLabel: 'Unsaved changes'),
-                        ),
+              child: Row(
+                children: [
+                  SizedBox(width: 8.0 + e.depth * 14),
+                  Icon(_iconFor(e, collapsed), size: 17, color: selected ? p.text : p.subText),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ExcludeSemantics(
+                      child: Text(
+                        e.name,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: p.text, fontSize: StackType.button),
                       ),
-                  ],
-                ),
+                    ),
+                  ),
+                  if (selected && widget.editor.dirty)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: Tooltip(
+                        message: 'Unsaved changes',
+                        child: Icon(Icons.circle, size: 7, color: p.accentA),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
@@ -250,9 +204,9 @@ class _SidebarState extends State<Sidebar> {
       case 'new':
         await widget.onNewPage(e.path);
       case 'rename':
-        await _rename(e);
+        await rename(e.path);
       case 'delete':
-        await _delete(e);
+        await delete(e.path);
     }
   }
 }

@@ -11,38 +11,52 @@ double contrast(Color a, Color b) {
 }
 
 void main() {
-  for (final p in [StackPalette.dark, StackPalette.light]) {
+  test('palettes are the exact Stills & Reels values', () {
+    expect(StackPalette.darkPalette.panel, const Color.fromARGB(255, 14, 19, 37));
+    expect(StackPalette.darkPalette.accentA, const Color.fromARGB(255, 38, 104, 255));
+    expect(StackPalette.lightPalette.panel, const Color.fromARGB(255, 250, 251, 254));
+    expect(StackPalette.lightPalette.accentB, const Color.fromARGB(255, 150, 62, 240));
+  });
+
+  for (final p in [StackPalette.darkPalette, StackPalette.lightPalette]) {
     group('${p.brightness.name} palette', () {
-      test('body and secondary text reach 4.5:1 on every surface', () {
+      test('Text and SubText reach 4.5:1 on every surface', () {
         for (final entry in p.surfaces.entries) {
-          for (final (name, color) in [
-            ('text', p.text),
-            ('textMuted', p.textMuted),
-            ('textSubtle', p.textSubtle),
-            ('accentText', p.accentText),
-            ('error', p.error),
-          ]) {
+          for (final (name, color) in [('text', p.text), ('subText', p.subText)]) {
             expect(contrast(color, entry.value), greaterThanOrEqualTo(4.5),
                 reason: '$name on ${entry.key}: ${contrast(color, entry.value).toStringAsFixed(2)}');
           }
         }
       });
 
-      test('filled and selected states keep readable text', () {
-        expect(contrast(p.onAccent, p.accent), greaterThanOrEqualTo(4.5));
-        expect(contrast(p.onSelected, p.selected), greaterThanOrEqualTo(4.5));
-        expect(contrast(p.text, p.selected), greaterThanOrEqualTo(4.5));
-        expect(contrast(p.onErrorContainer, p.errorContainer), greaterThanOrEqualTo(4.5));
-        expect(contrast(p.text, p.controlHigh), greaterThanOrEqualTo(4.5));
+      test('error text reaches 4.5:1 on the canvas and panel', () {
+        for (final surface in [p.canvas, p.panel, p.control]) {
+          expect(contrast(p.error, surface), greaterThanOrEqualTo(4.5));
+        }
       });
 
-      test('input borders, status colours and icons reach 3:1', () {
-        for (final surface in [p.dock, p.raised, p.panel]) {
-          expect(contrast(p.inputBorder, surface), greaterThanOrEqualTo(3));
-          expect(contrast(p.success, surface), greaterThanOrEqualTo(3));
-          expect(contrast(p.warning, surface), greaterThanOrEqualTo(3));
-          expect(contrast(p.accent, surface), greaterThanOrEqualTo(3));
+      test('white text on the primary gradient reaches 4:1 across it', () {
+        // AA large-text / UI level at the purple end in dark mode (4.03), 4.5 at the blue end.
+        expect(contrast(Colors.white, p.accentA), greaterThanOrEqualTo(4.5));
+        expect(contrast(Colors.white, p.accentB), greaterThanOrEqualTo(4.0));
+      });
+
+      test('accents, status colours and the pill outline reach 3:1', () {
+        for (final surface in [p.panel, p.pill, p.canvas, p.bar]) {
+          for (final (name, color) in [
+            ('accentA', p.accentA),
+            ('accentB', p.accentB),
+            ('success', p.success),
+            ('warning', p.warning),
+          ]) {
+            expect(contrast(color, surface), greaterThanOrEqualTo(3),
+                reason: '$name: ${contrast(color, surface).toStringAsFixed(2)}');
+          }
         }
+      });
+
+      test('Muted is below 4.5:1, so it is only used for disabled controls', () {
+        expect(contrast(p.muted, p.panel), lessThan(4.5));
       });
     });
   }

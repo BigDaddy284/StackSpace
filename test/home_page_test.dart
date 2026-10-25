@@ -53,9 +53,10 @@ void main() {
   testWidgets('chat opens, minimises, maximises and closes', (tester) async {
     await pumpApp(tester);
     expect(find.text('hello.py'), findsWidgets);
-    expect(find.text('Assistant'), findsOneWidget); // the floating button
+    const open = 'Open the assistant (Ctrl+J)';
+    expect(find.byTooltip(open), findsOneWidget); // the Assistant cell in the top-bar pill
 
-    await tester.tap(find.text('Assistant'));
+    await tester.tap(find.byTooltip(open));
     await tester.pumpAndSettle();
     expect(find.byTooltip('Minimize'), findsOneWidget);
     expect(find.byType(TextField), findsNWidgets(2)); // editor + composer
@@ -75,7 +76,7 @@ void main() {
     await tester.tap(find.byTooltip('Close (Ctrl+J)'));
     await tester.pumpAndSettle();
     expect(find.byTooltip('Minimize'), findsNothing);
-    expect(find.text('Assistant'), findsOneWidget);
+    expect(find.byTooltip(open), findsOneWidget);
   });
 
   testWidgets('the model can edit the open page from the chat', (tester) async {
@@ -83,7 +84,7 @@ void main() {
       ..queueToolCall('replace_text', {'path': 'hello.py', 'old_text': 'print("hi")', 'new_text': 'print("hello")'})
       ..queueText('Done: it now prints hello.');
     await pumpApp(tester);
-    await tester.tap(find.text('Assistant'));
+    await tester.tap(find.byTooltip('Open the assistant (Ctrl+J)'));
     await tester.pumpAndSettle();
     expect(find.text('Thinking: Medium'), findsWidgets);
     expect(find.text('llama3.2:3b'), findsWidgets);

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../platform/title_bar.dart';
 import '../ui/home_page.dart';
 import 'settings.dart';
 import 'theme.dart';
@@ -9,8 +10,8 @@ class StackSpaceApp extends StatelessWidget {
 
   final AppSettings settings;
 
-  static final _light = buildTheme(StackPalette.light);
-  static final _dark = buildTheme(StackPalette.dark);
+  static final _light = buildTheme(StackPalette.lightPalette);
+  static final _dark = buildTheme(StackPalette.darkPalette);
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +23,10 @@ class StackSpaceApp extends StatelessWidget {
         theme: _light,
         darkTheme: _dark,
         themeMode: settings.themeMode,
+        builder: (context, child) {
+          TitleBar.sync(StackColors.of(context));
+          return child!;
+        },
         home: child,
       ),
       child: HomePage(settings: settings),

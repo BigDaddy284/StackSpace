@@ -58,7 +58,7 @@ void main() {
   }
 
   Future<void> openChatAndSend(WidgetTester tester) async {
-    await tester.tap(find.bySemanticsLabel('Open assistant'));
+    await tester.tap(find.byTooltip('Open the assistant (Ctrl+J)'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('composer')), 'summarise');
     await tester.pump();
@@ -66,7 +66,7 @@ void main() {
     await settle(tester);
   }
 
-  for (final palette in [StackPalette.light, StackPalette.dark]) {
+  for (final palette in [StackPalette.lightPalette, StackPalette.darkPalette]) {
     final mode = palette.brightness.name;
 
     testWidgets('$mode: closed dock meets contrast, label and target guidelines', (tester) async {
@@ -91,13 +91,13 @@ void main() {
   }
 
   testWidgets('works at 150% text size without overflow', (tester) async {
-    await pumpApp(tester, StackPalette.dark, textScale: 1.5);
+    await pumpApp(tester, StackPalette.darkPalette, textScale: 1.5);
     await openChatAndSend(tester);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('theme button cycles Windows, light and dark', (tester) async {
-    await pumpApp(tester, StackPalette.light);
+    await pumpApp(tester, StackPalette.lightPalette);
     expect(find.byTooltip('Theme: follow Windows. Click for light'), findsOneWidget);
     await tester.tap(find.byTooltip('Theme: follow Windows. Click for light'));
     await tester.pump();
