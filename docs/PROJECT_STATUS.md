@@ -1,10 +1,11 @@
 # PROJECT STATUS
 
-_Last updated: 2026-10-25 (Improvement Phase 1, Tasks 1-11 done)_
+_Last updated: 2026-10-25 (Improvement Phase 1, Tasks 1-12 done; test build 2 tagged)_
 
 ## Current phase
 Improvement Phase 1: advanced editor, slash menu, code spaces. Working one task at a time.
 Test build 1 (v0.1.0-test.1) is published on GitHub and loads the user's AppFlowy workspace.
+Test build 2 (v0.2.0-test.1, version 0.2.0+2) carries everything from Phase 1; see the GitHub release.
 
 ## Current task and scope
 Tasks 1-11 done: research, plan, the block editor, the slash menu, code spaces, formatting keys,
@@ -16,6 +17,7 @@ Final report: `docs/PHASE1_REPORT.md`.
 ## Task log (Phase 1)
 | Task | Status | Tests | Files |
 | --- | --- | --- | --- |
+| 12. Sidebar clean-up + test build 2 | Done 2026-10-25. Pictures and other binary files (`WorkspaceEntry.binaryExtensions`: images, PDF, archives, media, fonts, executables) are no longer pages: the sidebar hides them and any folder that holds nothing but them, the assistant's search skips them and the first page opened is never one of them. They stay in the folder and the assistant's list tool still shows them. Version bumped to 0.2.0+2 and tag `v0.2.0-test.1` pushed for the GitHub Actions Windows build. | 134/134 (+2) + 21 timing tests | `lib/workspace/workspace.dart`, `lib/ui/sidebar.dart`, `test/workspace_test.dart`, `test/home_page_test.dart`, `pubspec.yaml` |
 | 11. Folding sections + drag-and-drop | Done 2026-10-25. Every heading has a chevron in the gutter (on hover or focus; always while folded) that folds the blocks up to the next heading of the same or a higher level; the block menu has Collapse / Expand section; folded rows take no space in the list; a caret move into a folded block (arrows, undo, a drop) unfolds it; folding changes nothing in the file. The block handle can be dragged: a chip with the block's first line follows the pointer, the source row is dimmed, a line shows where the block will land (upper half: above, lower half: below, the space after the last block: at the end), the list scrolls while the pointer is near its top or bottom edge, and the drop is one undo step. Also fixed on the way: row heights now account for the caret margin a text field keeps at its right, which a borderline-wrapping to-do item exposed at 1100 px / 150 %. | 132/132 (+4) + 21 timing tests | `lib/ui/editor/block_menu.dart`, `block_editor.dart`, `block_metrics.dart`, `test/sections_drag_test.dart`; screenshots 19-20 |
 | 10. Tables + images | Done 2026-10-25. A Markdown table is a grid of single-line cells under a header strip ("Table 4 × 3" and, on hover or focus, Add row / Add column / Delete row / Delete column / Delete table); Tab and Shift+Tab move between cells (Tab on the last cell adds a row), Enter moves down (and adds a row at the bottom), arrows leave at the edges; every change is written back as padded Markdown and each row / column change is its own undo step. `lib/editor/table_data.dart` reads and writes the lines (escaped pipes, alignments, ragged rows repaired). Images: the slash command opens a dialog with "Choose a file…" (system picker) or a typed path / link; a file from outside the workspace is copied to `images/` next to the page, a workspace file is referenced relative to the page, a link stays; a description field under every picture edits the alt text. | 128/128 (+8) + 21 timing tests | `lib/editor/table_data.dart`, `lib/ui/editor/table_block.dart`, `lib/ui/editor/image_dialog.dart`, `lib/ui/editor/header_button.dart`, `block_editor.dart`, `block_metrics.dart`, `slash_commands.dart`, `test/table_image_test.dart`; screenshots 17-18 |
 | 9. Formatting toolbar + block menu | Done 2026-10-25. A toolbar floats above (or below) a text selection with Bold / Italic / Strikethrough / Inline code / Link and a "Turn into" menu (Text, Heading 1-3, Bulleted, Numbered, To-do, Quote, Code block); it follows the selection, never takes focus, and closes on a collapsed caret, scroll or blur. Every row has a drag-handle button in a 24 px gutter (visible on hover or while the block has focus) that opens the block menu: Turn into, Duplicate, Move up / down (Ctrl+Shift+arrows), Delete. Also fixed on the way: markers hug the words when a selection drags in spaces; saves are serialised so a slow write can never land an older version over a newer one; text lines are at least 24 px so one-line blocks stay WCAG tap targets next to the handle. | 119/119 (+5) + 21 timing tests | `lib/ui/editor/format_toolbar.dart`, `lib/ui/editor/block_menu.dart`, `block_editor.dart`, `block_metrics.dart`, `page_editor_controller.dart`, `test/block_menu_test.dart`, `test/block_editor_test.dart`; screenshots 15-16 |
@@ -51,6 +53,15 @@ Final report: `docs/PHASE1_REPORT.md`.
 
 ## Files changed
 See `git log` in `windows_app/` (5 commits on `main`).
+
+## Tests executed and actual results (Task 12)
+- `flutter analyze`: no issues. `flutter test` (without the timing file): 134 passed, 2 skipped by
+  design.
+- New: `workspace_test.dart` lists a `.PNG` and an `images/a.jpg` in `entries` but not in `pages`;
+  `home_page_test.dart` pumps the app with `cover.png`, `images/shot.jpg`, `docs/pic.gif` and
+  `docs/readme.md` and checks the sidebar shows `hello.py`, `docs` and `readme.md` and none of the
+  pictures or the `images` folder.
+- The Windows build itself runs on GitHub Actions for the tag (analyze, test, build, zip, release).
 
 ## Tests executed and actual results (Task 11)
 - `flutter analyze`: no issues. `flutter test` (without the timing file): 132 passed, 2 skipped by
@@ -231,10 +242,9 @@ See KNOWN_ISSUES.md. Main ones: no real-model test yet; large files are read-onl
 Analyzer clean and tests green on Linux. `flutter build windows` not yet run.
 
 ## Next single task
-Phase 1's plan is done. Suggested next task (Task 12): hide non-text files (images) from the sidebar
-and open them in the system viewer, then the Windows build on a Windows machine (`flutter build
-windows`) with a real Ollama model. Columns (side-by-side blocks) stay deferred: Markdown has no
-syntax for them, so they would need HTML in the page.
+Try test build 2 on Windows with a real Ollama model and record what is found. Columns
+(side-by-side blocks) stay deferred: Markdown has no syntax for them, so they would need HTML in
+the page.
 
 ## Exact commands to resume
 ```bash

@@ -51,6 +51,25 @@ void main() {
     await settle(tester);
   }
 
+  testWidgets('the sidebar hides pictures and folders that hold only pictures', (tester) async {
+    await tester.runAsync(() async {
+      await File('${dir.path}/cover.png').writeAsBytes([1, 2, 3]);
+      await Directory('${dir.path}/images').create();
+      await File('${dir.path}/images/shot.jpg').writeAsBytes([1]);
+      await Directory('${dir.path}/docs').create();
+      await File('${dir.path}/docs/pic.gif').writeAsBytes([1]);
+      await File('${dir.path}/docs/readme.md').writeAsString('# R\n');
+    });
+    await pumpApp(tester);
+    expect(find.text('hello.py'), findsWidgets);
+    expect(find.text('readme.md'), findsOneWidget);
+    expect(find.text('docs'), findsOneWidget, reason: 'a folder with a page shows');
+    expect(find.text('cover.png'), findsNothing);
+    expect(find.text('shot.jpg'), findsNothing);
+    expect(find.text('pic.gif'), findsNothing);
+    expect(find.text('images'), findsNothing, reason: 'a folder of pictures only is hidden');
+  });
+
   testWidgets('chat opens, minimises, maximises and closes', (tester) async {
     await pumpApp(tester);
     expect(find.text('hello.py'), findsWidgets);

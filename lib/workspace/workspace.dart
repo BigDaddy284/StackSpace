@@ -29,6 +29,17 @@ class WorkspaceEntry {
   final int size;
   final DateTime? modified;
 
+  /// Pictures, archives and other files that are not text: they are kept in
+  /// the folder (pages reference them) but are not pages.
+  bool get isBinary => !isFolder && binaryExtensions.contains(p.extension(path).toLowerCase());
+
+  static const binaryExtensions = {
+    '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico', '.svg', '.tif', '.tiff', '.heic', //
+    '.pdf', '.zip', '.7z', '.rar', '.gz', '.tar', '.exe', '.dll', '.msi', //
+    '.mp3', '.wav', '.ogg', '.m4a', '.mp4', '.mov', '.avi', '.mkv', '.webm', //
+    '.ttf', '.otf', '.woff', '.woff2', '.db', '.sqlite',
+  };
+
   String get name => p.posix.basename(path);
   int get depth => '/'.allMatches(path).length;
   String get parent => p.posix.dirname(path) == '.' ? '' : p.posix.dirname(path);
@@ -112,7 +123,9 @@ class Workspace extends ChangeNotifier {
     return aParts.length.compareTo(bParts.length);
   }
 
-  List<WorkspaceEntry> get pages => _entries.where((e) => !e.isFolder).toList();
+  /// The text files: what the sidebar shows, the assistant searches and the
+  /// editor opens first. Pictures and other binary files are left out.
+  List<WorkspaceEntry> get pages => _entries.where((e) => !e.isFolder && !e.isBinary).toList();
 
   /// Turns a workspace-relative path into an absolute one, rejecting anything
   /// that would land outside the workspace folder.
@@ -132,8 +145,7 @@ class Workspace extends ChangeNotifier {
     return absolute;
   }
 
-  String toRelative(String absolutePath) =>
-      p.relative(absolutePath, from: root).replaceAll('\\', '/');
+  String toRelative(String absolutePath) => p.relative(absolutePath, from: root).replaceAll('\\', '/');
 
   /// Normalises a relative path to the form used in [entries].
   String normalize(String relativePath) => toRelative(resolve(relativePath));

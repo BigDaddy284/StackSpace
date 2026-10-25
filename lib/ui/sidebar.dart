@@ -25,10 +25,26 @@ class SidebarState extends State<Sidebar> {
 
   Workspace get ws => widget.workspace;
 
-  List<WorkspaceEntry> _visible(List<WorkspaceEntry> entries) => [
-        for (final e in entries)
-          if (!_collapsed.any((folder) => e.path.startsWith('$folder/'))) e,
-      ];
+  /// Rows to show: pages, and folders that hold a page somewhere below them
+  /// (a folder of pictures only is hidden with its pictures); nothing under
+  /// a collapsed folder.
+  List<WorkspaceEntry> _visible(List<WorkspaceEntry> entries) {
+    final hasPage = <String>{};
+    for (final e in entries) {
+      if (e.isFolder || e.isBinary) continue;
+      final parts = e.path.split('/');
+      for (var i = 1; i < parts.length; i++) {
+        hasPage.add(parts.sublist(0, i).join('/'));
+      }
+    }
+    return [
+      for (final e in entries)
+        if (!e.isBinary &&
+            (!e.isFolder || hasPage.contains(e.path)) &&
+            !_collapsed.any((folder) => e.path.startsWith('$folder/')))
+          e,
+    ];
+  }
 
   static IconData _iconFor(WorkspaceEntry e, bool collapsed) {
     if (e.isFolder) return collapsed ? Icons.folder_outlined : Icons.folder_open_outlined;

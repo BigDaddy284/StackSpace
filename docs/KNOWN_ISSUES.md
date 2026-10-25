@@ -36,9 +36,8 @@ without decoding the file.
   assistant edit, or restarting the app unfolds everything. Folding is not written to the file.
 - Dragging a block to a point far down a long page scrolls the list while the pointer sits near its
   bottom edge; there is no drop onto a folded section's hidden blocks (they unfold on the drop).
-- The sidebar lists every file in the workspace, so a picture copied into `images/` next to a page
-  shows there too; opening it in the editor shows its bytes as text. Hiding non-text files is a
-  small follow-up.
+- Pictures and other binary files are hidden from the sidebar (Task 12); there is no way to open
+  them from the app yet. A text file with an unusual extension still shows and opens as text.
 - Links are styled but not clickable; images show when the file exists next to the page, otherwise
   the path is shown.
 - Selection cannot span blocks; Ctrl+A selects the current block.

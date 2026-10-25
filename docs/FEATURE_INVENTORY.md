@@ -112,6 +112,7 @@ This document outlines the features of AppFlowy as identified during the audit p
 | Images: insert from a file picker, path or link; outside files copied next to the page; alt-text field | Implemented and tested (Task 10) |
 | Folding sections: a chevron beside every heading hides the blocks up to the next heading of the same level; Collapse / Expand in the block menu | Implemented and tested (Task 11) |
 | Drag and drop: drag the block handle to move a block, insertion line, auto-scroll at the edges | Implemented and tested (Task 11) |
+| Sidebar shows pages only: pictures, archives and other binary files (and folders holding only those) are hidden | Implemented and tested (Task 12) |
 | Columns (side-by-side blocks) | Deferred: no Markdown syntax |
 | Databases, views | Deferred |
 | Images, attachments, templates | Deferred |

@@ -35,6 +35,17 @@ void main() {
     expect(ws.entries.map((e) => e.path), ['a', 'a/inner.md', 'b.md']);
   });
 
+  test('pictures and other binary files are listed but are not pages', () async {
+    await ws.write('notes.md', 'n');
+    await File('${dir.path}/photo.PNG').writeAsBytes([1, 2, 3]);
+    await Directory('${dir.path}/images').create();
+    await File('${dir.path}/images/a.jpg').writeAsBytes([1]);
+    await ws.refresh();
+    expect(ws.entries.map((e) => e.path), ['images', 'images/a.jpg', 'notes.md', 'photo.PNG']);
+    expect(ws.entries.where((e) => e.isBinary).map((e) => e.path), ['images/a.jpg', 'photo.PNG']);
+    expect(ws.pages.map((e) => e.path), ['notes.md']);
+  });
+
   test('keeps CRLF line endings when saving', () async {
     final file = File(p.join(dir.path, 'win.txt'));
     await file.writeAsString('one\r\ntwo\r\n');
