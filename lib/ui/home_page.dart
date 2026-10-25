@@ -131,6 +131,7 @@ class _HomePageState extends State<HomePage> {
                   editor: _editor,
                   onNewPage: _newPage,
                   onOpenSettings: _openSettings,
+                  settings: settings,
                 ),
               ),
               const VerticalDivider(width: 1),

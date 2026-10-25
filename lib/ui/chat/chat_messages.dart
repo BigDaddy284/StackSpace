@@ -17,22 +17,25 @@ class ChatMessages extends StatelessWidget {
     if (chat.items.isEmpty) return _EmptyState(chat: chat, onOpenSettings: onOpenSettings);
     final items = chat.items.reversed.toList();
     // reverse: true keeps the list pinned to the newest message while it streams.
-    return ListView.builder(
-      reverse: true,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      itemCount: items.length,
-      itemBuilder: (context, i) => Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: _maxWidth),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.only(bottom: 10),
-            child: switch (items[i]) {
-              UserItem item => _UserBubble(item: item),
-              AssistantItem item => _AssistantMessage(item: item),
-              ToolItem item => _ToolCard(item: item, onUndo: () => chat.revert(item)),
-              ErrorItem item => _ErrorBox(message: item.message),
-            },
+    // One SelectionArea lets you select and copy across the whole conversation.
+    return SelectionArea(
+      child: ListView.builder(
+        reverse: true,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        itemCount: items.length,
+        itemBuilder: (context, i) => Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _maxWidth),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.only(bottom: 10),
+              child: switch (items[i]) {
+                UserItem item => _UserBubble(item: item),
+                AssistantItem item => _AssistantMessage(item: item),
+                ToolItem item => _ToolCard(item: item, onUndo: () => chat.revert(item)),
+                ErrorItem item => _ErrorBox(message: item.message),
+              },
+            ),
           ),
         ),
       ),
@@ -116,7 +119,7 @@ class _UserBubble extends StatelessWidget {
                 color: theme.colorScheme.surfaceContainerHigh,
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: SelectableText(item.text),
+              child: Text(item.text),
             ),
           ],
         ),
@@ -171,9 +174,9 @@ class _AssistantMessageState extends State<_AssistantMessage> {
           Container(
             margin: const EdgeInsets.only(bottom: 6),
             padding: const EdgeInsets.only(left: 12),
-            decoration: BoxDecoration(border: Border(left: BorderSide(color: theme.colorScheme.outlineVariant, width: 2))),
-            child: SelectableText(item.thinking.toString().trim(),
-                style: theme.textTheme.bodySmall?.copyWith(color: muted)),
+            decoration:
+                BoxDecoration(border: Border(left: BorderSide(color: theme.colorScheme.outlineVariant, width: 2))),
+            child: Text(item.thinking.toString().trim(), style: theme.textTheme.bodySmall?.copyWith(color: muted)),
           ),
         if (item.content.isNotEmpty) MessageBody(text: item.content.toString()),
       ],
@@ -196,12 +199,12 @@ class MessageBody extends StatelessWidget {
     var last = 0;
     for (final m in _fence.allMatches(text)) {
       final before = text.substring(last, m.start).trim();
-      if (before.isNotEmpty) parts.add(SelectableText(before));
+      if (before.isNotEmpty) parts.add(Text(before));
       parts.add(_CodeBlock(language: m.group(1) ?? '', code: (m.group(2) ?? '').trimRight()));
       last = m.end;
     }
     final rest = text.substring(last).trim();
-    if (rest.isNotEmpty) parts.add(SelectableText(rest));
+    if (rest.isNotEmpty) parts.add(Text(rest));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -244,7 +247,7 @@ class _CodeBlock extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: SelectableText(code,
+            child: Text(code,
                 style: const TextStyle(fontFamily: monoFont, fontFamilyFallback: monoFallback, fontSize: 13)),
           ),
         ],
@@ -317,7 +320,7 @@ class _ToolCardState extends State<_ToolCard> {
           if (_expanded)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-              child: SelectableText(
+              child: Text(
                 '${item.name}(${item.arguments.entries.map((e) => '${e.key}: ${_short(e.value)}').join(', ')})\n\n${_short(item.result, 1500)}',
                 style: const TextStyle(fontFamily: monoFont, fontFamilyFallback: monoFallback, fontSize: 12),
               ),
@@ -355,7 +358,7 @@ class _ErrorBox extends StatelessWidget {
       child: Row(children: [
         Icon(Icons.error_outline, size: 16, color: scheme.onErrorContainer),
         const SizedBox(width: 8),
-        Expanded(child: SelectableText(message, style: TextStyle(color: scheme.onErrorContainer))),
+        Expanded(child: Text(message, style: TextStyle(color: scheme.onErrorContainer))),
       ]),
     );
   }

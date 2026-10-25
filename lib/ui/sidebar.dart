@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../app/settings.dart';
+import '../app/theme.dart';
 import '../editor/page_editor_controller.dart';
 import '../workspace/workspace.dart';
 import 'dialogs.dart';
@@ -12,8 +15,10 @@ class Sidebar extends StatefulWidget {
     required this.editor,
     required this.onNewPage,
     required this.onOpenSettings,
+    required this.settings,
   });
 
+  final AppSettings settings;
   final Workspace workspace;
   final PageEditorController editor;
   final Future<void> Function([String folder]) onNewPage;
@@ -44,7 +49,8 @@ class _SidebarState extends State<Sidebar> {
   }
 
   Future<void> _rename(WorkspaceEntry e) async {
-    final name = await promptDialog(context, title: 'Rename', label: 'New path', initial: e.path, confirmLabel: 'Rename');
+    final name =
+        await promptDialog(context, title: 'Rename', label: 'New path', initial: e.path, confirmLabel: 'Rename');
     if (name == null || name.trim().isEmpty || name.trim() == e.path) return;
     try {
       await ws.rename(e.path, name.trim());
@@ -85,7 +91,7 @@ class _SidebarState extends State<Sidebar> {
             padding: const EdgeInsets.fromLTRB(16, 14, 8, 6),
             child: Row(
               children: [
-                Icon(Icons.layers_outlined, size: 20, color: scheme.primary),
+                Icon(Icons.layers_outlined, size: 20, color: StackColors.of(context).accentText),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Tooltip(
@@ -105,6 +111,10 @@ class _SidebarState extends State<Sidebar> {
                 ),
               ],
             ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 6),
+            child: SectionLabel('Pages'),
           ),
           Expanded(
             child: ListenableBuilder(
@@ -127,11 +137,40 @@ class _SidebarState extends State<Sidebar> {
             ),
           ),
           const Divider(),
-          ListTile(
-            dense: true,
-            leading: const Icon(Icons.settings_outlined, size: 20),
-            title: const Text('Settings'),
-            onTap: widget.onOpenSettings,
+          Row(
+            children: [
+              Expanded(
+                child: ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.settings_outlined, size: 20),
+                  title: const Text('Settings'),
+                  onTap: widget.onOpenSettings,
+                ),
+              ),
+              ValueListenableBuilder(
+                valueListenable: widget.settings.themeModeListenable,
+                builder: (context, mode, _) => IconButton(
+                  tooltip: switch (mode) {
+                    ThemeMode.system => 'Theme: follow Windows. Click for light',
+                    ThemeMode.light => 'Theme: light. Click for dark',
+                    ThemeMode.dark => 'Theme: dark. Click to follow Windows',
+                  },
+                  icon: Icon(
+                      switch (mode) {
+                        ThemeMode.system => Icons.brightness_auto_outlined,
+                        ThemeMode.light => Icons.light_mode_outlined,
+                        ThemeMode.dark => Icons.dark_mode_outlined,
+                      },
+                      size: 20),
+                  onPressed: () => widget.settings.themeMode = switch (mode) {
+                    ThemeMode.system => ThemeMode.light,
+                    ThemeMode.light => ThemeMode.dark,
+                    ThemeMode.dark => ThemeMode.system,
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
           ),
         ],
       ),
@@ -142,35 +181,54 @@ class _SidebarState extends State<Sidebar> {
     final scheme = Theme.of(context).colorScheme;
     final collapsed = _collapsed.contains(e.path);
     final selected = !e.isFolder && widget.editor.path == e.path;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 1),
-      child: Material(
-        color: selected ? scheme.secondaryContainer : Colors.transparent,
-        borderRadius: BorderRadius.circular(6),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(6),
-          onTap: () {
-            if (e.isFolder) {
-              setState(() => collapsed ? _collapsed.remove(e.path) : _collapsed.add(e.path));
-            } else {
-              widget.editor.open(e.path);
-            }
-          },
-          onSecondaryTapDown: (details) => _showMenu(e, details.globalPosition),
-          child: SizedBox(
-            height: 30,
-            child: Row(
-              children: [
-                SizedBox(width: 8.0 + e.depth * 14),
-                Icon(_iconFor(e, collapsed), size: 17, color: scheme.onSurfaceVariant),
-                const SizedBox(width: 8),
-                Expanded(child: Text(e.name, overflow: TextOverflow.ellipsis)),
-                if (selected && widget.editor.dirty)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Icon(Icons.circle, size: 7, color: scheme.primary),
-                  ),
-              ],
+    return Semantics(
+      selected: selected,
+      expanded: e.isFolder ? !collapsed : null,
+      hint: 'F2 to rename, Delete to delete, or right-click for more',
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.f2): () => _rename(e),
+          const SingleActivator(LogicalKeyboardKey.delete): () => _delete(e),
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 1),
+          child: Material(
+            color: selected ? scheme.secondaryContainer : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: () {
+                if (e.isFolder) {
+                  setState(() => collapsed ? _collapsed.remove(e.path) : _collapsed.add(e.path));
+                } else {
+                  widget.editor.open(e.path);
+                }
+              },
+              onSecondaryTapDown: (details) => _showMenu(e, details.globalPosition),
+              child: SizedBox(
+                height: 30,
+                child: Row(
+                  children: [
+                    SizedBox(width: 8.0 + e.depth * 14),
+                    Icon(_iconFor(e, collapsed), size: 17, color: scheme.onSurfaceVariant),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(e.name,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: selected ? scheme.onSecondaryContainer : scheme.onSurface)),
+                    ),
+                    if (selected && widget.editor.dirty)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Tooltip(
+                          message: 'Unsaved changes',
+                          child: Icon(Icons.circle,
+                              size: 7, color: StackColors.of(context).accentText, semanticLabel: 'Unsaved changes'),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),

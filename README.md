@@ -23,6 +23,19 @@ that runs on local models through [Ollama](https://ollama.com).
     shows as a card in the chat with an **Undo** button. Deletes ask you first (Settings can
     turn that off), and the editor is locked while the assistant is working.
 
+## Look and accessibility
+
+- Uses the Stills & Reels look: deep navy surfaces, a blue accent and a blue-to-violet
+  gradient on the Assistant button and the focused message box.
+- Light and dark themes. The button next to Settings cycles between following Windows,
+  light and dark; Settings has the same choice.
+- Every text colour reaches WCAG AA contrast (4.5:1) on the surfaces it's used on, and
+  borders and icons reach 3:1. `test/theme_contrast_test.dart` checks the palette, and
+  `test/accessibility_test.dart` checks the running app in both themes for contrast,
+  screen-reader labels, 24x24 click targets, and layout at 150% text size.
+- Keyboard: Ctrl+J opens and closes the assistant, Enter sends, Shift+Enter adds a line,
+  and F2 / Delete rename or delete the focused page in the sidebar.
+
 ## Using it with Ollama
 
 1. Install Ollama for Windows and pull a model that supports tools, for example

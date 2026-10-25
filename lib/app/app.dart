@@ -2,31 +2,29 @@ import 'package:flutter/material.dart';
 
 import '../ui/home_page.dart';
 import 'settings.dart';
+import 'theme.dart';
 
 class StackSpaceApp extends StatelessWidget {
   const StackSpaceApp({super.key, required this.settings});
 
   final AppSettings settings;
 
-  static ThemeData _theme(Brightness brightness) {
-    final scheme = ColorScheme.fromSeed(seedColor: const Color(0xFF5B5BD6), brightness: brightness);
-    return ThemeData(
-      colorScheme: scheme,
-      useMaterial3: true,
-      visualDensity: VisualDensity.compact,
-      dividerTheme: DividerThemeData(color: scheme.outlineVariant, space: 1, thickness: 1),
-      tooltipTheme: const TooltipThemeData(waitDuration: Duration(milliseconds: 500)),
-    );
-  }
+  static final _light = buildTheme(StackPalette.light);
+  static final _dark = buildTheme(StackPalette.dark);
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'StackSpace',
-      debugShowCheckedModeBanner: false,
-      theme: _theme(Brightness.light),
-      darkTheme: _theme(Brightness.dark),
-      home: HomePage(settings: settings),
+    return ListenableBuilder(
+      listenable: settings.themeModeListenable,
+      builder: (context, child) => MaterialApp(
+        title: 'StackSpace',
+        debugShowCheckedModeBanner: false,
+        theme: _light,
+        darkTheme: _dark,
+        themeMode: settings.themeMode,
+        home: child,
+      ),
+      child: HomePage(settings: settings),
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -55,6 +56,17 @@ class AppSettings extends ChangeNotifier {
 
   bool get confirmDeletes => _prefs.getBool('confirmDeletes') ?? true;
   set confirmDeletes(bool value) => _set('confirmDeletes', value);
+
+  /// System follows the Windows light/dark setting.
+  ThemeMode get themeMode => themeModeListenable.value;
+  set themeMode(ThemeMode value) {
+    themeModeListenable.value = value;
+    _set('themeMode', value.name);
+  }
+
+  /// Separate from [notifyListeners] so dragging the dock doesn't rebuild the whole app.
+  late final themeModeListenable =
+      ValueNotifier(ThemeMode.values.asNameMap()[_prefs.getString('themeMode')] ?? ThemeMode.system);
 
   double get dockHeight => _prefs.getDouble('dockHeight') ?? 360;
   set dockHeight(double value) => _set('dockHeight', value);

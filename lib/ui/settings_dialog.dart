@@ -21,6 +21,7 @@ class _SettingsDialogState extends State<_SettingsDialog> {
   late final _context = TextEditingController(text: '${widget.settings.contextLength}');
   late final _workspace = TextEditingController(text: widget.settings.workspacePath);
   late bool _confirmDeletes = widget.settings.confirmDeletes;
+  late ThemeMode _themeMode = widget.settings.themeMode;
 
   @override
   void dispose() {
@@ -36,6 +37,7 @@ class _SettingsDialogState extends State<_SettingsDialog> {
     s.contextLength = int.tryParse(_context.text.trim())?.clamp(2048, 262144) ?? AppSettings.defaultContextLength;
     if (_workspace.text.trim().isNotEmpty) s.workspacePath = _workspace.text.trim();
     s.confirmDeletes = _confirmDeletes;
+    s.themeMode = _themeMode;
     Navigator.pop(context, true);
   }
 
@@ -50,6 +52,18 @@ class _SettingsDialogState extends State<_SettingsDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text('Appearance', style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: 8),
+            SegmentedButton<ThemeMode>(
+              segments: const [
+                ButtonSegment(value: ThemeMode.system, icon: Icon(Icons.brightness_auto_outlined), label: Text('Windows')),
+                ButtonSegment(value: ThemeMode.light, icon: Icon(Icons.light_mode_outlined), label: Text('Light')),
+                ButtonSegment(value: ThemeMode.dark, icon: Icon(Icons.dark_mode_outlined), label: Text('Dark')),
+              ],
+              selected: {_themeMode},
+              onSelectionChanged: (v) => setState(() => _themeMode = v.first),
+            ),
+            const SizedBox(height: 16),
             TextField(controller: _workspace, decoration: const InputDecoration(labelText: 'Workspace folder')),
             const SizedBox(height: 4),
             Text('Every text file in this folder is a page.', style: muted),

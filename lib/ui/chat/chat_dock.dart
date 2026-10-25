@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../ai/chat_controller.dart';
+import '../../app/theme.dart';
 import '../../editor/page_editor_controller.dart';
 import 'chat_messages.dart';
 import 'composer.dart';
@@ -43,12 +44,7 @@ class ChatDockLayout extends StatelessWidget {
               bottom: 36,
               child: Tooltip(
                 message: 'Open the assistant (Ctrl+J)',
-                child: FloatingActionButton.extended(
-                  heroTag: 'assistant',
-                  onPressed: () => onModeChanged(DockMode.open),
-                  icon: const Icon(Icons.auto_awesome),
-                  label: const Text('Assistant'),
-                ),
+                child: _AssistantButton(onPressed: () => onModeChanged(DockMode.open)),
               ),
             ),
           ],
@@ -139,9 +135,10 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final p = StackColors.of(context);
     final (dotColor, statusText) = switch (chat.status) {
-      OllamaStatus.connected => (Colors.green, chat.model ?? 'No model'),
-      OllamaStatus.connecting => (Colors.amber, 'Connecting...'),
+      OllamaStatus.connected => (p.success, chat.model ?? 'No model'),
+      OllamaStatus.connecting => (p.warning, 'Connecting...'),
       OllamaStatus.offline => (scheme.error, 'Ollama offline'),
       OllamaStatus.unknown => (scheme.outline, 'Not connected'),
     };
@@ -155,37 +152,60 @@ class _Header extends StatelessWidget {
           padding: const EdgeInsets.only(left: 16, right: 6),
           child: Row(
             children: [
-              Icon(Icons.auto_awesome, size: 18, color: scheme.primary),
+              Icon(Icons.auto_awesome, size: 18, color: p.accentText),
               const SizedBox(width: 8),
-              Text('Assistant', style: theme.textTheme.titleSmall),
+              Semantics(header: true, child: Text('Assistant', style: theme.textTheme.titleSmall)),
               const SizedBox(width: 14),
-              Tooltip(
-                message: chat.statusMessage ??
-                    (chat.status == OllamaStatus.connected
-                        ? 'Connected to Ollama ${chat.ollamaVersion ?? ''} at ${chat.settings.ollamaUrl}'
-                        : chat.settings.ollamaUrl),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: scheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(20),
+              Expanded(
+                child: Row(children: [
+                  Flexible(
+                    child: Tooltip(
+                      message: chat.statusMessage ??
+                          (chat.status == OllamaStatus.connected
+                              ? 'Connected to Ollama ${chat.ollamaVersion ?? ''} at ${chat.settings.ollamaUrl}'
+                              : chat.settings.ollamaUrl),
+                      child: Semantics(
+                        liveRegion: true,
+                        label: 'Ollama ${switch (chat.status) {
+                          OllamaStatus.connected => 'connected',
+                          OllamaStatus.connecting => 'connecting',
+                          OllamaStatus.offline => 'offline',
+                          OllamaStatus.unknown => 'not connected',
+                        }}',
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: scheme.surfaceContainerHigh,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Icons.circle, size: 8, color: dotColor),
+                            const SizedBox(width: 6),
+                            Flexible(
+                                child: Text(statusText,
+                                    style: theme.textTheme.labelMedium, overflow: TextOverflow.ellipsis)),
+                            if (chat.status == OllamaStatus.connected && chat.capabilities.thinking) ...[
+                              Text('  ·  ', style: theme.textTheme.labelMedium?.copyWith(color: scheme.outline)),
+                              Flexible(
+                                child: Text('Thinking: ${chat.thinkLevel.label}',
+                                    style: theme.textTheme.labelMedium, overflow: TextOverflow.ellipsis),
+                              ),
+                            ],
+                          ]),
+                        ),
+                      ),
+                    ),
                   ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.circle, size: 8, color: dotColor),
-                    const SizedBox(width: 6),
-                    Text(statusText, style: theme.textTheme.labelMedium),
-                    if (chat.status == OllamaStatus.connected && chat.capabilities.thinking) ...[
-                      Text('  ·  ', style: theme.textTheme.labelMedium?.copyWith(color: scheme.outline)),
-                      Text('Thinking: ${chat.thinkLevel.label}', style: theme.textTheme.labelMedium),
-                    ],
-                  ]),
-                ),
+                  if (chat.busy) ...[
+                    const SizedBox(width: 10),
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2, semanticsLabel: 'Assistant is working'),
+                    ),
+                  ],
+                ]),
               ),
-              if (chat.busy) ...[
-                const SizedBox(width: 10),
-                const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
-              ],
-              const Spacer(),
               if (!minimized)
                 IconButton(
                   tooltip: 'New chat',
@@ -208,6 +228,39 @@ class _Header extends StatelessWidget {
                 onPressed: () => onModeChanged(DockMode.closed),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The floating "Assistant" pill, styled like the mode switcher in Stills & Reels.
+class _AssistantButton extends StatelessWidget {
+  const _AssistantButton({required this.onPressed});
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = StackColors.of(context);
+    return Semantics(
+      button: true,
+      label: 'Open assistant',
+      excludeSemantics: true,
+      child: GradientBorder(
+        glow: true,
+        child: Material(
+          color: p.raised,
+          child: InkWell(
+            onTap: onPressed,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.auto_awesome, size: 18, color: p.accentText),
+                const SizedBox(width: 8),
+                Text('Assistant', style: TextStyle(color: p.text, fontWeight: FontWeight.w600)),
+              ]),
+            ),
           ),
         ),
       ),

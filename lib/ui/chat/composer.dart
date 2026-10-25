@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../ai/chat_controller.dart';
 import '../../app/settings.dart';
+import '../../app/theme.dart';
 import '../../editor/page_editor_controller.dart';
 
 /// The message box at the bottom of the chat: context chips for the open page
@@ -66,73 +67,75 @@ class _ComposerState extends State<Composer> {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 800),
-          child: Container(
-            decoration: BoxDecoration(
-              color: scheme.surface,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: _focus.hasFocus ? scheme.outline : scheme.outlineVariant),
-              boxShadow: [BoxShadow(color: scheme.shadow.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2))],
-            ),
-            padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ListenableBuilder(listenable: widget.editor, builder: (context, _) => _contextChips(theme)),
-                CallbackShortcuts(
-                  bindings: {const SingleActivator(LogicalKeyboardKey.enter): _send},
-                  child: Focus(
-                    onFocusChange: (_) => setState(() {}),
-                    child: TextField(
-                      key: const Key('composer'),
-                      controller: _text,
-                      focusNode: _focus,
-                      minLines: 1,
-                      maxLines: 8,
-                      decoration: const InputDecoration(
-                        hintText: 'Ask about this page, or tell me what to create, edit or delete...',
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(vertical: 8),
+          child: GradientBorder(
+            radius: 18,
+            active: _focus.hasFocus,
+            glow: _focus.hasFocus,
+            child: Container(
+              color: StackColors.of(context).raised,
+              padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ListenableBuilder(listenable: widget.editor, builder: (context, _) => _contextChips(theme)),
+                  CallbackShortcuts(
+                    bindings: {const SingleActivator(LogicalKeyboardKey.enter): _send},
+                    child: Focus(
+                      onFocusChange: (_) => setState(() {}),
+                      child: TextField(
+                        key: const Key('composer'),
+                        controller: _text,
+                        focusNode: _focus,
+                        minLines: 1,
+                        maxLines: 8,
+                        decoration: const InputDecoration(
+                          hintText: 'Ask about this page, or tell me what to create, edit or delete...',
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(vertical: 8),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    _ModelPicker(chat: chat),
-                    const SizedBox(width: 4),
-                    _ThinkingPicker(chat: chat),
-                    if (chat.model != null && chat.status == OllamaStatus.connected && !chat.capabilities.tools)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 6),
-                        child: Tooltip(
-                          message: "This model can't call tools, so it can answer questions but not change pages.",
-                          child: Text('No tools', style: theme.textTheme.labelSmall?.copyWith(color: scheme.tertiary)),
-                        ),
-                      ),
-                    const Spacer(),
-                    if (chat.lastPromptTokens != null)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 10),
-                        child: Tooltip(
-                          message: 'Tokens used by the last request, out of the context length set in Settings.',
-                          child: Text(
-                            '${_k(chat.lastPromptTokens!)} / ${_k(chat.settings.contextLength)}',
-                            style: theme.textTheme.labelSmall?.copyWith(color: scheme.outline),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      _ModelPicker(chat: chat),
+                      const SizedBox(width: 4),
+                      _ThinkingPicker(chat: chat),
+                      if (chat.model != null && chat.status == OllamaStatus.connected && !chat.capabilities.tools)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 6),
+                          child: Tooltip(
+                            message: "This model can't call tools, so it can answer questions but not change pages.",
+                            child:
+                                Text('No tools', style: theme.textTheme.labelSmall?.copyWith(color: scheme.tertiary)),
                           ),
                         ),
-                      ),
-                    chat.busy
-                        ? IconButton.filled(tooltip: 'Stop', onPressed: chat.stop, icon: const Icon(Icons.stop, size: 18))
-                        : IconButton.filled(
-                            tooltip: 'Send (Enter)',
-                            onPressed: canSend ? _send : null,
-                            icon: const Icon(Icons.arrow_upward, size: 18),
+                      const Spacer(),
+                      if (chat.lastPromptTokens != null)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 10),
+                          child: Tooltip(
+                            message: 'Tokens used by the last request, out of the context length set in Settings.',
+                            child: Text(
+                              '${_k(chat.lastPromptTokens!)} / ${_k(chat.settings.contextLength)}',
+                              style: theme.textTheme.labelSmall?.copyWith(color: scheme.outline),
+                            ),
                           ),
-                  ],
-                ),
-              ],
+                        ),
+                      chat.busy
+                          ? IconButton.filled(
+                              tooltip: 'Stop', onPressed: chat.stop, icon: const Icon(Icons.stop, size: 18))
+                          : IconButton.filled(
+                              tooltip: 'Send (Enter)',
+                              onPressed: canSend ? _send : null,
+                              icon: const Icon(Icons.arrow_upward, size: 18),
+                            ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -195,9 +198,15 @@ class _ContextChip extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 260),
             child: Text(label, style: theme.textTheme.labelMedium, overflow: TextOverflow.ellipsis),
           ),
-          InkWell(
-            onTap: onRemove,
-            child: const Padding(padding: EdgeInsets.all(5), child: Icon(Icons.close, size: 13)),
+          Semantics(
+            button: true,
+            label: 'Remove $label from context',
+            excludeSemantics: true,
+            child: InkWell(
+              onTap: onRemove,
+              borderRadius: BorderRadius.circular(6),
+              child: SizedBox(width: 24, height: 24, child: Icon(Icons.close, size: 13)),
+            ),
           ),
         ]),
       ),
