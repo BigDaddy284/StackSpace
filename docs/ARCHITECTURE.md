@@ -38,6 +38,12 @@ BlockEditor (lib/ui/editor/block_editor.dart)
          Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z, Ctrl+Shift+Up/Down (move block)
    text: newline splits (Shift+Enter keeps a soft break), shortcuts convert, late platform
          updates are reconciled
+   selection toolbar (lib/ui/editor/format_toolbar.dart): shown in an Overlay above or below the
+         selected text (RenderEditable boxes), Bold / Italic / Strike / Code / Link + "Turn into";
+         buttons never take focus, so the field keeps its selection; closes on collapse, scroll, blur
+   block handle + menu (lib/ui/editor/block_menu.dart): 24 px gutter left of every row, a
+         drag-handle button visible on hover or focus, popup with Turn into / Duplicate /
+         Move up / Move down / Delete; edits go through PageDocument so undo covers them
 ```
 
 Every row of the list has a height computed before it is built (`lib/ui/editor/block_metrics.dart`:

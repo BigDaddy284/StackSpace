@@ -14,8 +14,10 @@ import '../../editor/code_languages.dart';
 import '../../editor/page_document.dart';
 import '../../editor/page_editor_controller.dart';
 import '../../editor/slash_commands.dart';
+import 'block_menu.dart';
 import 'block_metrics.dart';
 import 'code_block.dart';
+import 'format_toolbar.dart';
 import 'inline_markdown.dart';
 import 'slash_menu.dart';
 
@@ -45,6 +47,12 @@ class _BlockEditorState extends State<BlockEditor> {
   /// Where the caret goes once the target block has been built.
   Caret? _pending;
 
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_onScroll);
+  }
+
   final _fieldKeys = <int, GlobalKey>{};
 
   // Code spaces: their editors, wrap setting, and which ones have a guessed
@@ -56,6 +64,11 @@ class _BlockEditorState extends State<BlockEditor> {
   static const detectDelay = Duration(milliseconds: 500);
 
   final _slashPortal = OverlayPortalController();
+  final _toolbarPortal = OverlayPortalController();
+  _ToolbarSession? _toolbar;
+
+  /// Whether the mouse is over a row, one notifier per block, read by its handle.
+  final _hovers = <int, ValueNotifier<bool>>{};
   _SlashSession? _slash;
 
   /// The open slash menu, for tests and the pane.
@@ -63,6 +76,10 @@ class _BlockEditorState extends State<BlockEditor> {
 
   @override
   void dispose() {
+    _scroll.removeListener(_onScroll);
+    for (final h in _hovers.values) {
+      h.dispose();
+    }
     for (final c in _texts.values) {
       c.dispose();
     }
@@ -91,6 +108,7 @@ class _BlockEditorState extends State<BlockEditor> {
   bool _isCode(Block block) => block.kind == BlockKind.code;
 
   GlobalKey _fieldKeyFor(Block block) => _fieldKeys.putIfAbsent(block.id, GlobalKey.new);
+  ValueNotifier<bool> _hoverFor(Block block) => _hovers.putIfAbsent(block.id, () => ValueNotifier(false));
 
   /// Code blocks whose caption field is open although the caption is empty.
   final _captions = <int>{};
@@ -104,6 +122,9 @@ class _BlockEditorState extends State<BlockEditor> {
     _fieldKeys.removeWhere((id, _) => !live.contains(id));
     _heights.removeWhere((id, _) => !live.contains(id));
     _captions.removeWhere((id) => !live.contains(id));
+    for (final id in _hovers.keys.where((id) => !live.contains(id)).toList()) {
+      _hovers.remove(id)!.dispose();
+    }
     for (final id in _texts.keys.where((id) => !live.contains(id)).toList()) {
       _texts.remove(id)!.dispose();
     }
@@ -577,7 +598,16 @@ class _BlockEditorState extends State<BlockEditor> {
     final text = _textFor(block);
     final value = text.text;
     final sel = text.selection.isValid ? text.selection : TextSelection.collapsed(offset: value.length);
-    final start = sel.start, end = sel.end, n = marker.length;
+    // Markers hug the words: a selection that drags in a space on either side
+    // ("** word**" is not bold in Markdown) is trimmed first.
+    var start = sel.start, end = sel.end;
+    while (start < end && value[start].trim().isEmpty) {
+      start++;
+    }
+    while (end > start && value[end - 1].trim().isEmpty) {
+      end--;
+    }
+    final n = marker.length;
     final inner = value.substring(start, end);
     final String next;
     final TextSelection after;
@@ -711,6 +741,11 @@ class _BlockEditorState extends State<BlockEditor> {
     final text = _textFor(block);
     final focused = _focusFor(block).hasFocus;
     if (focused) widget.controller.setSelection(index, text.selection);
+    if (block.isText && !doc.plain && focused && !text.selection.isCollapsed && !widget.readOnly) {
+      _positionToolbar(block);
+    } else if (_toolbar?.blockId == block.id) {
+      _closeToolbar();
+    }
     final slash = _slash;
     if (slash != null && slash.blockId == block.id) {
       if (!focused) {
@@ -719,6 +754,101 @@ class _BlockEditorState extends State<BlockEditor> {
         // The caret left the query.
         _closeSlash();
       }
+    }
+  }
+
+  // ---- floating toolbar and block menu ----------------------------------------
+
+  /// Shows the toolbar above the block's selection once it has been laid out.
+  void _positionToolbar(Block block) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_focusFor(block).hasFocus) return;
+      final text = _textFor(block);
+      if (text.selection.isCollapsed || !text.selection.isValid) return;
+      final editable = _findEditable(_fieldKeyFor(block).currentContext?.findRenderObject());
+      if (editable == null) return;
+      final boxes = editable.getBoxesForSelection(text.selection);
+      Rect local;
+      if (boxes.isEmpty) {
+        local = editable.getLocalRectForCaret(TextPosition(offset: text.selection.start));
+      } else {
+        local = boxes.first.toRect();
+        for (final b in boxes.skip(1)) {
+          local = local.expandToInclude(b.toRect());
+        }
+      }
+      final topLeft = editable.localToGlobal(local.topLeft);
+      final anchor = Rect.fromLTWH(topLeft.dx, topLeft.dy, local.width, local.height);
+      final current = _toolbar;
+      if (current != null && current.blockId == block.id && current.anchor == anchor) return;
+      setState(() => _toolbar = _ToolbarSession(block.id, anchor));
+      if (!_toolbarPortal.isShowing) _toolbarPortal.show();
+    });
+  }
+
+  void _closeToolbar() {
+    if (_toolbar == null) return;
+    _toolbar = null;
+    if (_toolbarPortal.isShowing) _toolbarPortal.hide();
+    if (mounted) setState(() {});
+  }
+
+  void _onScroll() {
+    if (_toolbar != null) _closeToolbar();
+  }
+
+  void _formatAction(Block block, FormatAction action) {
+    final index = doc.indexOf(block.id);
+    if (index < 0) return;
+    switch (action) {
+      case FormatAction.bold:
+        _toggleInline(index, block, '**');
+      case FormatAction.italic:
+        _toggleInline(index, block, '_');
+      case FormatAction.strike:
+        _toggleInline(index, block, '~~');
+      case FormatAction.code:
+        _toggleInline(index, block, '`');
+      case FormatAction.link:
+        _insertLink(index, block);
+    }
+    _focusFor(block).requestFocus();
+  }
+
+  /// Turns a block into [kind] at [level], keeping its text and the caret.
+  void _turnInto(Block block, BlockKind kind, int level) {
+    final index = doc.indexOf(block.id);
+    if (index < 0) return;
+    final current = doc[index];
+    if (current.kind == kind && (kind != BlockKind.heading || current.level == level)) return;
+    final offset = _isCode(current) ? 0 : (_textFor(current).selection.extentOffset.clamp(0, current.text.length));
+    doc.convert(index, kind, level: level, caret: (block: index, offset: offset));
+    _moveCaret((block: index, offset: offset));
+  }
+
+  Future<void> _openBlockMenu(Block block, Offset at) async {
+    final index = doc.indexOf(block.id);
+    if (index < 0) return;
+    final result =
+        await showBlockMenu(context, at, doc[index], canMoveUp: index > 0, canMoveDown: index + 1 < doc.length);
+    if (result == null || !mounted) return;
+    final i = doc.indexOf(block.id);
+    if (i < 0) return;
+    switch (result.$1) {
+      case BlockAction.turnInto:
+        _turnInto(block, result.$2!.$1, result.$2!.$2);
+      case BlockAction.duplicate:
+        final copy = doc[i].clone();
+        doc.insert(i + 1, copy.copyWith(caption: doc[i].caption, checked: doc[i].checked));
+        _moveCaret((block: i + 1, offset: 0));
+      case BlockAction.moveUp:
+        doc.move(i, i - 1);
+        _moveCaret((block: i - 1, offset: 0));
+      case BlockAction.moveDown:
+        doc.move(i, i + 1);
+        _moveCaret((block: i + 1, offset: 0));
+      case BlockAction.delete:
+        _moveCaret(doc.remove(i));
     }
   }
 
@@ -877,6 +1007,21 @@ class _BlockEditorState extends State<BlockEditor> {
         // pass over every block, so it waits for that.
         if (_focus.length > doc.length) _prune();
         return OverlayPortal(
+          controller: _toolbarPortal,
+          overlayChildBuilder: (context) {
+            final toolbar = _toolbar;
+            if (toolbar == null) return const SizedBox.shrink();
+            final i = doc.indexOf(toolbar.blockId);
+            if (i < 0) return const SizedBox.shrink();
+            final block = doc[i];
+            return FormatToolbar(
+              anchor: toolbar.anchor,
+              block: block,
+              onAction: (action) => _formatAction(block, action),
+              onTurnInto: (kind, level) => _turnInto(block, kind, level),
+            );
+          },
+          child: OverlayPortal(
             controller: _slashPortal,
             overlayChildBuilder: (context) {
               final slash = _slash;
@@ -897,12 +1042,13 @@ class _BlockEditorState extends State<BlockEditor> {
               controller: _scroll,
               child: ListView.builder(
                 controller: _scroll,
-                padding: const EdgeInsets.fromLTRB(BlockMetrics.listPadding, 6, BlockMetrics.listPadding, 0),
+                padding: const EdgeInsets.fromLTRB(0, 6, BlockMetrics.listPadding, 0),
                 itemCount: doc.length + 1,
                 // Every row's height is known up front, so a jump to any point
                 // of a long page lays out only the rows that show there.
-                itemExtentBuilder: (i, dimensions) =>
-                    i == doc.length ? BlockMetrics.tailHeight : _extentsFor(metrics, dimensions.crossAxisExtent)[i],
+                itemExtentBuilder: (i, dimensions) => i == doc.length
+                    ? BlockMetrics.tailHeight
+                    : _extentsFor(metrics, dimensions.crossAxisExtent - BlockMetrics.gutter)[i],
                 // Rows are keyed by block id, so a block that moves (after a split
                 // or an insert above it) keeps its widgets, focus and text input.
                 findChildIndexCallback: (key) {
@@ -915,7 +1061,9 @@ class _BlockEditorState extends State<BlockEditor> {
                   return _row(context, palette, i, doc[i]);
                 },
               ),
-            ));
+            ),
+          ),
+        );
       },
     );
   }
@@ -996,13 +1144,37 @@ class _BlockEditorState extends State<BlockEditor> {
         alignment: Alignment.topLeft,
         minHeight: 0,
         maxHeight: double.infinity,
-        child: KeyedSubtree(
-          key: ValueKey('body-${block.id}'),
-          child: Focus(
-            skipTraversal: true,
-            canRequestFocus: false,
-            onKeyEvent: (_, event) => _onKey(block, event),
-            child: body,
+        child: MouseRegion(
+          onEnter: (_) => _hoverFor(block).value = true,
+          onExit: (_) => _hoverFor(block).value = false,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: BlockMetrics.gutter,
+                child: Padding(
+                  padding: EdgeInsets.only(top: block.kind == BlockKind.heading ? (block.level == 1 ? 14 : 8) : 2),
+                  child: BlockHandle(
+                    key: ValueKey('handle-${block.id}'),
+                    hover: _hoverFor(block),
+                    focusNode: node,
+                    label: 'Block options for block ${index + 1}',
+                    onOpen: (at) => _openBlockMenu(block, at),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: KeyedSubtree(
+                  key: ValueKey('body-${block.id}'),
+                  child: Focus(
+                    skipTraversal: true,
+                    canRequestFocus: false,
+                    onKeyEvent: (_, event) => _onKey(block, event),
+                    child: body,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1294,6 +1466,12 @@ class _TextBlockState extends State<_TextBlock> {
 }
 
 /// The state of an open slash menu.
+class _ToolbarSession {
+  _ToolbarSession(this.blockId, this.anchor);
+  final int blockId;
+  final Rect anchor;
+}
+
 class _SlashSession {
   _SlashSession({required this.blockId, required this.offset, required this.items});
 

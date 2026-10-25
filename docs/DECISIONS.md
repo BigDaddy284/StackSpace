@@ -241,6 +241,17 @@ paragraphs in the test VM, immediate in the release build. The alternative of es
 correcting them as rows appear would make the page jump under the user.
 **Status**: Done. Read-only threshold raised to 250,000 lines / 16 MB on the measurements.
 
+### The toolbar and block menu edit Markdown text, not styles (Task 9)
+**Decision**: The floating toolbar applies the same marker edits as the keys (`**`, `_`, `~~`,
+`` ` ``, `[text](url)`) around the selected words, and "Turn into" rewrites the block's kind in the
+document; the block menu duplicates, moves and deletes blocks through `PageDocument`. Underline is
+not offered because Markdown has no marker for it. Writes to disk are serialised: a flush that
+starts while another is still writing waits, then writes the newest text.
+**Rationale**: Pages stay plain Markdown that the assistant and other tools can read; every action is
+one undo step; a slow disk can never leave an older version on top of a newer one (found by the
+block-menu test, which edits faster than the file system answers).
+**Status**: Done; `test/block_menu_test.dart`.
+
 ### Captions live on the fence line
 **Decision**: A caption is stored after the language on the fence line (` ```python Download helper `),
 which CommonMark allows and GitHub ignores. A caption on a block with no language writes `text`

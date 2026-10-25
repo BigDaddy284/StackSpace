@@ -68,7 +68,7 @@ void main() {
             palette: StackColors.of(element),
             textScaler: TextScaler.linear(scale),
             inputStyle: BlockMetrics.inputStyleOf(element));
-        final rowWidth = width - 2 * BlockMetrics.listPadding;
+        final rowWidth = width - BlockMetrics.listPadding - BlockMetrics.gutter;
         final problems = <String>[];
         for (var i = 0; i < doc.length; i++) {
           final block = doc[i];

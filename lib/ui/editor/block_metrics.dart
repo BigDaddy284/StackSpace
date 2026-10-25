@@ -33,8 +33,13 @@ class BlockMetrics {
     return theme.useMaterial3 ? theme.textTheme.bodyLarge! : theme.textTheme.titleMedium!;
   }
 
-  /// Horizontal padding of the list around the rows.
+  /// Smallest line height of a text block, in logical pixels.
+  static const minLineHeight = 24.0;
+
+  /// Padding at the right of the list; at the left each row has a [gutter]
+  /// holding its handle instead.
   static const listPadding = 22.0;
+  static const gutter = 24.0;
 
   /// Height of the empty row after the last block.
   static const tailHeight = 120.0;
@@ -42,18 +47,21 @@ class BlockMetrics {
   static const mono =
       TextStyle(fontFamily: 'Cascadia Mono', fontFamilyFallback: StackType.mono, fontSize: 14, height: 1.45);
 
-  /// Text style of a text block.
+  /// Text style of a text block. Every line is at least 24 px tall, so a
+  /// one-line block is a tap target of the size WCAG 2.2 asks for (the block
+  /// handle beside a row keeps the row from merging with its padding).
   static TextStyle styleFor(Block block, StackPalette palette) {
     switch (block.kind) {
       case BlockKind.heading:
         final size = switch (block.level) { 1 => 30.0, 2 => 24.0, 3 => 20.0, 4 => 17.0, _ => 15.5 };
-        return StackType.display(size, palette.text).copyWith(height: 1.3);
+        return StackType.display(size, palette.text).copyWith(height: math.max(1.3, minLineHeight / size));
       case BlockKind.code || BlockKind.table || BlockKind.raw:
         return mono.copyWith(color: palette.text);
       case BlockKind.quote:
-        return TextStyle(fontSize: 15.5, height: 1.5, color: palette.subText, fontStyle: FontStyle.italic);
+        return TextStyle(
+            fontSize: 15.5, height: minLineHeight / 15.5, color: palette.subText, fontStyle: FontStyle.italic);
       default:
-        return TextStyle(fontSize: 15.5, height: 1.5, color: palette.text);
+        return TextStyle(fontSize: 15.5, height: minLineHeight / 15.5, color: palette.text);
     }
   }
 

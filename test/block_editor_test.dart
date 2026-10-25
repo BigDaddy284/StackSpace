@@ -260,9 +260,10 @@ void main() {
     field.selection = const TextSelection(baseOffset: 10, extentOffset: 16); // markers inside the selection
     await key(tester, LogicalKeyboardKey.keyI, control: true);
     expect(doc[0].text, 'make this bold');
-    field.selection = const TextSelection(baseOffset: 5, extentOffset: 9);
+    field.selection = const TextSelection(baseOffset: 4, extentOffset: 10); // " this " drags in spaces
     await key(tester, LogicalKeyboardKey.keyE, control: true);
-    expect(doc[0].text, 'make `this` bold');
+    expect(doc[0].text, 'make `this` bold', reason: 'markers hug the word');
+    expect(fieldAt(tester, 0).controller!.selection, const TextSelection(baseOffset: 6, extentOffset: 10));
     field.selection = const TextSelection(baseOffset: 0, extentOffset: 4);
     await key(tester, LogicalKeyboardKey.keyX, control: true, shift: true);
     expect(doc[0].text, '~~make~~ `this` bold');

@@ -106,7 +106,9 @@ This document outlines the features of AppFlowy as identified during the audit p
 | Light / dark themes, accessibility (WCAG AA contrast, screen-reader labels, 150% text) | Implemented and tested |
 | Slash menu (13 commands, aliases, search, keyboard and mouse) | Implemented and tested (Tasks 4-5) |
 | Code spaces: distinct background, monospace, line numbers, syntax highlighting for 30 languages, searchable language picker, **automatic language detection for typed or pasted code** (written into the fence, "auto" shown, picker overrides), copy button, wrap toggle, caption on the fence line, context menu (copy / copy all / cut / paste / select all / wrap / language / caption / delete), exact paste and copy, page-wide undo/redo, Ctrl+Enter to leave the block, Backspace on an empty block back to text; `.py` / `.json` / ... files open as one code space with the language from the extension | Implemented and tested (Task 6) |
-| Formatting toolbar, block menu, table editing, toggles, drag and drop | Planned: Phase 1 Tasks 9+ |
+| Floating formatting toolbar on a selection (bold, italic, strikethrough, inline code, link, turn into) | Implemented and tested (Task 9) |
+| Block handle and menu (turn into, duplicate, move up / down, delete) | Implemented and tested (Task 9) |
+| Table editing, images from the folder, toggles, drag and drop | Planned: Phase 1 Tasks 10+ |
 | Databases, views | Deferred |
 | Images, attachments, templates | Deferred |
 | AppFlowy backup import | Implemented (File > Import, zip or folder); export deferred |

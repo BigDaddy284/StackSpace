@@ -1,19 +1,21 @@
 # PROJECT STATUS
 
-_Last updated: 2026-10-25 (Improvement Phase 1, Tasks 1-8 done)_
+_Last updated: 2026-10-25 (Improvement Phase 1, Tasks 1-9 done)_
 
 ## Current phase
 Improvement Phase 1: advanced editor, slash menu, code spaces. Working one task at a time.
 Test build 1 (v0.1.0-test.1) is published on GitHub and loads the user's AppFlowy workspace.
 
 ## Current task and scope
-Tasks 1-8 done: research, plan, the block editor, the slash menu, code spaces, formatting keys,
-and the performance pass with its fix for long pages.
-Next: Task 9, the floating formatting toolbar and the block option menu.
+Tasks 1-9 done: research, plan, the block editor, the slash menu, code spaces, formatting keys,
+the performance pass with its fix for long pages, the floating formatting toolbar and the block
+option menu.
+Next: Task 10, simple tables and images from the workspace folder.
 
 ## Task log (Phase 1)
 | Task | Status | Tests | Files |
 | --- | --- | --- | --- |
+| 9. Formatting toolbar + block menu | Done 2026-10-25. A toolbar floats above (or below) a text selection with Bold / Italic / Strikethrough / Inline code / Link and a "Turn into" menu (Text, Heading 1-3, Bulleted, Numbered, To-do, Quote, Code block); it follows the selection, never takes focus, and closes on a collapsed caret, scroll or blur. Every row has a drag-handle button in a 24 px gutter (visible on hover or while the block has focus) that opens the block menu: Turn into, Duplicate, Move up / down (Ctrl+Shift+arrows), Delete. Also fixed on the way: markers hug the words when a selection drags in spaces; saves are serialised so a slow write can never land an older version over a newer one; text lines are at least 24 px so one-line blocks stay WCAG tap targets next to the handle. | 119/119 (+5) + 21 timing tests | `lib/ui/editor/format_toolbar.dart`, `lib/ui/editor/block_menu.dart`, `block_editor.dart`, `block_metrics.dart`, `page_editor_controller.dart`, `test/block_menu_test.dart`, `test/block_editor_test.dart`; screenshots 15-16 |
 | 1. Baseline + research | Done 2026-10-25. `flutter analyze` clean, `flutter test` 49 passed, Linux debug build OK, Git checkpoint on `main`. | 49/49 | `docs/EDITOR_FEATURE_RESEARCH.md`, docs copied into `docs/` |
 | 2. Matrix + plan + spikes | Done 2026-10-25. Feature matrix (§8), spikes (§11: `re_editor` handles 100k lines in ~30 ms per operation; `appflowy_editor` compiles from git but is ruled out), prioritised plan (§12). | 49/49 | `docs/EDITOR_FEATURE_RESEARCH.md` |
 | 8. Performance + regression | Done 2026-10-25. Timing tests for 5k-100k lines; found and fixed the O(n) jump in long pages with pre-measured row heights (`lib/ui/editor/block_metrics.dart`, `block_editor.dart` list with `itemExtentBuilder`, cached extents per edit, id→index map in `PageDocument`, lazy pruning); image rows fixed at 300 px; read-only threshold 250k lines / 16 MB. Live run in the release build with 10k-line code, 10k-line mixed and 50k-paragraph pages. | 114/114 (+4 metrics) + 21 timing tests | `lib/ui/editor/block_metrics.dart`, `block_editor.dart`, `code_block.dart`, `inline_markdown.dart`, `page_document.dart`, `page_editor_controller.dart`, tests |
@@ -46,6 +48,26 @@ Next: Task 9, the floating formatting toolbar and the block option menu.
 
 ## Files changed
 See `git log` in `windows_app/` (5 commits on `main`).
+
+## Tests executed and actual results (Task 9)
+- `flutter analyze`: no issues. `flutter test` (without the timing file): 119 passed, 2 skipped by
+  design. `test/performance_test.dart`: 21 timing tests passed (no change from Task 8 within noise).
+- New `test/block_menu_test.dart` (5): toolbar appears on a selection, Bold / Italic / Code buttons
+  wrap the text and the file matches, it goes when the caret collapses; Turn into changes the kind
+  and keeps the text; no toolbar in a plain file, a read-only page or on a collapsed caret; the handle
+  shows on hover or focus, Duplicate / Move up / Move down / Delete from the menu change the document
+  and the saved file; Turn into from the menu converts a list item to a code block and back.
+- Regression found and fixed: the handle beside each row stopped the text field merging with its
+  padding in the accessibility tree, so a one-line paragraph was a 23 px target; text lines are now
+  at least 24 px (`BlockMetrics.minLineHeight`) and the four accessibility tests pass again.
+- Bug found and fixed while testing: a save that was still writing when the next edit's save
+  started could finish last and leave the older text on disk. `PageEditorController.flush` now
+  waits for the write in flight and then writes the newest content.
+- Live run (Linux release build, `docs/screenshots/15-format-toolbar-dark.png` and
+  `16-block-menu-dark.png`): drag-selected words show the toolbar, Bold wraps them and the file on
+  disk follows; hovering a bullet shows its handle, the menu duplicates the item. Note for Windows
+  builds: a stale icon-font subset in `build/` left the new icons blank until the cached
+  `MaterialIcons-Regular.otf` was deleted; `flutter clean` does the same.
 
 ## Tests executed and actual results (Task 8)
 - `flutter analyze`: no issues. `flutter test` (without the timing file): 114 passed (4 of them the new metrics checks), 2 skipped by
@@ -164,9 +186,9 @@ See KNOWN_ISSUES.md. Main ones: no real-model test yet; large files are read-onl
 Analyzer clean and tests green on Linux. `flutter build windows` not yet run.
 
 ## Next single task
-Task 9: floating formatting toolbar on a text selection (bold, italic, strike, code, link, heading
-levels, turn into) and the block option menu (turn into, duplicate, delete, move up / down), with
-tests and screenshots.
+Task 10: simple tables (add / remove row and column, Tab between cells) and images from the
+workspace folder (insert from the slash menu with a file picker, copy into the page's folder,
+alt text), with round-trip tests and screenshots.
 
 ## Exact commands to resume
 ```bash

@@ -89,8 +89,7 @@ class PageEditorController extends ChangeNotifier {
       document.clear();
     } else {
       largeLines = null;
-      document.load(content,
-          markdown: isMarkdown(_path!), language: languageForExtension(p.extension(_path!))?.id);
+      document.load(content, markdown: isMarkdown(_path!), language: languageForExtension(p.extension(_path!))?.id);
     }
     _savedVersion = document.version;
     _wasDirty = false;
@@ -118,15 +117,34 @@ class PageEditorController extends ChangeNotifier {
   }
 
   /// Saves pending edits now.
+  Future<void>? _writing;
+
+  /// Saves the page now if it has unsaved edits. Writes never overlap: a
+  /// save that starts while another is still on its way waits for it, then
+  /// writes the newest content, so a slow disk can never land an older
+  /// version on top of a newer one.
   Future<void> flush() async {
     _autosave?.cancel();
-    final path = _path;
-    if (path == null || !dirty) return;
+    while (_writing != null) {
+      await _writing;
+    }
+    if (_path == null || !dirty) return;
+    final write = _write();
+    _writing = write;
+    try {
+      await write;
+    } finally {
+      if (identical(_writing, write)) _writing = null;
+    }
+  }
+
+  Future<void> _write() async {
+    final path = _path!;
     final version = document.version;
     final content = document.toMarkdown();
     try {
       await workspace.write(path, content);
-      _savedVersion = version;
+      if (_path == path && version > _savedVersion) _savedVersion = version;
       error = null;
     } on Exception catch (e) {
       error = 'Could not save: $e';
