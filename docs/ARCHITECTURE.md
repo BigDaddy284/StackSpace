@@ -27,8 +27,12 @@ blocks.dart                 Block model + parseMarkdown / writeMarkdown (line ba
 
 BlockEditor (lib/ui/editor/block_editor.dart)
    ListView.builder keyed by block id (findChildIndexCallback) → only visible blocks are built
-   one TextField per text / code / table / raw block, InlineMarkdownController styles **bold**,
+   one TextField per text / table / raw block, InlineMarkdownController styles **bold**,
    _italic_, `code`, ~~strike~~ and [links] while keeping the markers in the text
+   code blocks are CodeBlockView (lib/ui/editor/code_block.dart): header (language + "auto",
+         wrap, copy, menu), re_editor CodeEditor body with line numbers and re_highlight colours,
+         optional caption field; language guessed by lib/editor/code_languages.dart 500 ms after
+         the last edit when the fence had none
    divider and image blocks are focusable widgets
    keys: Backspace at start (merge / demote), Tab / Shift+Tab (indent), arrows between blocks,
          Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z, Ctrl+Shift+Up/Down (move block)

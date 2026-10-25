@@ -1,15 +1,19 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
+import 'package:re_editor/re_editor.dart';
 
 import '../../app/theme.dart';
 import '../../editor/blocks.dart';
+import '../../editor/code_languages.dart';
 import '../../editor/page_document.dart';
 import '../../editor/page_editor_controller.dart';
 import '../../editor/slash_commands.dart';
+import 'code_block.dart';
 import 'inline_markdown.dart';
 import 'slash_menu.dart';
 
@@ -40,6 +44,15 @@ class _BlockEditorState extends State<BlockEditor> {
   Caret? _pending;
 
   final _fieldKeys = <int, GlobalKey>{};
+
+  // Code spaces: their editors, wrap setting, and which ones have a guessed
+  // language (so a later edit may guess again).
+  final _codes = <int, CodeLineEditingController>{};
+  final _wrap = <int, bool>{};
+  final _autoLanguage = <int>{};
+  final _detectTimers = <int, Timer>{};
+  static const detectDelay = Duration(milliseconds: 500);
+
   final _slashPortal = OverlayPortalController();
   _SlashSession? _slash;
 
@@ -54,6 +67,12 @@ class _BlockEditorState extends State<BlockEditor> {
     for (final f in _focus.values) {
       f.dispose();
     }
+    for (final c in _codes.values) {
+      c.dispose();
+    }
+    for (final t in _detectTimers.values) {
+      t.cancel();
+    }
     _scroll.dispose();
     super.dispose();
   }
@@ -62,6 +81,12 @@ class _BlockEditorState extends State<BlockEditor> {
       _texts.putIfAbsent(block.id, () => InlineMarkdownController(text: block.text));
 
   FocusNode _focusFor(Block block) => _focus.putIfAbsent(block.id, () => FocusNode(debugLabel: 'block ${block.id}'));
+
+  CodeLineEditingController _codeFor(Block block) =>
+      _codes.putIfAbsent(block.id, () => CodeLineEditingController.fromText(block.text));
+
+  /// Whether the block's text lives in a code editor rather than a text field.
+  bool _isCode(Block block) => block.kind == BlockKind.code;
 
   GlobalKey _fieldKeyFor(Block block) => _fieldKeys.putIfAbsent(block.id, GlobalKey.new);
 
@@ -73,6 +98,12 @@ class _BlockEditorState extends State<BlockEditor> {
     }
     for (final id in _focus.keys.where((id) => !live.contains(id)).toList()) {
       _focus.remove(id)!.dispose();
+    }
+    for (final id in _codes.keys.where((id) => !live.contains(id)).toList()) {
+      _codes.remove(id)!.dispose();
+      _detectTimers.remove(id)?.cancel();
+      _wrap.remove(id);
+      _autoLanguage.remove(id);
     }
   }
 
@@ -96,6 +127,16 @@ class _BlockEditorState extends State<BlockEditor> {
       // typing still on its way in.
       if (node.hasFocus) return;
       node.requestFocus();
+      if (_isCode(block)) {
+        final code = _codeFor(block);
+        if (pending.offset == 0) {
+          code.selection = const CodeLineSelection.collapsed(index: 0, offset: 0);
+        } else {
+          final last = code.codeLines.length - 1;
+          code.selection = CodeLineSelection.collapsed(index: last, offset: code.codeLines[last].text.length);
+        }
+        return;
+      }
       final current = doc.indexOf(block.id);
       final editable =
           block.isText || block.kind == BlockKind.code || block.kind == BlockKind.table || block.kind == BlockKind.raw;
@@ -157,8 +198,9 @@ class _BlockEditorState extends State<BlockEditor> {
       return KeyEventResult.handled;
     }
 
-    final editable =
-        block.isText || block.kind == BlockKind.code || block.kind == BlockKind.table || block.kind == BlockKind.raw;
+    if (_isCode(block)) return _onCodeKey(index, block, key, ctrl: ctrl, shift: shift);
+
+    final editable = block.isText || block.kind == BlockKind.table || block.kind == BlockKind.raw;
     if (!editable) return _onNonTextKey(index, block, key);
 
     final text = _textFor(block);
@@ -248,6 +290,146 @@ class _BlockEditorState extends State<BlockEditor> {
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
+  }
+
+  /// Keys the editor handles around a code space; the code editor itself
+  /// handles typing, Tab, Enter, selection and its own shortcuts.
+  KeyEventResult _onCodeKey(int index, Block block, LogicalKeyboardKey key, {required bool ctrl, required bool shift}) {
+    final code = _codeFor(block);
+    final sel = code.selection;
+    if (ctrl && (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.numpadEnter)) {
+      // Ctrl+Enter leaves the code space on a new paragraph below it.
+      doc.insert(index + 1, Block(kind: BlockKind.paragraph));
+      _moveCaret((block: index + 1, offset: 0));
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.backspace && !doc.plain && code.text.isEmpty) {
+      doc.convert(index, BlockKind.paragraph, caret: (block: index, offset: 0));
+      _moveCaret((block: index, offset: 0));
+      return KeyEventResult.handled;
+    }
+    if (shift || ctrl || !sel.isCollapsed) return KeyEventResult.ignored;
+    final lastLine = code.codeLines.length - 1;
+    if (key == LogicalKeyboardKey.arrowUp && sel.extentIndex == 0 && index > 0) {
+      _moveCaret((block: index - 1, offset: doc[index - 1].text.length));
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowDown && sel.extentIndex == lastLine && index + 1 < doc.length) {
+      _moveCaret((block: index + 1, offset: 0));
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowLeft && sel.extentIndex == 0 && sel.extentOffset == 0 && index > 0) {
+      _moveCaret((block: index - 1, offset: doc[index - 1].text.length));
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowRight &&
+        sel.extentIndex == lastLine &&
+        sel.extentOffset == code.codeLines[lastLine].text.length &&
+        index + 1 < doc.length) {
+      _moveCaret((block: index + 1, offset: 0));
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  // ---- code spaces -----------------------------------------------------------
+
+  void _onCodeChanged(Block block) {
+    final index = doc.indexOf(block.id);
+    if (index < 0) return;
+    final code = _codeFor(block);
+    final text = code.text;
+    _reportCodeSelection(index, block, code);
+    if (text == doc[index].text) return;
+    doc.updateText(index, text);
+    final current = doc[index];
+    if (current.language == null || _autoLanguage.contains(block.id)) _scheduleDetect(block.id);
+  }
+
+  void _scheduleDetect(int id) {
+    _detectTimers[id]?.cancel();
+    _detectTimers[id] = Timer(detectDelay, () {
+      _detectTimers.remove(id);
+      if (!mounted) return;
+      _detectNow(id);
+    });
+  }
+
+  /// Guesses the language of a code space whose language was not chosen by
+  /// hand, and writes it into the fence.
+  void _detectNow(int id) {
+    final index = doc.indexOf(id);
+    if (index < 0) return;
+    final block = doc[index];
+    if (block.language != null && !_autoLanguage.contains(id)) return;
+    final guess = detectLanguage(block.text);
+    final next = guess?.id;
+    if (next == block.language) return;
+    _autoLanguage.add(id);
+    doc.replace(index, next == null ? block.copyWith(clearLanguage: true) : block.copyWith(language: next));
+  }
+
+  void _setLanguage(Block block, CodeLanguage? language) {
+    final index = doc.indexOf(block.id);
+    if (index < 0) return;
+    if (language == null) {
+      _autoLanguage.add(block.id);
+      final guess = detectLanguage(doc[index].text);
+      doc.replace(
+          index, guess == null ? doc[index].copyWith(clearLanguage: true) : doc[index].copyWith(language: guess.id));
+    } else {
+      _autoLanguage.remove(block.id);
+      doc.replace(index, doc[index].copyWith(language: language.id));
+    }
+    _focusFor(block).requestFocus();
+  }
+
+  /// Offsets into the block's text for the code editor's line/column selection.
+  void _reportCodeSelection(int index, Block block, CodeLineEditingController code) {
+    if (!_focusFor(block).hasFocus) return;
+    int offsetOf(int line, int column) {
+      var offset = 0;
+      final lines = code.codeLines;
+      for (var i = 0; i < line && i < lines.length; i++) {
+        offset += lines[i].text.length + 1;
+      }
+      return offset + column;
+    }
+
+    final sel = code.selection;
+    widget.controller.setSelection(
+      index,
+      TextSelection(
+        baseOffset: offsetOf(sel.baseIndex, sel.baseOffset),
+        extentOffset: offsetOf(sel.extentIndex, sel.extentOffset),
+      ),
+    );
+  }
+
+  Widget _codeBlock(int index, Block block) {
+    final code = _codeFor(block);
+    if (code.text != block.text) code.text = block.text;
+    return CodeBlockView(
+      key: ValueKey('code-${block.id}'),
+      block: block,
+      controller: code,
+      focusNode: _focusFor(block),
+      readOnly: widget.readOnly,
+      plain: doc.plain,
+      wrap: _wrap[block.id] ?? false,
+      autoDetected: _autoLanguage.contains(block.id),
+      onChanged: (_) => _onCodeChanged(block),
+      onLanguage: (language) => _setLanguage(block, language),
+      onCaption: (caption) {
+        final i = doc.indexOf(block.id);
+        if (i >= 0 && doc[i].caption != caption) doc.replace(i, doc[i].copyWith(caption: caption));
+      },
+      onWrap: (wrap) => setState(() => _wrap[block.id] = wrap),
+      onDelete: () {
+        final i = doc.indexOf(block.id);
+        if (i >= 0) _moveCaret(doc.remove(i));
+      },
+    );
   }
 
   KeyEventResult _onNonTextKey(int index, Block block, LogicalKeyboardKey key) {
@@ -362,6 +544,10 @@ class _BlockEditorState extends State<BlockEditor> {
   void _reportSelection(Block block) {
     final index = doc.indexOf(block.id);
     if (index < 0) return;
+    if (_isCode(block)) {
+      _reportCodeSelection(index, block, _codeFor(block));
+      return;
+    }
     final text = _textFor(block);
     final focused = _focusFor(block).hasFocus;
     if (focused) widget.controller.setSelection(index, text.selection);
@@ -602,6 +788,8 @@ class _BlockEditorState extends State<BlockEditor> {
           label: 'Image ${block.alt.isEmpty ? block.url : block.alt}',
           child: _ImageBlock(block: block, controller: widget.controller),
         );
+      case BlockKind.code:
+        body = _codeBlock(index, block);
       default:
         final text = _textFor(block);
         if (text.text != block.text) {
@@ -848,8 +1036,7 @@ class _TextBlockState extends State<_TextBlock> {
     // The tree keeps one shape for every kind, so changing a paragraph into a
     // heading or a list item updates the field in place instead of recreating
     // it (which would drop keys typed in the same instant).
-    final isCode = block.kind == BlockKind.code && !widget.plain;
-    final boxed = isCode || block.kind == BlockKind.table || block.kind == BlockKind.raw;
+    final boxed = block.kind == BlockKind.table || block.kind == BlockKind.raw;
     final isListItem = block.isList;
     final Widget marker;
     if (block.kind == BlockKind.todo) {
@@ -878,23 +1065,18 @@ class _TextBlockState extends State<_TextBlock> {
     // Always the same widgets around the field (DecoratedBox, Padding, Row,
     // Column), only their parameters change, so the field is never rebuilt
     // from scratch when its block changes kind.
-    final decoration = isCode
-        ? BoxDecoration(
-            color: palette.panel, borderRadius: BorderRadius.circular(8), border: Border.all(color: palette.barBorder))
-        : boxed
-            ? BoxDecoration(borderRadius: BorderRadius.circular(6), border: Border.all(color: palette.barBorder))
-            : block.kind == BlockKind.quote
-                ? BoxDecoration(border: Border(left: BorderSide(color: palette.accentB, width: 3)))
-                : const BoxDecoration();
-    final padding = isCode
-        ? const EdgeInsets.fromLTRB(14, 10, 14, 12)
-        : boxed
-            ? const EdgeInsets.fromLTRB(10, 6, 10, 8)
-            : block.kind == BlockKind.quote
-                ? const EdgeInsets.only(left: 14)
-                : block.kind == BlockKind.heading
-                    ? EdgeInsets.only(top: block.level == 1 ? 10 : 6)
-                    : EdgeInsets.zero;
+    final decoration = boxed
+        ? BoxDecoration(borderRadius: BorderRadius.circular(6), border: Border.all(color: palette.barBorder))
+        : block.kind == BlockKind.quote
+            ? BoxDecoration(border: Border(left: BorderSide(color: palette.accentB, width: 3)))
+            : const BoxDecoration();
+    final padding = boxed
+        ? const EdgeInsets.fromLTRB(10, 6, 10, 8)
+        : block.kind == BlockKind.quote
+            ? const EdgeInsets.only(left: 14)
+            : block.kind == BlockKind.heading
+                ? EdgeInsets.only(top: block.level == 1 ? 10 : 6)
+                : EdgeInsets.zero;
     return Padding(
       padding: EdgeInsets.only(left: isListItem ? 24.0 * block.level : 0),
       child: DecoratedBox(
@@ -910,13 +1092,6 @@ class _TextBlockState extends State<_TextBlock> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Padding(
-                      padding: EdgeInsets.only(bottom: isCode ? 6 : 0),
-                      child: isCode
-                          ? Text(block.language ?? 'plain text',
-                              style: TextStyle(color: palette.subText, fontSize: StackType.hint))
-                          : const SizedBox.shrink(),
-                    ),
                     DefaultTextStyle.merge(
                       style: TextStyle(
                           decoration: block.kind == BlockKind.todo && block.checked

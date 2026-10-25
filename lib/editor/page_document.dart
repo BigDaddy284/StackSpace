@@ -35,13 +35,15 @@ class PageDocument extends ChangeNotifier {
 
   /// Replaces the content, clearing the history. [markdown] is false for files
   /// that are not Markdown pages.
-  void load(String content, {bool markdown = true}) {
+  void load(String content, {bool markdown = true, String? language}) {
     _plain = !markdown;
     _blocks = markdown
         ? parseMarkdown(content)
         : [
             Block(
-                kind: BlockKind.code, text: content.endsWith('\n') ? content.substring(0, content.length - 1) : content)
+                kind: BlockKind.code,
+                language: language,
+                text: content.endsWith('\n') ? content.substring(0, content.length - 1) : content)
           ];
     if (_blocks.isEmpty) _blocks = [Block(kind: BlockKind.paragraph)];
     _undo.clear();

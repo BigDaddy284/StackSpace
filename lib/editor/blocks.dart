@@ -18,6 +18,7 @@ class Block {
     this.number,
     this.checked = false,
     this.language,
+    this.caption = '',
     this.url = '',
     this.alt = '',
     this.marker = '-',
@@ -44,6 +45,10 @@ class Block {
 
   /// Code fence language, or null for none.
   final String? language;
+
+  /// Caption of a code block: the rest of the fence line after the language
+  /// (`\`\`\`python Download helper`).
+  final String caption;
   final String url;
   final String alt;
 
@@ -76,6 +81,7 @@ class Block {
     bool? checked,
     String? language,
     bool clearLanguage = false,
+    String? caption,
     String? url,
     String? alt,
     String? marker,
@@ -90,6 +96,7 @@ class Block {
         number: clearNumber ? null : number ?? this.number,
         checked: checked ?? this.checked,
         language: clearLanguage ? null : language ?? this.language,
+        caption: caption ?? this.caption,
         url: url ?? this.url,
         alt: alt ?? this.alt,
         marker: marker ?? this.marker,
@@ -114,7 +121,7 @@ class Block {
 }
 
 final _heading = RegExp(r'^(#{1,6}) (.*)$');
-final _fence = RegExp(r'^(`{3,}|~{3,})\s*([\w#+.-]*)\s*$');
+final _fence = RegExp(r'^(`{3,}|~{3,})\s*([\w#+.-]*)(?:[ \t]+(.*?))?[ \t]*$');
 final _divider = RegExp(r'^(?:-{3,}|\*{3,}|_{3,})\s*$');
 final _listItem = RegExp(r'^( *)(?:([-*+])|(\d+)\.) (?:\[([ xX])\] )?(.*)$');
 final _image = RegExp(r'^!\[([^\]]*)\]\(([^)\s]+)\)\s*$');
@@ -155,6 +162,7 @@ List<Block> parseMarkdown(String markdown) {
       flushParagraph();
       final marker = fence.group(1)!;
       final language = fence.group(2)!;
+      final caption = fence.group(3) ?? '';
       final body = <String>[];
       i++;
       bool closes(String l) {
@@ -167,7 +175,8 @@ List<Block> parseMarkdown(String markdown) {
         i++;
       }
       i++; // closing fence (or past the end)
-      add(Block(kind: BlockKind.code, text: body.join('\n'), language: language.isEmpty ? null : language));
+      add(Block(
+          kind: BlockKind.code, text: body.join('\n'), language: language.isEmpty ? null : language, caption: caption));
       continue;
     }
     final heading = _heading.firstMatch(line);
@@ -287,7 +296,10 @@ String blockToMarkdown(Block block, {int number = 1}) {
       while (block.text.contains(fence)) {
         fence += '`';
       }
-      return '$fence${block.language ?? ''}\n${block.text}\n$fence';
+      // A caption needs a language word in front of it so it can be read back.
+      final language = block.language ?? (block.caption.isNotEmpty ? 'text' : '');
+      final info = block.caption.isNotEmpty ? '$language ${block.caption}' : language;
+      return '$fence$info\n${block.text}\n$fence';
     case BlockKind.divider:
       return '---';
     case BlockKind.image:

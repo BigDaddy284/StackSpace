@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import '../ai/chat_controller.dart';
 import '../workspace/workspace.dart';
 import 'blocks.dart';
+import 'code_languages.dart';
 import 'page_document.dart';
 
 /// Holds the page open in the editor: loads it into a [PageDocument],
@@ -85,7 +86,8 @@ class PageEditorController extends ChangeNotifier {
       document.clear();
     } else {
       largeLines = null;
-      document.load(content, markdown: isMarkdown(_path!));
+      document.load(content,
+          markdown: isMarkdown(_path!), language: languageForExtension(p.extension(_path!))?.id);
     }
     _savedVersion = document.version;
     _wasDirty = false;

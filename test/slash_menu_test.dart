@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:re_editor/re_editor.dart';
 import 'package:stack_space/editor/blocks.dart';
 import 'package:stack_space/editor/page_editor_controller.dart';
 import 'package:stack_space/editor/slash_commands.dart';
@@ -145,15 +146,20 @@ void main() {
       final para = find.byType(TextField).at(0);
       await type(tester, para, 'a/');
       expect(menu, findsNothing);
-      final code = find.byType(TextField).at(1);
-      await type(tester, code, 'x/');
+      await tester.tap(find.byType(CodeEditor));
+      await tester.pump();
+      tester.widget<CodeEditor>(find.byType(CodeEditor)).controller!.replaceSelection(' /');
+      await tester.pump();
       expect(menu, findsNothing);
       await settle(tester);
     });
 
     testWidgets('plain files never show the menu', (tester) async {
       await pumpEditor(tester, 'x = 1\n', name: 's.py');
-      await type(tester, find.byType(TextField), 'x = 1\n/');
+      await tester.tap(find.byType(CodeEditor));
+      await tester.pump();
+      tester.widget<CodeEditor>(find.byType(CodeEditor)).controller!.replaceSelection('\n/');
+      await tester.pump();
       expect(menu, findsNothing);
       await settle(tester);
     });

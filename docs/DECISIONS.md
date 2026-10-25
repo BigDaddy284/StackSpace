@@ -148,7 +148,8 @@ licences (MIT, BSD, Apache-2.0) may be used; each one is listed here when it is 
 **Rationale**: The user's rule ("we can't reuse code from other apps", "fine if the Flutter licences
 allow it"). It also keeps the whole editor under the MIT licence of the repo.
 **Status**: Done. Packages in use: `http`, `shared_preferences`, `path`, `archive`, `collection`,
-`file_selector` (all BSD-3). `flutter_svg`, `provider` and `intl` were unused and removed.
+`file_selector` (all BSD-3); from Task 6 also `re_editor` 0.10.0 and `re_highlight` 0.0.3 (both MIT,
+Reqable). `flutter_svg`, `provider` and `intl` were unused and removed.
 
 ### Markdown stays the file format; blocks are the editing view
 **Decision**: A page file stays plain Markdown. The editor reads it into a list of blocks (heading,
@@ -202,3 +203,34 @@ editor fall behind fast typing.
 - Any changes to documented decisions must be recorded with rationale
 - All decisions should align with the core project mission
 - Maintain consistency with Windows 11 compatibility focus
+## Decisions made 2026-10-25 (Improvement Phase 1, Task 6)
+
+### Code spaces use `re_editor` for the body and `re_highlight` for colours
+**Decision**: A code block's body is a `re_editor` `CodeEditor` (MIT) with line numbers, horizontal
+scrolling or wrapping, bracket pairing and auto-indent, highlighted by `re_highlight` (MIT port of
+highlight.js). Everything around it is StackSpace code: the header (language label, wrap, copy,
+menu), the searchable language picker, captions, the context menu, and the keys that tie it into the
+page (Ctrl+Enter leaves the block, Backspace on an empty block turns it back into a paragraph,
+arrows at the edges move between blocks). The editor's own undo/redo and Ctrl+Enter bindings are
+turned off so the page keeps one history.
+**Rationale**: The spike in `EDITOR_FEATURE_RESEARCH.md` §11 showed `re_editor` lays out 100,000
+lines in tens of milliseconds, which a plain TextField cannot; both packages are permissively
+licensed and are generic editor components, not note-app code. Writing a highlighter for 30
+languages would have cost the rest of the phase.
+
+### The language of typed or pasted code is guessed, and the picker overrides it
+**Decision**: A code block without a language in its fence is guessed 500 ms after the last edit
+(`lib/editor/code_languages.dart`): a JSON check, then signature patterns for the common cases
+(shebangs, `using UnityEngine`, `def ...:`, `<?php`, `#include`, `SELECT ... FROM`, PowerShell verbs,
+...), then highlight.js' relevance scoring with a threshold. The guess is written into the fence
+(` ```csharp `) so other tools see it, and the header shows "auto". Picking a language by hand stops
+the guessing for that block; "Auto-detect" in the picker turns it back on. A language that came from
+the file is never re-guessed. Files such as `.py` or `.json` take their language from the extension.
+**Rationale**: The user's request ("auto pick up language for typed/pasted code") with the picker as
+the override; a guess that keeps changing under a user who chose a language would be worse than none.
+
+### Captions live on the fence line
+**Decision**: A caption is stored after the language on the fence line (` ```python Download helper `),
+which CommonMark allows and GitHub ignores. A caption on a block with no language writes `text`
+first so the caption can be read back. Plain script files have no caption.
+**Rationale**: Keeps pages plain Markdown with nothing hidden in comments or side files.

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:re_editor/re_editor.dart';
 import 'package:stack_space/editor/blocks.dart';
 import 'package:stack_space/editor/page_editor_controller.dart';
 import 'package:stack_space/ui/editor/block_editor.dart';
@@ -129,9 +130,12 @@ void main() {
     await tester.enterText(find.byType(TextField).at(4), '```');
     await tester.pump();
     expect(doc[4].kind, BlockKind.code);
-    await tester.enterText(find.byType(TextField).at(4), 'let x = 1;');
-    await enter(tester, 4); // newline inside code, not a split
+    // The code space is its own editor; Enter inside it is a newline, not a split.
+    final code = tester.widget<CodeEditor>(find.byType(CodeEditor)).controller!;
+    code.replaceSelection('let x = 1;\n');
+    await tester.pump();
     expect(doc.length, 5);
+    expect(doc[4].text, 'let x = 1;\n');
     // Shift+Enter in a paragraph keeps a soft break.
     await tester.tap(find.byType(TextField).at(0));
     await tester.pump();
@@ -168,15 +172,17 @@ void main() {
     expect(saved('page.md'), '# Title\n\n- a\n\nb\n');
   });
 
-  testWidgets('a .py file is one plain code field and Enter inserts a newline', (tester) async {
+  testWidgets('a .py file is one code space and Enter inserts a newline', (tester) async {
     await pumpEditor(tester, 'x = 1\n', name: 's.py');
-    expect(find.byType(TextField), findsOneWidget);
-    await tester.tap(find.byType(TextField));
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byType(CodeEditor), findsOneWidget);
+    await tester.tap(find.byType(CodeEditor));
     await tester.pump();
-    fieldAt(tester, 0).controller!.selection = const TextSelection.collapsed(offset: 5);
-    await enter(tester, 0);
+    final code = tester.widget<CodeEditor>(find.byType(CodeEditor)).controller!;
+    code.selection = const CodeLineSelection.collapsed(index: 0, offset: 5);
+    code.replaceSelection('\ny = 2');
+    await tester.pump();
     expect(editor.document.length, 1);
-    await tester.enterText(find.byType(TextField), 'x = 1\ny = 2');
     await settle(tester);
     expect(saved('s.py'), 'x = 1\ny = 2\n');
   });
@@ -216,12 +222,12 @@ void main() {
     await settle(tester);
   });
 
-  testWidgets('turning a paragraph into a heading, list or code keeps the same text field', (tester) async {
+  testWidgets('turning a paragraph into a heading or list keeps the same text field', (tester) async {
     await pumpEditor(tester, 'x\n');
     await tester.tap(find.byType(TextField));
     await tester.pump();
     final before = tester.state(find.byType(EditableText));
-    for (final shortcut in ['## ', '- ', '```']) {
+    for (final shortcut in ['## ', '- ', '> ', '1. ']) {
       await tester.enterText(find.byType(TextField), '');
       await tester.pump();
       if (editor.document[0].kind != BlockKind.paragraph) {

@@ -19,8 +19,12 @@ The limit will be revisited with the Task 8 performance measurements.
 
 ### Editor limits after Task 3 (block editor)
 **Status**: Open, being worked through Phase 1.
-- No syntax highlighting, language picker, copy or wrap toggle in code blocks yet (Task 6). Code
-  blocks show the fence language as a label.
+- Code spaces (Task 6): a tab character renders narrow (Flutter draws `\t` as one small space);
+  the saved text keeps the tab. Typing `{` or `(` pairs the closing bracket and Enter inside the pair
+  auto-indents, like an IDE; pasted text is never changed. The language guess can be wrong for very
+  short snippets (under 12 characters nothing is guessed) or for look-alike languages (C vs C++,
+  JavaScript vs TypeScript); the picker overrides it and the choice is kept. Selection and find
+  inside a code space do not cross into the surrounding page.
 - The slash menu opens only when `/` is typed at the start of a block or after a space, so
   `http://` never opens it. It does not open on a pasted `/`.
 - Tables and raw HTML are edited as their Markdown / HTML text in a boxed field.

@@ -104,7 +104,9 @@ This document outlines the features of AppFlowy as identified during the audit p
 | Undo/redo in the editor | Implemented: document-level undo/redo (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z), typing coalesced per second |
 | Settings | Partial: theme (Windows / light / dark), workspace folder, Ollama address, context length, delete confirmation |
 | Light / dark themes, accessibility (WCAG AA contrast, screen-reader labels, 150% text) | Implemented and tested |
-| Slash menu, code block language picker / highlighting / copy / wrap, formatting toolbar, table editing | Planned: Phase 1 Tasks 4-10 |
+| Slash menu (13 commands, aliases, search, keyboard and mouse) | Implemented and tested (Tasks 4-5) |
+| Code spaces: distinct background, monospace, line numbers, syntax highlighting for 30 languages, searchable language picker, **automatic language detection for typed or pasted code** (written into the fence, "auto" shown, picker overrides), copy button, wrap toggle, caption on the fence line, context menu (copy / copy all / cut / paste / select all / wrap / language / caption / delete), exact paste and copy, page-wide undo/redo, Ctrl+Enter to leave the block, Backspace on an empty block back to text; `.py` / `.json` / ... files open as one code space with the language from the extension | Implemented and tested (Task 6) |
+| Formatting toolbar, block menu, table editing, toggles, drag and drop | Planned: Phase 1 Tasks 9+ |
 | Databases, views | Deferred |
 | Images, attachments, templates | Deferred |
 | AppFlowy backup import | Implemented (File > Import, zip or folder); export deferred |

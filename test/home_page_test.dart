@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:re_editor/re_editor.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stack_space/ai/chat_controller.dart';
 import 'package:stack_space/ai/ollama_client.dart';
@@ -59,19 +60,23 @@ void main() {
     await tester.tap(find.byTooltip(open));
     await tester.pumpAndSettle();
     expect(find.byTooltip('Minimize'), findsOneWidget);
-    expect(find.byType(TextField), findsNWidgets(2)); // editor + composer
+    // The .py file is a code space; the composer is the only TextField.
+    expect(find.byType(CodeEditor), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
 
     await tester.tap(find.byTooltip('Minimize'));
     await tester.pumpAndSettle();
     expect(find.byTooltip('Restore'), findsOneWidget);
-    expect(find.byType(TextField), findsOneWidget);
+    expect(find.byType(CodeEditor), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
 
     await tester.tap(find.byTooltip('Restore'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Maximize'));
     await tester.pumpAndSettle();
     expect(find.byTooltip('Restore size'), findsOneWidget);
-    expect(find.byType(TextField), findsOneWidget); // editor hidden
+    expect(find.byType(CodeEditor), findsNothing); // editor hidden
+    expect(find.byType(TextField), findsOneWidget); // composer
 
     await tester.tap(find.byTooltip('Close (Ctrl+J)'));
     await tester.pumpAndSettle();
@@ -98,7 +103,7 @@ void main() {
     expect(find.textContaining('Edited hello.py'), findsOneWidget);
     expect(find.textContaining('Done: it now prints hello.'), findsOneWidget);
     // The editor reloaded the page the assistant changed.
-    final editor = tester.widget<TextField>(find.byType(TextField).first);
+    final editor = tester.widget<CodeEditor>(find.byType(CodeEditor));
     expect(editor.controller!.text, contains('print("hello")'));
 
     await tester.tap(find.text('Undo'));
@@ -107,4 +112,3 @@ void main() {
     expect(find.text('Undone'), findsOneWidget);
   });
 }
-
