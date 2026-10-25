@@ -24,7 +24,8 @@ class ChatMessages extends StatelessWidget {
       itemBuilder: (context, i) => Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: _maxWidth),
-          child: Padding(
+          child: Container(
+            width: double.infinity,
             padding: const EdgeInsets.only(bottom: 10),
             child: switch (items[i]) {
               UserItem item => _UserBubble(item: item),

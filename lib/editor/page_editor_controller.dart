@@ -131,6 +131,8 @@ class PageEditorController extends ChangeNotifier {
       case WorkspaceChangeKind.modified || WorkspaceChangeKind.created:
         if (change.source != ChangeSource.ai) return;
         final content = await workspace.read(path);
+        // The old selection points at text that may have moved, so drop it.
+        text.selection = TextSelection.collapsed(offset: text.selection.isValid ? text.selection.start : 0);
         _setContent(content);
         notifyListeners();
     }
