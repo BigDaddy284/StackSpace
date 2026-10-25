@@ -1,20 +1,21 @@
 # PROJECT STATUS
 
-_Last updated: 2026-10-25 (Improvement Phase 1, Tasks 1-9 done)_
+_Last updated: 2026-10-25 (Improvement Phase 1, Tasks 1-10 done)_
 
 ## Current phase
 Improvement Phase 1: advanced editor, slash menu, code spaces. Working one task at a time.
 Test build 1 (v0.1.0-test.1) is published on GitHub and loads the user's AppFlowy workspace.
 
 ## Current task and scope
-Tasks 1-9 done: research, plan, the block editor, the slash menu, code spaces, formatting keys,
+Tasks 1-10 done: research, plan, the block editor, the slash menu, code spaces, formatting keys,
 the performance pass with its fix for long pages, the floating formatting toolbar and the block
-option menu.
-Next: Task 10, simple tables and images from the workspace folder.
+option menu, table editing and images.
+Next: Task 11, toggles and block drag-and-drop.
 
 ## Task log (Phase 1)
 | Task | Status | Tests | Files |
 | --- | --- | --- | --- |
+| 10. Tables + images | Done 2026-10-25. A Markdown table is a grid of single-line cells under a header strip ("Table 4 × 3" and, on hover or focus, Add row / Add column / Delete row / Delete column / Delete table); Tab and Shift+Tab move between cells (Tab on the last cell adds a row), Enter moves down (and adds a row at the bottom), arrows leave at the edges; every change is written back as padded Markdown and each row / column change is its own undo step. `lib/editor/table_data.dart` reads and writes the lines (escaped pipes, alignments, ragged rows repaired). Images: the slash command opens a dialog with "Choose a file…" (system picker) or a typed path / link; a file from outside the workspace is copied to `images/` next to the page, a workspace file is referenced relative to the page, a link stays; a description field under every picture edits the alt text. | 128/128 (+8) + 21 timing tests | `lib/editor/table_data.dart`, `lib/ui/editor/table_block.dart`, `lib/ui/editor/image_dialog.dart`, `lib/ui/editor/header_button.dart`, `block_editor.dart`, `block_metrics.dart`, `slash_commands.dart`, `test/table_image_test.dart`; screenshots 17-18 |
 | 9. Formatting toolbar + block menu | Done 2026-10-25. A toolbar floats above (or below) a text selection with Bold / Italic / Strikethrough / Inline code / Link and a "Turn into" menu (Text, Heading 1-3, Bulleted, Numbered, To-do, Quote, Code block); it follows the selection, never takes focus, and closes on a collapsed caret, scroll or blur. Every row has a drag-handle button in a 24 px gutter (visible on hover or while the block has focus) that opens the block menu: Turn into, Duplicate, Move up / down (Ctrl+Shift+arrows), Delete. Also fixed on the way: markers hug the words when a selection drags in spaces; saves are serialised so a slow write can never land an older version over a newer one; text lines are at least 24 px so one-line blocks stay WCAG tap targets next to the handle. | 119/119 (+5) + 21 timing tests | `lib/ui/editor/format_toolbar.dart`, `lib/ui/editor/block_menu.dart`, `block_editor.dart`, `block_metrics.dart`, `page_editor_controller.dart`, `test/block_menu_test.dart`, `test/block_editor_test.dart`; screenshots 15-16 |
 | 1. Baseline + research | Done 2026-10-25. `flutter analyze` clean, `flutter test` 49 passed, Linux debug build OK, Git checkpoint on `main`. | 49/49 | `docs/EDITOR_FEATURE_RESEARCH.md`, docs copied into `docs/` |
 | 2. Matrix + plan + spikes | Done 2026-10-25. Feature matrix (§8), spikes (§11: `re_editor` handles 100k lines in ~30 ms per operation; `appflowy_editor` compiles from git but is ruled out), prioritised plan (§12). | 49/49 | `docs/EDITOR_FEATURE_RESEARCH.md` |
@@ -48,6 +49,28 @@ Next: Task 10, simple tables and images from the workspace folder.
 
 ## Files changed
 See `git log` in `windows_app/` (5 commits on `main`).
+
+## Tests executed and actual results (Task 10)
+- `flutter analyze`: no issues. `flutter test` (without the timing file): 128 passed, 2 skipped by
+  design. `test/performance_test.dart`: 21 timing tests passed.
+- New `test/table_image_test.dart` (8): `TableData` reads and writes a table keeping escaped pipes and
+  alignments, repairs a table without a separator or with ragged rows, adds and removes rows and
+  columns (never the header or the last column); in the editor a table shows as cells, typing writes
+  padded Markdown and the file follows; Tab / Shift+Tab / Enter / arrows move between cells, Tab on the
+  last cell adds a row, Up from the header and Down from the last row leave the table and the
+  neighbours' arrows enter it; the header buttons add and remove rows and columns, Ctrl+Z undoes one
+  change at a time, Delete table removes the block; `/table` inserts a table with the caret in the
+  first cell; the description field under a picture saves as the alt text and Enter below it adds a
+  paragraph; `importImage` copies an outside file into `images/` next to the page (a taken name gets
+  a number), keeps links, references workspace files relative to the page and keeps a path that
+  leads nowhere.
+- `test/block_metrics_test.dart` now covers the table grid and the always-present description
+  field (image rows are 4 + 24 px taller than before).
+- Live run (Linux release build, `docs/screenshots/17-table-dark.png` and `18-image-dark.png`):
+  typing in a cell, Tab to the next, Tab on the last cell adding a row, the file on disk padded;
+  `/image` with a path from outside the workspace copied the file to `images/outside_photo.png`
+  and the page shows the picture with "outside photo" as its description.
+- Noted: the sidebar lists every file, so a copied image shows there too (see KNOWN_ISSUES.md).
 
 ## Tests executed and actual results (Task 9)
 - `flutter analyze`: no issues. `flutter test` (without the timing file): 119 passed, 2 skipped by
@@ -186,9 +209,8 @@ See KNOWN_ISSUES.md. Main ones: no real-model test yet; large files are read-onl
 Analyzer clean and tests green on Linux. `flutter build windows` not yet run.
 
 ## Next single task
-Task 10: simple tables (add / remove row and column, Tab between cells) and images from the
-workspace folder (insert from the slash menu with a file picker, copy into the page's folder,
-alt text), with round-trip tests and screenshots.
+Task 11: toggle blocks (collapsible headings or `<details>` sections that stay Markdown) and block
+drag-and-drop with the handle, with tests and screenshots.
 
 ## Exact commands to resume
 ```bash

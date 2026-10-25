@@ -19,7 +19,9 @@ import 'block_metrics.dart';
 import 'code_block.dart';
 import 'format_toolbar.dart';
 import 'inline_markdown.dart';
+import 'image_dialog.dart';
 import 'slash_menu.dart';
+import 'table_block.dart';
 
 /// Edits a page block by block. Each block is its own text field, so a page
 /// with thousands of lines of code lays out only the blocks on screen.
@@ -101,6 +103,17 @@ class _BlockEditorState extends State<BlockEditor> {
 
   FocusNode _focusFor(Block block) => _focus.putIfAbsent(block.id, () => FocusNode(debugLabel: 'block ${block.id}'));
 
+  final _tableKeys = <int, GlobalKey<TableBlockViewState>>{};
+  GlobalKey<TableBlockViewState> _tableKeyFor(Block block) => _tableKeys.putIfAbsent(block.id, GlobalKey.new);
+
+  /// The alt-text field of an image block.
+  final _alts = <int, TextEditingController>{};
+  final _altFocus = <int, FocusNode>{};
+  TextEditingController _altFor(Block block) =>
+      _alts.putIfAbsent(block.id, () => TextEditingController(text: block.alt));
+  FocusNode _altFocusFor(Block block) =>
+      _altFocus.putIfAbsent(block.id, () => FocusNode(debugLabel: 'alt ${block.id}'));
+
   CodeLineEditingController _codeFor(Block block) =>
       _codes.putIfAbsent(block.id, () => CodeLineEditingController.fromText(block.text));
 
@@ -127,6 +140,13 @@ class _BlockEditorState extends State<BlockEditor> {
     }
     for (final id in _texts.keys.where((id) => !live.contains(id)).toList()) {
       _texts.remove(id)!.dispose();
+    }
+    _tableKeys.removeWhere((id, _) => !live.contains(id));
+    for (final id in _alts.keys.where((id) => !live.contains(id)).toList()) {
+      _alts.remove(id)!.dispose();
+    }
+    for (final id in _altFocus.keys.where((id) => !live.contains(id)).toList()) {
+      _altFocus.remove(id)!.dispose();
     }
     for (final id in _focus.keys.where((id) => !live.contains(id)).toList()) {
       _focus.remove(id)!.dispose();
@@ -158,6 +178,17 @@ class _BlockEditorState extends State<BlockEditor> {
       // would also send the field's text back to the platform, over any
       // typing still on its way in.
       if (node.hasFocus) return;
+      if (block.kind == BlockKind.table) {
+        final table = _tableKeyFor(block).currentState;
+        if (table == null) {
+          node.requestFocus();
+        } else if (pending.offset == 0) {
+          table.focusFirst();
+        } else {
+          table.focusLast();
+        }
+        return;
+      }
       node.requestFocus();
       if (_isCode(block)) {
         final code = _codeFor(block);
@@ -170,8 +201,7 @@ class _BlockEditorState extends State<BlockEditor> {
         return;
       }
       final current = doc.indexOf(block.id);
-      final editable =
-          block.isText || block.kind == BlockKind.code || block.kind == BlockKind.table || block.kind == BlockKind.raw;
+      final editable = block.isText || block.kind == BlockKind.code || block.kind == BlockKind.raw;
       if (editable && current >= 0 && text.text == doc[current].text) {
         text.selection = TextSelection.collapsed(offset: pending.offset.clamp(0, text.text.length));
       }
@@ -250,7 +280,9 @@ class _BlockEditorState extends State<BlockEditor> {
       }
     }
 
-    final editable = block.isText || block.kind == BlockKind.table || block.kind == BlockKind.raw;
+    // A table handles its own keys (Tab, Enter, arrows between cells).
+    if (block.kind == BlockKind.table) return KeyEventResult.ignored;
+    final editable = block.isText || block.kind == BlockKind.raw;
     if (!editable) return _onNonTextKey(index, block, key);
 
     final text = _textFor(block);
@@ -374,6 +406,43 @@ class _BlockEditorState extends State<BlockEditor> {
   /// Moves the focus to the block before or after a code space when the
   /// caret is on its first or last line (up / down) or at its first or last
   /// character (left / right). Returns false when the caret stays inside.
+  /// Moves the caret to the block before (up / left) or after (down / right).
+  bool _leaveBlock(Block block, AxisDirection direction) {
+    final index = doc.indexOf(block.id);
+    if (index < 0) return false;
+    final back = direction == AxisDirection.up || direction == AxisDirection.left;
+    if (back && index > 0) {
+      _moveCaret((block: index - 1, offset: doc[index - 1].text.length));
+      return true;
+    }
+    if (!back && index + 1 < doc.length) {
+      _moveCaret((block: index + 1, offset: 0));
+      return true;
+    }
+    return false;
+  }
+
+  Widget _tableBlock(int index, Block block) => TableBlockView(
+        key: _tableKeyFor(block),
+        block: block,
+        focusNode: _focusFor(block),
+        readOnly: widget.readOnly,
+        onChanged: (markdown, {structural = false}) {
+          final i = doc.indexOf(block.id);
+          if (i < 0 || doc[i].text == markdown) return;
+          if (structural) {
+            doc.replace(i, doc[i].copyWith(text: markdown)); // one undo step each
+          } else {
+            doc.updateText(i, markdown);
+          }
+        },
+        onMoveOut: (direction) => _leaveBlock(block, direction),
+        onDelete: () {
+          final i = doc.indexOf(block.id);
+          if (i >= 0) _moveCaret(doc.remove(i));
+        },
+      );
+
   bool _leaveCode(Block block, AxisDirection direction) {
     final index = doc.indexOf(block.id);
     if (index < 0) return false;
@@ -569,6 +638,23 @@ class _BlockEditorState extends State<BlockEditor> {
   }
 
   KeyEventResult _onNonTextKey(int index, Block block, LogicalKeyboardKey key) {
+    if (block.kind == BlockKind.image && _altFocusFor(block).hasFocus) {
+      // Typing in the description: only Enter and Up / Down leave the field.
+      if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.numpadEnter) {
+        doc.insert(index + 1, Block(kind: BlockKind.paragraph));
+        _moveCaret((block: index + 1, offset: 0));
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.arrowUp && index > 0) {
+        _moveCaret((block: index - 1, offset: doc[index - 1].text.length));
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.arrowDown && index + 1 < doc.length) {
+        _moveCaret((block: index + 1, offset: 0));
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
     if (key == LogicalKeyboardKey.backspace || key == LogicalKeyboardKey.delete) {
       _moveCaret(doc.remove(index));
       return KeyEventResult.handled;
@@ -950,46 +1036,22 @@ class _BlockEditorState extends State<BlockEditor> {
     text.value = TextEditingValue(text: cleaned, selection: TextSelection.collapsed(offset: slash.offset));
     if (cleaned != doc[index].text) doc.updateText(index, cleaned);
     if (command.id == 'image') {
-      final path = await (widget.pickImage ?? _askImagePath)(context);
+      final path = await (widget.pickImage ?? showImageDialog)(context);
       if (!mounted || path == null || path.trim().isEmpty) return;
+      final url = await importImage(widget.controller, path);
+      if (!mounted) return;
       final at = doc.indexOf(block.id);
       if (at < 0) return;
       final result = command.apply(doc, at);
       final imageIndex = doc.blocks.indexWhere((b) => b.kind == BlockKind.image && b.url.isEmpty);
       if (imageIndex >= 0) {
-        final name = p.basename(path.trim());
-        doc.replace(imageIndex, doc[imageIndex].copyWith(url: path.trim(), alt: name));
+        final name = p.basenameWithoutExtension(Uri.decodeFull(url)).replaceAll(RegExp(r'[-_]+'), ' ');
+        doc.replace(imageIndex, doc[imageIndex].copyWith(url: url, alt: url.contains('://') ? '' : name));
       }
       _moveCaret(result);
       return;
     }
     _moveCaret(command.apply(doc, index));
-  }
-
-  static Future<String?> _askImagePath(BuildContext context) {
-    final controller = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Insert image'),
-        content: SizedBox(
-          width: 420,
-          child: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'File path or link',
-              hintText: 'images/photo.png or https://...',
-            ),
-            onSubmitted: (v) => Navigator.of(context).pop(v),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(controller.text), child: const Text('Insert')),
-        ],
-      ),
-    );
   }
 
   // ---- building --------------------------------------------------------------
@@ -1100,11 +1162,25 @@ class _BlockEditorState extends State<BlockEditor> {
           child: Divider(color: palette.barBorder, thickness: 1, height: 24),
         );
       case BlockKind.image:
+        final alt = _altFor(block);
+        if (alt.text != block.alt && !_altFocusFor(block).hasFocus) alt.text = block.alt;
         body = _NonTextBlock(
           focusNode: node,
           label: 'Image ${block.alt.isEmpty ? block.url : block.alt}',
-          child: _ImageBlock(block: block, file: _imageFile(block)),
+          child: _ImageBlock(
+            block: block,
+            file: _imageFile(block),
+            alt: alt,
+            altFocus: _altFocusFor(block),
+            readOnly: widget.readOnly,
+            onAlt: (value) {
+              final i = doc.indexOf(block.id);
+              if (i >= 0 && doc[i].alt != value) doc.replace(i, doc[i].copyWith(alt: value));
+            },
+          ),
         );
+      case BlockKind.table:
+        body = _tableBlock(index, block);
       case BlockKind.code:
         body = _codeBlock(index, block);
       default:
@@ -1218,9 +1294,20 @@ class _NonTextBlock extends StatelessWidget {
 }
 
 class _ImageBlock extends StatelessWidget {
-  const _ImageBlock({required this.block, required this.file});
+  const _ImageBlock({
+    required this.block,
+    required this.file,
+    required this.alt,
+    required this.altFocus,
+    required this.readOnly,
+    required this.onAlt,
+  });
   final Block block;
   final File? file;
+  final TextEditingController alt;
+  final FocusNode altFocus;
+  final bool readOnly;
+  final ValueChanged<String> onAlt;
 
   @override
   Widget build(BuildContext context) {
@@ -1252,14 +1339,35 @@ class _ImageBlock extends StatelessWidget {
                         overflow: TextOverflow.ellipsis)),
               ]),
             ),
-          if (block.alt.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(block.alt,
-                  style: ImageBlockMetrics.altStyle.copyWith(color: palette.subText),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: SizedBox(
+              height: ImageBlockMetrics.altHeight,
+              child: Center(
+                child: TextField(
+                  key: ValueKey('alt-${block.id}'),
+                  controller: alt,
+                  focusNode: altFocus,
+                  readOnly: readOnly,
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis),
+                  style: ImageBlockMetrics.altStyle.copyWith(color: palette.subText),
+                  strutStyle: StrutStyle.fromTextStyle(ImageBlockMetrics.altStyle, forceStrutHeight: true),
+                  cursorColor: palette.accentA,
+                  decoration: InputDecoration(
+                    isCollapsed: true,
+                    filled: false,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 2),
+                    hintText: 'Add a description (alt text)',
+                    hintStyle: TextStyle(color: palette.subText.withAlpha(120)),
+                  ),
+                  onChanged: onAlt,
+                ),
+              ),
             ),
+          ),
         ],
       ),
     );
@@ -1371,7 +1479,7 @@ class _TextBlockState extends State<_TextBlock> {
     // The tree keeps one shape for every kind, so changing a paragraph into a
     // heading or a list item updates the field in place instead of recreating
     // it (which would drop keys typed in the same instant).
-    final boxed = block.kind == BlockKind.table || block.kind == BlockKind.raw;
+    final boxed = block.kind == BlockKind.raw;
     final isListItem = block.isList;
     final Widget marker;
     if (block.kind == BlockKind.todo) {

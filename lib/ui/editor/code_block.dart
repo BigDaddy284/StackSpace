@@ -5,6 +5,7 @@ import 'package:re_highlight/styles/atom-one-dark.dart';
 import 'package:re_highlight/styles/atom-one-light.dart';
 
 import '../../app/theme.dart';
+import 'header_button.dart';
 import '../../editor/blocks.dart';
 import '../../editor/code_languages.dart';
 
@@ -260,7 +261,7 @@ class _CodeBlockViewState extends State<CodeBlockView> {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(8, 4, 6, 0),
                   child: Row(children: [
-                    _HeaderButton(
+                    HeaderButton(
                       tooltip: 'Change language',
                       semanticLabel: 'Language: $languageLabel$autoLabel. Change language',
                       onPressed: widget.readOnly ? null : _pickLanguage,
@@ -277,20 +278,20 @@ class _CodeBlockViewState extends State<CodeBlockView> {
                       ]),
                     ),
                     const Spacer(),
-                    _HeaderButton(
+                    HeaderButton(
                       tooltip: widget.wrap ? 'Wrap lines: on' : 'Wrap lines: off',
                       semanticLabel: widget.wrap ? 'Wrap lines, on' : 'Wrap lines, off',
                       onPressed: () => widget.onWrap(!widget.wrap),
                       child: Icon(Icons.wrap_text, size: 16, color: widget.wrap ? palette.accentA : palette.subText),
                     ),
-                    _HeaderButton(
+                    HeaderButton(
                       tooltip: 'Copy code',
                       semanticLabel: _copied ? 'Copied' : 'Copy code',
                       onPressed: _copy,
                       child: Icon(_copied ? Icons.check : Icons.copy_outlined,
                           size: 16, color: _copied ? palette.success : palette.subText),
                     ),
-                    _HeaderButton(
+                    HeaderButton(
                       tooltip: 'More',
                       semanticLabel: 'More code block options',
                       onPressed: () {
@@ -361,37 +362,6 @@ class _CodeBlockViewState extends State<CodeBlockView> {
                   ),
                 ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HeaderButton extends StatelessWidget {
-  const _HeaderButton(
-      {required this.tooltip, required this.semanticLabel, required this.onPressed, required this.child});
-  final String tooltip;
-  final String semanticLabel;
-  final VoidCallback? onPressed;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = StackColors.of(context);
-    return Tooltip(
-      message: tooltip,
-      child: Semantics(
-        button: true,
-        label: semanticLabel,
-        enabled: onPressed != null,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(5),
-          hoverColor: palette.hover,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-            child: Padding(padding: const EdgeInsets.symmetric(horizontal: 5), child: Center(child: child)),
           ),
         ),
       ),

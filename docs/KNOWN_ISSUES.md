@@ -29,7 +29,12 @@ without decoding the file.
   inside a code space do not cross into the surrounding page.
 - The slash menu opens only when `/` is typed at the start of a block or after a space, so
   `http://` never opens it. It does not open on a pasted `/`.
-- Tables and raw HTML are edited as their Markdown / HTML text in a boxed field.
+- Raw HTML is edited as its text in a boxed field. Table cells hold one line each; a table with more
+  columns than fit shows narrow cells (the text scrolls inside the cell) and there is no column
+  width or alignment control yet (alignments in the file are kept).
+- The sidebar lists every file in the workspace, so a picture copied into `images/` next to a page
+  shows there too; opening it in the editor shows its bytes as text. Hiding non-text files is a
+  small follow-up.
 - Links are styled but not clickable; images show when the file exists next to the page, otherwise
   the path is shown.
 - Selection cannot span blocks; Ctrl+A selects the current block.

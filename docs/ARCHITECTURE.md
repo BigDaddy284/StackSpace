@@ -41,6 +41,14 @@ BlockEditor (lib/ui/editor/block_editor.dart)
    selection toolbar (lib/ui/editor/format_toolbar.dart): shown in an Overlay above or below the
          selected text (RenderEditable boxes), Bold / Italic / Strike / Code / Link + "Turn into";
          buttons never take focus, so the field keeps its selection; closes on collapse, scroll, blur
+   tables are TableBlockView (lib/ui/editor/table_block.dart): header strip with the row /
+         column buttons, a Table of single-line fields, one per cell; lib/editor/table_data.dart
+         reads `| a | b |` lines into cells and writes them back padded; Tab / Enter / arrows
+         handled in the view, Ctrl keys bubble to the editor; cell typing is one undo step per
+         second, a row or column change its own
+   images: picture (or the path when the file is missing) plus a description field that edits
+         the alt text; lib/ui/editor/image_dialog.dart asks for a file (system picker), path
+         or link and copies outside files to images/ next to the page
    block handle + menu (lib/ui/editor/block_menu.dart): 24 px gutter left of every row, a
          drag-handle button visible on hover or focus, popup with Turn into / Duplicate /
          Move up / Move down / Delete; edits go through PageDocument so undo covers them

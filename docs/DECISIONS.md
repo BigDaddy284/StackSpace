@@ -252,6 +252,17 @@ one undo step; a slow disk can never leave an older version on top of a newer on
 block-menu test, which edits faster than the file system answers).
 **Status**: Done; `test/block_menu_test.dart`.
 
+### Tables are edited as cells but stored as padded Markdown (Task 10)
+**Decision**: A table block keeps its Markdown lines as its text. The editor shows them as a grid
+of single-line cells and writes padded `| a | b |` lines back on every change; alignments (`:---`)
+and escaped pipes survive the round trip. Cells hold one line (Markdown tables have no multi-line
+cells). Images picked from outside the workspace are copied to an `images/` folder next to the page
+and referenced relative to the page, so the page and its pictures move together.
+**Rationale**: The page stays plain Markdown that renders anywhere and that the assistant can edit;
+an unedited table writes back exactly as read. Copying pictures in keeps a workspace self-contained
+and portable, which is what the AppFlowy export did too.
+**Status**: Done; `test/table_image_test.dart`.
+
 ### Captions live on the fence line
 **Decision**: A caption is stored after the language on the fence line (` ```python Download helper `),
 which CommonMark allows and GitHub ignores. A caption on a block with no language writes `text`

@@ -6,6 +6,7 @@ import '../../app/theme.dart';
 import '../../editor/blocks.dart';
 import 'code_block.dart';
 import 'inline_markdown.dart';
+import 'table_block.dart';
 
 /// The height of every row in the block list, computed before the row is
 /// built.
@@ -80,6 +81,8 @@ class BlockMetrics {
         return 26; // 1 px border, Divider(height: 24), 1 px border
       case BlockKind.image:
         return _imageHeight(block, width);
+      case BlockKind.table:
+        return TableBlockView.heightFor(block);
       case BlockKind.code:
         return CodeBlockView.heightFor(block, width,
             wrap: wrap, caption: caption, textScaler: textScaler, inputStyle: inputStyle);
@@ -90,7 +93,7 @@ class BlockMetrics {
 
   double _textHeight(Block block, double width) {
     final style = inputStyle.merge(styleFor(block, palette));
-    final boxed = block.kind == BlockKind.table || block.kind == BlockKind.raw;
+    final boxed = block.kind == BlockKind.raw;
     final isList = block.isList;
     final padLeft = isList ? 24.0 * block.level : 0.0;
     final EdgeInsets padding = boxed
@@ -157,8 +160,7 @@ class BlockMetrics {
       // One clipped line of the path next to an 18 px icon, 10 px padding around.
       body = 20 + math.max(18.0, lineHeight(ImageBlockMetrics.pathStyle));
     }
-    if (block.alt.isNotEmpty) body += 4 + lineHeight(ImageBlockMetrics.altStyle);
-    return frame + body;
+    return frame + body + 4 + ImageBlockMetrics.altHeight;
   }
 
   /// Tells whether an image block's file exists (set by the editor); a
@@ -175,4 +177,7 @@ class ImageBlockMetrics {
   /// depend on the theme's font.
   static const pathStyle = TextStyle(fontSize: StackType.button, height: 1.3);
   static const altStyle = TextStyle(fontSize: StackType.hint, height: 1.3);
+
+  /// The description field under a picture: tall enough to be a click target.
+  static const altHeight = 24.0;
 }

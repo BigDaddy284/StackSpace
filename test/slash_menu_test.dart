@@ -221,14 +221,17 @@ void main() {
       await type(tester, field, '/');
       await type(tester, field, '/ima');
       await key(tester, LogicalKeyboardKey.enter);
-      await tester.pump();
-      await tester.pump();
+      for (var i = 0; i < 4; i++) {
+        // The path is looked up on disk before the block is filled.
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+        await tester.pump();
+      }
       final doc = editor.document;
       expect(doc[0].kind, BlockKind.image);
-      expect(doc[0].url, 'pics/cat.png');
-      expect(doc[0].alt, 'cat.png');
+      expect(doc[0].url, 'pics/cat.png', reason: 'a path that leads nowhere is kept as typed');
+      expect(doc[0].alt, 'cat');
       await settle(tester);
-      expect(File('${dir.path}/page.md').readAsStringSync(), '![cat.png](pics/cat.png)\n\n\n');
+      expect(File('${dir.path}/page.md').readAsStringSync(), '![cat](pics/cat.png)\n\n\n');
     });
 
     testWidgets('the menu opens below the slash and flips above it near the bottom edge', (tester) async {

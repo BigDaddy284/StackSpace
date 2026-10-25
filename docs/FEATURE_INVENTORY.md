@@ -108,7 +108,9 @@ This document outlines the features of AppFlowy as identified during the audit p
 | Code spaces: distinct background, monospace, line numbers, syntax highlighting for 30 languages, searchable language picker, **automatic language detection for typed or pasted code** (written into the fence, "auto" shown, picker overrides), copy button, wrap toggle, caption on the fence line, context menu (copy / copy all / cut / paste / select all / wrap / language / caption / delete), exact paste and copy, page-wide undo/redo, Ctrl+Enter to leave the block, Backspace on an empty block back to text; `.py` / `.json` / ... files open as one code space with the language from the extension | Implemented and tested (Task 6) |
 | Floating formatting toolbar on a selection (bold, italic, strikethrough, inline code, link, turn into) | Implemented and tested (Task 9) |
 | Block handle and menu (turn into, duplicate, move up / down, delete) | Implemented and tested (Task 9) |
-| Table editing, images from the folder, toggles, drag and drop | Planned: Phase 1 Tasks 10+ |
+| Table editing as a grid (Tab / Enter / arrows between cells, add / remove row and column, padded Markdown kept in the page) | Implemented and tested (Task 10) |
+| Images: insert from a file picker, path or link; outside files copied next to the page; alt-text field | Implemented and tested (Task 10) |
+| Toggles, drag and drop, columns | Planned: Phase 1 Task 11 |
 | Databases, views | Deferred |
 | Images, attachments, templates | Deferred |
 | AppFlowy backup import | Implemented (File > Import, zip or folder); export deferred |

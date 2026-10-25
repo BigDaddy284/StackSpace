@@ -192,12 +192,11 @@ final List<SlashCommand> slashCommands = [
     icon: Icons.table_chart_outlined,
     category: _blocks,
     aliases: ['grid', 'columns'],
-    apply: (doc, i) => _insertAfter(
-      doc,
-      i,
-      Block(kind: BlockKind.table, text: '| Column 1 | Column 2 |\n| --- | --- |\n|  |  |'),
-      focusInserted: true,
-    ),
+    apply: (doc, i) {
+      final table = Block(kind: BlockKind.table, text: '| Column 1 | Column 2 |\n| --- | --- |\n|  |  |');
+      final at = _insertAfter(doc, i, table, focusInserted: true);
+      return (block: at.block, offset: 0); // the first cell
+    },
   ),
   SlashCommand(
     id: 'image',
