@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:stack_space/import/appflowy_import.dart';
 import 'package:stack_space/workspace/workspace.dart';
+import 'support/temp.dart';
 
 String _ops(List<Map<String, dynamic>> ops) => jsonEncode(ops);
 
@@ -228,7 +229,7 @@ public class Cam {
 
   test('writes into a new folder without overwriting anything', () async {
     final dir = await Directory.systemTemp.createTemp('af_import_');
-    addTearDown(() => dir.delete(recursive: true));
+    addTearDown(() => deleteTemp(dir));
     final ws = Workspace(dir.path);
     await ws.init();
     final result = AppFlowyImporter(_export()).convert();

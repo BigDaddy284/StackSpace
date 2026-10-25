@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stack_space/ai/workspace_tools.dart';
 import 'package:stack_space/workspace/workspace.dart';
+import 'support/temp.dart';
 
 void main() {
   late Directory dir;
@@ -19,14 +20,22 @@ void main() {
 
   tearDown(() async {
     ws.dispose();
-    await dir.delete(recursive: true);
+    await deleteTemp(dir);
   });
 
   test('every tool has a definition the model can see', () {
     final names = tools.definitions.map((d) => d['function']['name']).toSet();
     expect(names, {
-      'list_pages', 'read_page', 'search_pages', 'create_page', 'write_page',
-      'replace_text', 'edit_lines', 'insert_lines', 'rename_page', 'delete_page',
+      'list_pages',
+      'read_page',
+      'search_pages',
+      'create_page',
+      'write_page',
+      'replace_text',
+      'edit_lines',
+      'insert_lines',
+      'rename_page',
+      'delete_page',
     });
   });
 
@@ -48,17 +57,20 @@ void main() {
     await ws.write('dup.txt', 'a\na\n');
     final dup = await tools.run('replace_text', {'path': 'dup.txt', 'old_text': 'a', 'new_text': 'b'});
     expect(dup.result, contains('matches 2 places'));
-    final all = await tools.run('replace_text', {'path': 'dup.txt', 'old_text': 'a', 'new_text': 'b', 'replace_all': true});
+    final all =
+        await tools.run('replace_text', {'path': 'dup.txt', 'old_text': 'a', 'new_text': 'b', 'replace_all': true});
     expect(all.isError, isFalse);
     expect(await ws.read('dup.txt'), 'b\nb\n');
 
-    final ok = await tools.run('replace_text', {'path': 'script.py', 'old_text': 'print("hi")', 'new_text': 'print("hello")'});
+    final ok =
+        await tools.run('replace_text', {'path': 'script.py', 'old_text': 'print("hi")', 'new_text': 'print("hello")'});
     expect(ok.summary, 'Edited script.py (line 4)');
     expect(await ws.read('script.py'), contains('print("hello")'));
   });
 
   test('edit_lines and insert_lines', () async {
-    await tools.run('edit_lines', {'path': 'script.py', 'start_line': 3, 'end_line': 4, 'new_text': 'def main():\n    return 1'});
+    await tools.run(
+        'edit_lines', {'path': 'script.py', 'start_line': 3, 'end_line': 4, 'new_text': 'def main():\n    return 1'});
     expect(await ws.read('script.py'), 'import os\n\ndef main():\n    return 1\n\nmain()');
     await tools.run('insert_lines', {'path': 'script.py', 'after_line': 0, 'text': '#!/usr/bin/env python'});
     expect((await ws.read('script.py')).split('\n').first, '#!/usr/bin/env python');

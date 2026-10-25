@@ -9,6 +9,7 @@ import 'package:stack_space/editor/page_document.dart';
 import 'package:stack_space/editor/page_editor_controller.dart';
 import 'package:stack_space/ui/editor/block_editor.dart';
 import 'package:stack_space/workspace/workspace.dart';
+import 'support/temp.dart';
 
 /// Timings for large pages. They run in the test VM (JIT, debug), so the
 /// numbers are upper bounds for the release build; the asserts only catch a
@@ -158,7 +159,7 @@ void main() {
         expect(firstFrame, lessThan(5000));
         expect(type, lessThan(2000), reason: 'one keystroke on $size lines');
         editor.dispose();
-        await tester.runAsync(() => dir.delete(recursive: true));
+        await tester.runAsync(() => deleteTemp(dir));
         debugDefaultTargetPlatformOverride = null;
       });
     }

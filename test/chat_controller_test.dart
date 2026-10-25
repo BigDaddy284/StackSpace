@@ -11,6 +11,7 @@ import 'package:stack_space/app/settings.dart';
 import 'package:stack_space/workspace/workspace.dart';
 
 import 'support/fake_ollama.dart';
+import 'support/temp.dart';
 
 void main() {
   late Directory dir;
@@ -34,7 +35,7 @@ void main() {
 
   tearDown(() async {
     ws.dispose();
-    await dir.delete(recursive: true);
+    await deleteTemp(dir);
   });
 
   test('connect picks the first model and loads its capabilities', () async {

@@ -8,6 +8,7 @@ import 'package:stack_space/editor/page_editor_controller.dart';
 import 'package:stack_space/ui/editor/block_editor.dart';
 import 'package:stack_space/ui/editor/block_metrics.dart';
 import 'package:stack_space/workspace/workspace.dart';
+import 'support/temp.dart';
 
 /// The list gives every row a height computed before the row is built, so a
 /// wrong number would clip or overlap rows. This pumps a page with every
@@ -86,7 +87,7 @@ void main() {
         expect(doc.length, greaterThan(20));
         debugDefaultTargetPlatformOverride = null;
         editor.dispose();
-        await tester.runAsync(() => dir.delete(recursive: true));
+        await tester.runAsync(() => deleteTemp(dir));
       });
     }
   }

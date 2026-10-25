@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:stack_space/workspace/workspace.dart';
+import 'support/temp.dart';
 
 void main() {
   late Directory dir;
@@ -16,7 +17,7 @@ void main() {
 
   tearDown(() async {
     ws.dispose();
-    await dir.delete(recursive: true);
+    await deleteTemp(dir);
   });
 
   test('rejects paths outside the workspace', () {

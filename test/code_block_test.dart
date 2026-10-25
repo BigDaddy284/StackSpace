@@ -10,6 +10,7 @@ import 'package:stack_space/editor/page_editor_controller.dart';
 import 'package:stack_space/ui/editor/block_editor.dart';
 import 'package:stack_space/ui/editor/code_block.dart';
 import 'package:stack_space/workspace/workspace.dart';
+import 'support/temp.dart';
 
 Future<void> settle(WidgetTester tester) async {
   // Language detection (500ms) restarts the 600ms autosave timer, so wait for both.
@@ -36,7 +37,7 @@ void main() {
 
   tearDown(() async {
     editor.dispose();
-    await dir.delete(recursive: true);
+    await deleteTemp(dir);
   });
 
   Future<void> pumpEditor(WidgetTester tester, String markdown, {String name = 'page.md'}) async {

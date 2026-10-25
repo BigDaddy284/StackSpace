@@ -32,15 +32,20 @@ void main() {
   });
 
   const samples = {
-    'python': 'import os\n\ndef greet(name):\n    print(f"hi {name}")\n\nif __name__ == "__main__":\n    greet("bob")\n',
+    'python':
+        'import os\n\ndef greet(name):\n    print(f"hi {name}")\n\nif __name__ == "__main__":\n    greet("bob")\n',
     'javascript': 'const x = require("fs");\nfunction add(a, b) {\n  return a + b;\n}\nconsole.log(add(1, 2));\n',
     'json': '{\n  "name": "stack",\n  "version": 2,\n  "tags": ["a", "b"],\n  "nested": {"ok": true}\n}\n',
-    'csharp': 'using UnityEngine;\n\npublic class Player : MonoBehaviour {\n    [SerializeField] private float speed = 5f;\n    void Update() {\n        transform.Translate(Vector3.forward * speed * Time.deltaTime);\n    }\n}\n',
-    'html': '<!DOCTYPE html>\n<html>\n<head><title>Hi</title></head>\n<body><div class="x"><p>Hello</p></div></body>\n</html>\n',
+    'csharp':
+        'using UnityEngine;\n\npublic class Player : MonoBehaviour {\n    [SerializeField] private float speed = 5f;\n    void Update() {\n        transform.Translate(Vector3.forward * speed * Time.deltaTime);\n    }\n}\n',
+    'html':
+        '<!DOCTYPE html>\n<html>\n<head><title>Hi</title></head>\n<body><div class="x"><p>Hello</p></div></body>\n</html>\n',
     'sql': 'SELECT id, name FROM users WHERE age > 21 ORDER BY name;\nINSERT INTO users (name) VALUES ("x");\n',
     'bash': '#!/bin/bash\nfor f in *.txt; do\n  echo "\$f"\n  cp "\$f" /tmp/\ndone\n',
-    'css': '.card {\n  display: flex;\n  margin: 0 auto;\n  color: #fff;\n}\n@media (max-width: 600px) { .card { display: none; } }\n',
-    'powershell': 'param([string]\$Name)\nGet-ChildItem -Path C:\\\\ | Where-Object { \$_.Length -gt 100 }\nWrite-Host "Hello \$Name"\n',
+    'css':
+        '.card {\n  display: flex;\n  margin: 0 auto;\n  color: #fff;\n}\n@media (max-width: 600px) { .card { display: none; } }\n',
+    'powershell':
+        'param([string]\$Name)\nGet-ChildItem -Path C:\\\\ | Where-Object { \$_.Length -gt 100 }\nWrite-Host "Hello \$Name"\n',
     'lua': 'local function update(dt)\n  for i, v in ipairs(items) do\n    v.x = v.x + dt\n  end\nend\n',
   };
 

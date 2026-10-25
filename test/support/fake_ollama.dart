@@ -7,7 +7,8 @@ import 'package:http/testing.dart';
 /// Pretends to be an Ollama server. Each queued chat reply is a list of
 /// NDJSON objects streamed back for one /api/chat request.
 class FakeOllama {
-  FakeOllama({this.models = const ['qwen3:8b', 'llama3.2:3b'], this.capabilities = const ['completion', 'tools', 'thinking']});
+  FakeOllama(
+      {this.models = const ['qwen3:8b', 'llama3.2:3b'], this.capabilities = const ['completion', 'tools', 'thinking']});
 
   final List<String> models;
   List<String> capabilities;
@@ -18,7 +19,13 @@ class FakeOllama {
   void queueText(String text, {String thinking = ''}) => chatReplies.add([
         if (thinking.isNotEmpty) _msg(thinking: thinking),
         for (final word in text.split(' ')) _msg(content: '$word '),
-        {'done': true, 'done_reason': 'stop', 'prompt_eval_count': 321, 'eval_count': 12, 'message': {'role': 'assistant', 'content': ''}},
+        {
+          'done': true,
+          'done_reason': 'stop',
+          'prompt_eval_count': 321,
+          'eval_count': 12,
+          'message': {'role': 'assistant', 'content': ''}
+        },
       ]);
 
   void queueToolCall(String name, Map<String, dynamic> args) => chatReplies.add([
@@ -27,12 +34,18 @@ class FakeOllama {
             'role': 'assistant',
             'content': '',
             'tool_calls': [
-              {'function': {'name': name, 'arguments': args}},
+              {
+                'function': {'name': name, 'arguments': args}
+              },
             ],
           },
           'done': false,
         },
-        {'done': true, 'done_reason': 'stop', 'message': {'role': 'assistant', 'content': ''}},
+        {
+          'done': true,
+          'done_reason': 'stop',
+          'message': {'role': 'assistant', 'content': ''}
+        },
       ]);
 
   static Map<String, dynamic> _msg({String content = '', String thinking = ''}) => {
@@ -48,7 +61,12 @@ class FakeOllama {
           return _json({
             'models': [
               for (final m in models)
-                {'name': m, 'model': m, 'size': 1000, 'details': {'family': 'qwen3', 'parameter_size': '8B'}},
+                {
+                  'name': m,
+                  'model': m,
+                  'size': 1000,
+                  'details': {'family': 'qwen3', 'parameter_size': '8B'}
+                },
             ],
           });
         }

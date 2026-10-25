@@ -11,6 +11,7 @@ import 'package:stack_space/ui/editor/block_editor.dart';
 import 'package:stack_space/ui/editor/image_dialog.dart';
 import 'package:stack_space/ui/editor/table_block.dart';
 import 'package:stack_space/workspace/workspace.dart';
+import 'support/temp.dart';
 
 Future<void> settle(WidgetTester tester) async {
   await tester.pump(const Duration(seconds: 2));
@@ -79,7 +80,7 @@ void main() {
 
     tearDown(() async {
       editor.dispose();
-      await dir.delete(recursive: true);
+      await deleteTemp(dir);
     });
 
     Future<void> pumpEditor(WidgetTester tester, String markdown) async {
@@ -246,7 +247,7 @@ void main() {
       await File('${dir.path}/shared.png').writeAsBytes(_png);
       await File('${dir.path}/notes/local.png').writeAsBytes(_png);
       final outside = await Directory.systemTemp.createTemp('outside_');
-      addTearDown(() => outside.delete(recursive: true));
+      addTearDown(() => deleteTemp(outside));
       await File('${outside.path}/my photo.png').writeAsBytes(_png);
       await editor.open('notes/page.md');
 

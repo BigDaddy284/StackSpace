@@ -10,6 +10,7 @@ import 'package:stack_space/app/settings.dart';
 import 'package:stack_space/ui/home_page.dart';
 
 import 'support/fake_ollama.dart';
+import 'support/temp.dart';
 
 /// Lets real file and fake-network work finish between frames.
 Future<void> settle(WidgetTester tester) async {
@@ -30,7 +31,7 @@ void main() {
     fake = FakeOllama();
   });
 
-  tearDown(() => dir.delete(recursive: true));
+  tearDown(() => deleteTemp(dir));
 
   Future<void> pumpApp(WidgetTester tester) async {
     tester.view.physicalSize = const Size(1400, 900);

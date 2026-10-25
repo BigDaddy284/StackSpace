@@ -10,6 +10,7 @@ import 'package:stack_space/app/theme.dart';
 import 'package:stack_space/ui/home_page.dart';
 
 import 'support/fake_ollama.dart';
+import 'support/temp.dart';
 
 /// WCAG 2.2 target size (minimum), AA: 24 by 24 CSS pixels.
 const wcagTargetSize = MinimumTapTargetGuideline(
@@ -33,7 +34,7 @@ void main() {
     SharedPreferences.setMockInitialValues({'workspacePath': dir.path});
   });
 
-  tearDown(() => dir.delete(recursive: true));
+  tearDown(() => deleteTemp(dir));
 
   Future<void> pumpApp(WidgetTester tester, StackPalette palette, {double textScale = 1}) async {
     tester.view.physicalSize = const Size(1280, 800);

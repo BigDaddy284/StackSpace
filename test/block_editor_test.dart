@@ -8,6 +8,7 @@ import 'package:stack_space/editor/blocks.dart';
 import 'package:stack_space/editor/page_editor_controller.dart';
 import 'package:stack_space/ui/editor/block_editor.dart';
 import 'package:stack_space/workspace/workspace.dart';
+import 'support/temp.dart';
 
 Future<void> settle(WidgetTester tester) async {
   await tester.pump(const Duration(seconds: 1)); // autosave timer
@@ -31,7 +32,7 @@ void main() {
 
   tearDown(() async {
     editor.dispose();
-    await dir.delete(recursive: true);
+    await deleteTemp(dir);
   });
 
   Future<void> pumpEditor(WidgetTester tester, String markdown, {String name = 'page.md'}) async {

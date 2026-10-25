@@ -10,6 +10,7 @@ import 'package:stack_space/editor/slash_commands.dart';
 import 'package:stack_space/ui/editor/block_editor.dart';
 import 'package:stack_space/ui/editor/slash_menu.dart';
 import 'package:stack_space/workspace/workspace.dart';
+import 'support/temp.dart';
 
 Future<void> settle(WidgetTester tester) async {
   await tester.pump(const Duration(seconds: 1));
@@ -58,7 +59,7 @@ void main() {
 
     tearDown(() async {
       editor.dispose();
-      await dir.delete(recursive: true);
+      await deleteTemp(dir);
     });
 
     Future<void> pumpEditor(WidgetTester tester, String markdown,
