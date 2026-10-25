@@ -256,4 +256,77 @@ void main() {
     // The guessed language goes on the fence; every line is kept.
     expect(saved('page.md'), endsWith('\n$script\n```\n'));
   });
+
+  testWidgets('arrows at the edges of a code space move to the neighbouring blocks', (tester) async {
+    await pumpEditor(tester, '# T\n\n```\na\nbb\n```\n\nAfter\n');
+    final doc = editor.document;
+    await tester.tap(find.byType(CodeEditor));
+    await tester.pump();
+    final c = codeController(tester);
+    c.selection = const CodeLineSelection.collapsed(index: 0, offset: 1);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    await tester.pump();
+    expect(tester.binding.focusManager.primaryFocus?.debugLabel, contains('block ${doc[0].id}'));
+
+    await tester.tap(find.byType(CodeEditor));
+    await tester.pump();
+    c.selection = const CodeLineSelection.collapsed(index: 1, offset: 1);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    await tester.pump();
+    expect(tester.binding.focusManager.primaryFocus?.debugLabel, contains('block ${doc[2].id}'));
+
+    // Inside the code the arrows move the caret as usual.
+    await tester.tap(find.byType(CodeEditor));
+    await tester.pump();
+    c.selection = const CodeLineSelection.collapsed(index: 1, offset: 1);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    expect(c.selection.extentIndex, 0);
+    expect(tester.binding.focusManager.primaryFocus?.debugLabel, contains('block ${doc[1].id}'));
+    c.selection = const CodeLineSelection.collapsed(index: 1, offset: 2);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+    await tester.pump();
+    expect(tester.binding.focusManager.primaryFocus?.debugLabel, contains('block ${doc[2].id}'));
+    await settle(tester);
+  });
+
+  testWidgets('the context menu copies all, cuts and pastes exactly', (tester) async {
+    const code = 'a\tb\n  c ✓';
+    await pumpEditor(tester, '```\n$code\n```\n');
+    String? clipboard;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') clipboard = (call.arguments as Map)['text'] as String;
+      if (call.method == 'Clipboard.getData') return {'text': clipboard};
+      if (call.method == 'Clipboard.hasStrings') return {'value': clipboard != null};
+      return null;
+    });
+    Future<void> menu(String item) async {
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(item));
+      await tester.pumpAndSettle();
+    }
+
+    await menu('Copy all');
+    expect(clipboard, code);
+    await tester.tap(find.byType(CodeEditor));
+    await tester.pump();
+    final c = codeController(tester);
+    c.selection = const CodeLineSelection(baseIndex: 0, baseOffset: 0, extentIndex: 0, extentOffset: 3);
+    await menu('Cut');
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.pump();
+    expect(clipboard, 'a\tb');
+    expect(editor.document[0].text, '\n  c ✓');
+    c.selection = const CodeLineSelection.collapsed(index: 1, offset: 5);
+    await menu('Paste');
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.pump();
+    expect(editor.document[0].text, '\n  c ✓a\tb');
+    await settle(tester);
+    expect(saved('page.md'), '```\n\n  c ✓a\tb\n```\n');
+  });
 }

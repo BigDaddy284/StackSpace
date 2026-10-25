@@ -100,7 +100,7 @@ This document outlines the features of AppFlowy as identified during the audit p
 | Large scripts | Editable block by block; only the blocks on screen are built. Over 100k lines / 8 MB: read-only viewer. Measurements due in Task 8 |
 | AI assistant (local models via Ollama): chat, page/selection context, create/edit/rename/delete pages, undo | Implemented; tested against a fake Ollama, not yet a real model |
 | Search across pages | Partial: available to the assistant, no search box in the UI yet |
-| Keyboard shortcuts | Partial: Ctrl+J assistant, Ctrl+S save, Ctrl+N new page |
+| Keyboard shortcuts | Ctrl+J assistant, Ctrl+S save, Ctrl+N new page; in text: Ctrl+B bold, Ctrl+I italic, Ctrl+E inline code, Ctrl+Shift+X strikethrough, Ctrl+K link, Tab / Shift+Tab indent, Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z, Ctrl+Shift+Up / Down move a block, Shift+Enter soft break; in code: Ctrl+Enter leaves the block, arrows at the edges move between blocks (Task 7) |
 | Undo/redo in the editor | Implemented: document-level undo/redo (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z), typing coalesced per second |
 | Settings | Partial: theme (Windows / light / dark), workspace folder, Ollama address, context length, delete confirmation |
 | Light / dark themes, accessibility (WCAG AA contrast, screen-reader labels, 150% text) | Implemented and tested |

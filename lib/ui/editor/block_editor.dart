@@ -200,6 +200,24 @@ class _BlockEditorState extends State<BlockEditor> {
 
     if (_isCode(block)) return _onCodeKey(index, block, key, ctrl: ctrl, shift: shift);
 
+    if (ctrl && block.isText && !doc.plain) {
+      final marker = switch (key) {
+        LogicalKeyboardKey.keyB => '**',
+        LogicalKeyboardKey.keyI => '_',
+        LogicalKeyboardKey.keyE => '`',
+        LogicalKeyboardKey.keyX when shift => '~~',
+        _ => null,
+      };
+      if (marker != null) {
+        _toggleInline(index, block, marker);
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.keyK) {
+        _insertLink(index, block);
+        return KeyEventResult.handled;
+      }
+    }
+
     final editable = block.isText || block.kind == BlockKind.table || block.kind == BlockKind.raw;
     if (!editable) return _onNonTextKey(index, block, key);
 
@@ -296,7 +314,6 @@ class _BlockEditorState extends State<BlockEditor> {
   /// handles typing, Tab, Enter, selection and its own shortcuts.
   KeyEventResult _onCodeKey(int index, Block block, LogicalKeyboardKey key, {required bool ctrl, required bool shift}) {
     final code = _codeFor(block);
-    final sel = code.selection;
     if (ctrl && (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.numpadEnter)) {
       // Ctrl+Enter leaves the code space on a new paragraph below it.
       doc.insert(index + 1, Block(kind: BlockKind.paragraph));
@@ -308,31 +325,45 @@ class _BlockEditorState extends State<BlockEditor> {
       _moveCaret((block: index, offset: 0));
       return KeyEventResult.handled;
     }
-    if (shift || ctrl || !sel.isCollapsed) return KeyEventResult.ignored;
-    final lastLine = code.codeLines.length - 1;
-    if (key == LogicalKeyboardKey.arrowUp && sel.extentIndex == 0 && index > 0) {
-      _moveCaret((block: index - 1, offset: doc[index - 1].text.length));
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.arrowDown && sel.extentIndex == lastLine && index + 1 < doc.length) {
-      _moveCaret((block: index + 1, offset: 0));
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.arrowLeft && sel.extentIndex == 0 && sel.extentOffset == 0 && index > 0) {
-      _moveCaret((block: index - 1, offset: doc[index - 1].text.length));
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.arrowRight &&
-        sel.extentIndex == lastLine &&
-        sel.extentOffset == code.codeLines[lastLine].text.length &&
-        index + 1 < doc.length) {
-      _moveCaret((block: index + 1, offset: 0));
-      return KeyEventResult.handled;
-    }
+    if (shift || ctrl) return KeyEventResult.ignored;
+    final arrows = {
+      LogicalKeyboardKey.arrowUp: AxisDirection.up,
+      LogicalKeyboardKey.arrowDown: AxisDirection.down,
+      LogicalKeyboardKey.arrowLeft: AxisDirection.left,
+      LogicalKeyboardKey.arrowRight: AxisDirection.right,
+    };
+    final direction = arrows[key];
+    if (direction != null && _leaveCode(block, direction)) return KeyEventResult.handled;
     return KeyEventResult.ignored;
   }
 
   // ---- code spaces -----------------------------------------------------------
+
+  /// Moves the focus to the block before or after a code space when the
+  /// caret is on its first or last line (up / down) or at its first or last
+  /// character (left / right). Returns false when the caret stays inside.
+  bool _leaveCode(Block block, AxisDirection direction) {
+    final index = doc.indexOf(block.id);
+    if (index < 0) return false;
+    final code = _codeFor(block);
+    final sel = code.selection;
+    if (!sel.isCollapsed) return false;
+    final lastLine = code.codeLines.length - 1;
+    final atStart = sel.extentIndex == 0 && sel.extentOffset == 0;
+    final atEnd = sel.extentIndex == lastLine && sel.extentOffset == code.codeLines[lastLine].text.length;
+    final back = direction == AxisDirection.up && sel.extentIndex == 0 || direction == AxisDirection.left && atStart;
+    final forward =
+        direction == AxisDirection.down && sel.extentIndex == lastLine || direction == AxisDirection.right && atEnd;
+    if (back && index > 0) {
+      _moveCaret((block: index - 1, offset: doc[index - 1].text.length));
+      return true;
+    }
+    if (forward && index + 1 < doc.length) {
+      _moveCaret((block: index + 1, offset: 0));
+      return true;
+    }
+    return false;
+  }
 
   void _onCodeChanged(Block block) {
     final index = doc.indexOf(block.id);
@@ -429,6 +460,7 @@ class _BlockEditorState extends State<BlockEditor> {
         final i = doc.indexOf(block.id);
         if (i >= 0) _moveCaret(doc.remove(i));
       },
+      onMoveOut: (direction) => _leaveCode(block, direction),
     );
   }
 
@@ -451,6 +483,51 @@ class _BlockEditorState extends State<BlockEditor> {
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
+  }
+
+  // ---- inline formatting ----------------------------------------------------
+
+  /// Wraps the selection in [marker] (`**`, `_`, `` ` ``, `~~`), or removes the
+  /// markers when the selection already has them, inside or just outside it.
+  /// With no selection the markers are inserted and the caret goes between.
+  void _toggleInline(int index, Block block, String marker) {
+    final text = _textFor(block);
+    final value = text.text;
+    final sel = text.selection.isValid ? text.selection : TextSelection.collapsed(offset: value.length);
+    final start = sel.start, end = sel.end, n = marker.length;
+    final inner = value.substring(start, end);
+    final String next;
+    final TextSelection after;
+    if (inner.length >= 2 * n && inner.startsWith(marker) && inner.endsWith(marker)) {
+      next = value.replaceRange(start, end, inner.substring(n, inner.length - n));
+      after = TextSelection(baseOffset: start, extentOffset: end - 2 * n);
+    } else if (start >= n &&
+        end + n <= value.length &&
+        value.substring(start - n, start) == marker &&
+        value.substring(end, end + n) == marker) {
+      next = value.replaceRange(start - n, end + n, inner);
+      after = TextSelection(baseOffset: start - n, extentOffset: end - n);
+    } else {
+      next = value.replaceRange(start, end, '$marker$inner$marker');
+      after = TextSelection(baseOffset: start + n, extentOffset: end + n);
+    }
+    text.expectChange(value, next);
+    text.value = TextEditingValue(text: next, selection: after);
+    doc.updateText(index, next, caret: (block: index, offset: after.extentOffset));
+  }
+
+  /// Turns the selection into a Markdown link with the URL part selected.
+  void _insertLink(int index, Block block) {
+    final text = _textFor(block);
+    final value = text.text;
+    final sel = text.selection.isValid ? text.selection : TextSelection.collapsed(offset: value.length);
+    final label = sel.isCollapsed ? 'text' : value.substring(sel.start, sel.end);
+    final next = value.replaceRange(sel.start, sel.end, '[$label](url)');
+    final urlStart = sel.start + label.length + 3;
+    final after = TextSelection(baseOffset: urlStart, extentOffset: urlStart + 3);
+    text.expectChange(value, next);
+    text.value = TextEditingValue(text: next, selection: after);
+    doc.updateText(index, next, caret: (block: index, offset: after.extentOffset));
   }
 
   // ---- typing --------------------------------------------------------------

@@ -241,4 +241,41 @@ void main() {
     }
     await settle(tester);
   });
+
+  testWidgets('Ctrl+B / I / E / Shift+X wrap the selection and toggle off again; Ctrl+K makes a link', (tester) async {
+    await pumpEditor(tester, 'make this bold\n');
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    final doc = editor.document;
+    final field = fieldAt(tester, 0).controller!;
+    field.selection = const TextSelection(baseOffset: 10, extentOffset: 14);
+    await key(tester, LogicalKeyboardKey.keyB, control: true);
+    expect(doc[0].text, 'make this **bold**');
+    expect(fieldAt(tester, 0).controller!.selection, const TextSelection(baseOffset: 12, extentOffset: 16));
+    await key(tester, LogicalKeyboardKey.keyB, control: true); // markers just outside: removed
+    expect(doc[0].text, 'make this bold');
+    field.selection = const TextSelection(baseOffset: 10, extentOffset: 14);
+    await key(tester, LogicalKeyboardKey.keyI, control: true);
+    expect(doc[0].text, 'make this _bold_');
+    field.selection = const TextSelection(baseOffset: 10, extentOffset: 16); // markers inside the selection
+    await key(tester, LogicalKeyboardKey.keyI, control: true);
+    expect(doc[0].text, 'make this bold');
+    field.selection = const TextSelection(baseOffset: 5, extentOffset: 9);
+    await key(tester, LogicalKeyboardKey.keyE, control: true);
+    expect(doc[0].text, 'make `this` bold');
+    field.selection = const TextSelection(baseOffset: 0, extentOffset: 4);
+    await key(tester, LogicalKeyboardKey.keyX, control: true, shift: true);
+    expect(doc[0].text, '~~make~~ `this` bold');
+    // No selection: the markers are inserted and the caret sits between them.
+    field.selection = const TextSelection.collapsed(offset: 20);
+    await key(tester, LogicalKeyboardKey.keyB, control: true);
+    expect(doc[0].text, '~~make~~ `this` bold****');
+    expect(fieldAt(tester, 0).controller!.selection.extentOffset, 22);
+    field.selection = const TextSelection(baseOffset: 16, extentOffset: 20);
+    await key(tester, LogicalKeyboardKey.keyK, control: true);
+    expect(doc[0].text, '~~make~~ `this` [bold](url)****');
+    expect(fieldAt(tester, 0).controller!.selection, const TextSelection(baseOffset: 23, extentOffset: 26));
+    await settle(tester);
+    expect(saved('page.md'), '~~make~~ `this` [bold](url)****\n');
+  });
 }

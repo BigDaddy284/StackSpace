@@ -1,22 +1,22 @@
 # PROJECT STATUS
 
-_Last updated: 2026-10-25 (Improvement Phase 1, Tasks 1-6 done)_
+_Last updated: 2026-10-25 (Improvement Phase 1, Tasks 1-7 done)_
 
 ## Current phase
 Improvement Phase 1: advanced editor, slash menu, code spaces. Working one task at a time.
 Test build 1 (v0.1.0-test.1) is published on GitHub and loads the user's AppFlowy workspace.
 
 ## Current task and scope
-Tasks 1-6 done: research, plan, the block editor, the slash menu with its tests, and code spaces
-(highlighting, automatic language detection, picker, copy, wrap, caption, menu) with their tests.
-Next: Task 7, the remaining Markdown shortcuts (`**bold**`, `` `code` `` wrapping of a selection)
-and any code space test gaps; then Task 8, large-page performance measurements.
+Tasks 1-7 done: research, plan, the block editor, the slash menu, code spaces, and the Task 7
+round of formatting keys, code-space navigation and clipboard tests.
+Next: Task 8, performance on 5k / 10k / 50k-line pages and a regression pass.
 
 ## Task log (Phase 1)
 | Task | Status | Tests | Files |
 | --- | --- | --- | --- |
 | 1. Baseline + research | Done 2026-10-25. `flutter analyze` clean, `flutter test` 49 passed, Linux debug build OK, Git checkpoint on `main`. | 49/49 | `docs/EDITOR_FEATURE_RESEARCH.md`, docs copied into `docs/` |
 | 2. Matrix + plan + spikes | Done 2026-10-25. Feature matrix (§8), spikes (§11: `re_editor` handles 100k lines in ~30 ms per operation; `appflowy_editor` compiles from git but is ruled out), prioritised plan (§12). | 49/49 | `docs/EDITOR_FEATURE_RESEARCH.md` |
+| 7. Formatting keys + code space tests | Done 2026-10-25. Ctrl+B / Ctrl+I / Ctrl+E / Ctrl+Shift+X wrap or unwrap the selection (`**`, `_`, `` ` ``, `~~`), Ctrl+K inserts `[text](url)`; arrows at the first / last line or character of a code space move to the neighbouring block (found that `re_editor` consumed arrows on desktop, so the editor's cursor-move action is overridden); context-menu Copy all / Cut / Paste tested with tabs and Unicode. | 110/110 (+3) | `lib/ui/editor/block_editor.dart`, `lib/ui/editor/code_block.dart`, tests |
 | 6. Code spaces | Done 2026-10-25. `lib/ui/editor/code_block.dart` (header with language label + "auto", wrap, copy, menu; `re_editor` body with line numbers and `re_highlight` colours; caption field; context menu; searchable language picker with "Auto-detect"), `lib/editor/code_languages.dart` (30 languages, fence aliases, extensions, `detectLanguage`), fence captions in `blocks.dart`, language from the file extension for `.py` / `.json` / ..., keys in `block_editor.dart` (Ctrl+Enter leaves the block, Backspace on an empty block makes a paragraph, arrows at the edges, page-wide Ctrl+Z / Ctrl+Y). Packages `re_editor` 0.10.0 + `re_highlight` 0.0.3 (MIT) added. | 107/107 (+24) | see files; screenshots 11-13 |
 | 4-5. Slash menu + tests | Done 2026-10-25. `lib/editor/slash_commands.dart` (13 commands: Text, Heading 1-3, Quote, Callout, Bulleted, Numbered, To-do, Code block, Divider, Table, Image; aliases such as h1, ul, todo, ```), `lib/ui/editor/slash_menu.dart` (panel anchored to the slash, flips at the bottom edge, categories, icons, descriptions, hover and click), tracking in `block_editor.dart` (opens on `/` at the start of a block or after a space, filters while typing, closes on Escape / slash deleted / focus lost, never in code blocks or plain files). | 83/83 (+14) | see files |
 | 3. Block editor | Done 2026-10-25. Own block model with exact Markdown round trip, document with undo/redo, block-by-block editor pane, controller refactor, caret path made cheap. Live-tested in a Linux release build at 40 keys/s (3 identical runs). | 69/69 (+20) | `lib/editor/blocks.dart`, `lib/editor/page_document.dart`, `lib/editor/page_editor_controller.dart`, `lib/ui/editor/block_editor.dart`, `lib/ui/editor/inline_markdown.dart`, `lib/ui/editor_pane.dart`, `lib/ui/home_page.dart`, `lib/ui/chat/composer.dart`, tests, docs |
@@ -45,6 +45,16 @@ and any code space test gaps; then Task 8, large-page performance measurements.
 
 ## Files changed
 See `git log` in `windows_app/` (5 commits on `main`).
+
+## Tests executed and actual results (Task 7)
+- `flutter analyze`: no issues. `flutter test`: 110 passed, 2 skipped by design.
+- New tests: inline formatting keys (block_editor_test), arrows out of a code space and the
+  context menu's cut / paste / copy all (code_block_test).
+- Found while writing the arrow test: on desktop `re_editor` binds the arrow keys itself, so the
+  Task 6 arrow code never ran there (the widget tests had used the Android key path). Fixed by
+  overriding the editor's cursor-move action; the tests now run with the Windows key bindings.
+- Release build under Xvfb: Ctrl+B on a selected word → `**bold**`; Up from the first code line and
+  Down from the last moved to the paragraphs around the code; the saved file was correct.
 
 ## Tests executed and actual results (Task 6)
 - `flutter analyze`: no issues. `flutter test`: 107 passed, 2 skipped by design (the real-zip and
@@ -103,10 +113,10 @@ See KNOWN_ISSUES.md. Main ones: no real-model test yet; large files are read-onl
 Analyzer clean and tests green on Linux. `flutter build windows` not yet run.
 
 ## Next single task
-Task 7: close the code space test gaps (context menu actions, cut / paste through the editor,
-arrow navigation out of a code space) and the remaining Markdown shortcuts (`**` and `` ` `` around a
-selection). Then Task 8: measure 5k / 10k / 50k-line pages in tests and in the release build, and
-revisit the 100k-line read-only threshold now that code spaces use `re_editor`.
+Task 8: measure 5k / 10k / 50k-line pages (one code block, many paragraphs, mixed) in tests and in
+the release build: open time, typing latency, scroll, autosave; revisit the 100k-line read-only
+threshold now that code spaces use `re_editor`; run the full regression (all tests, the user's
+imported pages round trip, launch / close).
 
 ## Exact commands to resume
 ```bash

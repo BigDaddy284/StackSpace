@@ -25,6 +25,7 @@ class CodeBlockView extends StatefulWidget {
     required this.onCaption,
     required this.onWrap,
     required this.onDelete,
+    required this.onMoveOut,
   });
 
   final Block block;
@@ -45,6 +46,11 @@ class CodeBlockView extends StatefulWidget {
   final ValueChanged<String> onCaption;
   final ValueChanged<bool> onWrap;
   final VoidCallback onDelete;
+
+  /// Called when an arrow key would move the caret past the first or last
+  /// line (or the first or last character). Returns true when the block
+  /// editor moved the focus to a neighbouring block.
+  final bool Function(AxisDirection direction) onMoveOut;
 
   static const fontSize = 13.5;
   static const lineHeight = 1.5;
@@ -256,6 +262,13 @@ class _CodeBlockViewState extends State<CodeBlockView> {
                     // An empty code space hands Backspace to the block editor, which turns it back into a paragraph.
                     shortcutsActivatorsBuilder:
                         _CodeShortcuts(passBackspace: !widget.plain && widget.block.text.isEmpty),
+                    shortcutOverrideActions: {
+                      // Arrows at the edges of the code leave the block.
+                      CodeShortcutCursorMoveIntent: CallbackAction<CodeShortcutCursorMoveIntent>(onInvoke: (intent) {
+                        if (!widget.onMoveOut(intent.direction)) widget.controller.moveCursor(intent.direction);
+                        return null;
+                      }),
+                    },
                     controller: widget.controller,
                     focusNode: widget.focusNode,
                     readOnly: widget.readOnly,

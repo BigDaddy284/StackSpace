@@ -121,6 +121,12 @@ Focus on large document handling and responsiveness:
 | `test/code_languages_test.dart` (Task 6) | Fence names and aliases (`c#`, `js`, `sh`, `xml`), extensions, picker filtering, and detection of C# (Unity), PowerShell, Python, JSON, HTML, SQL, Bash, TypeScript, JavaScript, CSS, YAML, Rust, Go; nothing guessed for short or plain prose. |
 | `test/code_block_test.dart` (Task 6) | A fenced block shows its language, keeps text exact (tabs, Unicode, Markdown characters) and saves the fence; typed C# is guessed, written to the fence and shown as "auto", picking PowerShell stops guessing, "Auto-detect" resumes it; a language from the file is never re-guessed; the copy button puts the exact code on the clipboard and shows "Copied"; the wrap toggle flips the editor and grows the block; a caption is saved on the fence line and read back; undo / redo across a code edit; Backspace in an empty block turns it into a paragraph and Ctrl+Enter adds a paragraph below; `/`, `- ` and `# ` do nothing inside code; a `.py` file is one highlighted code space; a 5,000-line paste keeps every line and the block stays within its maximum height. |
 
+| Task 7 additions | `block_editor_test.dart`: Ctrl+B / Ctrl+I / Ctrl+E / Ctrl+Shift+X wrap the selection in `**` / `_` / `` ` `` / `~~`, press again (markers inside or just outside the selection) removes them, no selection inserts the pair with the caret between, Ctrl+K makes `[text](url)` with `url` selected, saved file matches. `code_block_test.dart`: Up on the first line / Down on the last line / Right at the end of a code space move to the neighbouring block while arrows inside move the caret; the context menu's Copy all, Cut and Paste put and take the exact text (tab, Unicode) through the clipboard and the file matches. |
+
+Manual run for Task 7 (release build under Xvfb): Ctrl+B on a selected word wrote `**bold**`; Up from
+the first code line moved to the paragraph above and Down from the last line to the paragraph below;
+text typed after each landed in the right block and the saved file was correct.
+
 Manual code space run (release build under Xvfb): typed Unity C# into an empty block → guessed
 `csharp`, highlighted, fence saved as ` ```csharp `; pasted a Python file with tabs and `✓` through
 the X clipboard → guessed `python`, file byte-identical to the source; language picker search
