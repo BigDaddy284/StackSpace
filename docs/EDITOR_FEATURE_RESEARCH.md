@@ -159,3 +159,36 @@ Recommendation: **A**, confirmed by a spike in Task 3 (load the imported workspa
 - AppFlowy docs index: https://docs.appflowy.io/docs/llms.txt ; editor codebase overview: https://docs.appflowy.io/docs/blog-highlights/demystifying-appflowy-editors-codebase.md ; Notion import guide: https://docs.appflowy.io/docs/guides/import-from-notion.md
 - Notion help: https://www.notion.com/help/writing-and-editing-basics , https://www.notion.com/en-gb/help/guides/using-slash-commands , https://www.notion.com/help/code-blocks , https://www.notion.com/help/keyboard-shortcuts , https://www.notion.com/help/category/databases
 - Packages: https://pub.dev/packages/appflowy_editor , https://pub.dev/packages/appflowy_editor_plugins , https://pub.dev/packages/re_editor , https://pub.dev/packages/re_highlight , https://pub.dev/packages/flutter_code_editor , https://pub.dev/packages/highlight , https://pub.dev/packages/flutter_highlight , https://pub.dev/packages/code_forge , https://pub.dev/packages/markdown
+
+## 11. Spike results (Task 3 evidence, run 2026-10-25 on Flutter 3.47.8)
+
+Scratch project with `appflowy_editor` and `re_editor`, tests in `test/spike_test.dart` and `test/roundtrip_test.dart` of the spike (not in this repo).
+
+| Check | Result |
+| --- | --- |
+| `appflowy_editor` 6.2.0 from pub.dev | **Does not compile** on Flutter 3.47.8 (`DeltaTextInputService` lacks `TextInputClient.onFocusReceived`, added in newer Flutter). |
+| `appflowy_editor` from GitHub `main` (01eccc6, Aug 2026) | Compiles and runs. Must be pinned by commit in `pubspec.yaml`. |
+| Markdown round-trip of the 45 imported pages, stock decoder | 6/45 identical. **Fenced code blocks are dropped** by the stock decoder (the code block lives in the plugins package, and the editor's Markdown decoder has no parser for it). |
+| Round-trip with a 25-line custom `CodeFenceParser` (fence → `code` node with `language`) | 35/45 identical after whitespace normalisation. Remaining diffs are cosmetic or small: bullets written as `*` not `-`; table rule `|-|` not `|---|`; image alt text dropped and no blank line after an image; **nested list items lose their indentation on export** (must fix in the encoder). |
+| `appflowy_editor` with a 10,000-line code node | Parse 29 ms, first build 792 ms (cold), inserting text in a paragraph then one frame 111 ms, in the code node 37 ms (as a plain node without highlighting). |
+| `re_editor` 20,000 lines | Build 162 ms, insert a line 32 ms, wrap on 54 ms, select all 14 ms. |
+| `re_editor` 100,000 lines (4.7 MB) | Build 34 ms, insert a line 18 ms, wrap on 20 ms, select all 28 ms. |
+
+Conclusion: approach A is viable. `re_editor` is the right body for the code block. The integration work is: pin the git commit, write the code fence parser and a matching encoder, fix bullets/nested lists/images in the encoder, and restyle.
+
+## 12. Prioritised implementation plan (Task 2)
+
+One task at a time; each ends with tests green and `PROJECT_STATUS.md` updated.
+
+| # | Task | Done when |
+| --- | --- | --- |
+| 3 | Architecture: add the editor dependency (pinned), a `MarkdownCodec` (code fences, bullets `-`, nested lists, image alt, callouts as `> icon text`), and swap the editor pane to the block editor behind a `BlockEditorPane`. The assistant keeps editing Markdown; the editor reloads from the file as today. | Workspace loads, every imported page round-trips through the codec in a test, existing 49 tests pass, large pages (≥20k lines) still use the viewer. |
+| 4 | Slash menu: StackSpace-styled menu with categories (Text, Lists, Code, Media, Page), aliases, descriptions, keyboard and mouse, edge flipping, no-match empty state, closes on Escape / no match. Excluded inside code blocks. | Widget tests for open, filter, Enter, Esc, arrows, click, replacement of `/query`, empty and mid-text blocks. |
+| 5 | Slash menu test and fix pass; TEST_PLAN.md section. | All slash tests pass; manual run under Xvfb with screenshots. |
+| 6 | Code block: `re_editor` body, language picker with search (bundle ~30 languages incl. JS/TS, Python, JSON, HTML, CSS, SQL, Bash, PowerShell, C#, YAML, Markdown, plain), copy, wrap toggle, caption, menu, theme-matched colours, Tab/Shift+Tab, Ctrl+A inside the block. Language saved in the fence. | Insert via `/code`, change language, copy exact text, wrap on/off, save and reopen keep code and language. |
+| 7 | Code block clipboard, formatting and persistence tests; Markdown shortcuts (`# `, `- `, `1. `, `[] `, `> `, ``` ``` ```, `**`, `` ` ``). | Tests for paste with tabs and Unicode, undo/redo, no corruption of neighbours. |
+| 8 | Performance and regression: 5k / 10k / 50k-line pages and multi-block pages measured in tests; existing workspace loads; autosave; launch/close. | Numbers recorded in PROJECT_STATUS.md; no regression against the baseline. |
+| 9 | Floating formatting toolbar (B/I/U/S/code/link/headings) and block option menu (turn into, duplicate, delete, move up/down). | Tests and screenshots. |
+| 10 | Simple tables (add/remove row and column, Tab between cells) and images from the workspace folder. | Round-trip tests; screenshots. |
+| 11 | Toggles, block drag-and-drop, columns. | As above. |
+| Later | Colours, equations, search, page style, databases. | — |
