@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:windows_app/lib/plugins/document/virtualized_editor/virtualized_renderer.dart';
-import 'package:windows_app/lib/plugins/document/virtualized_editor/virtualized_editor_widget.dart';
+import 'package:stack_space/plugins/document/virtualized_editor/virtualized_renderer.dart';
+import 'package:stack_space/plugins/document/virtualized_editor/virtualized_editor_widget.dart';
 
 void main() {
   runApp(const MyApp());
