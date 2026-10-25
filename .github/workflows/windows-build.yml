@@ -28,7 +28,17 @@ jobs:
 
       - run: flutter pub get
       - run: flutter analyze
-      - run: flutter test
+      - name: Run the tests
+        shell: pwsh
+        run: |
+          flutter test --reporter expanded 2>&1 | Tee-Object -FilePath test-output.txt
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            # Name each failing test as an annotation, so the result is readable without the log.
+            Get-Content test-output.txt | Select-String -Pattern '\[E\]' | Select-Object -Unique | ForEach-Object { Write-Output "::error::$($_.Line)" }
+            Get-Content test-output.txt | Select-String -Pattern 'Expected:|Actual:|Which:|Exception|Error' | Select-Object -First 40 | ForEach-Object { Write-Output "::warning::$($_.Line)" }
+          }
+          exit $code
       - run: flutter build windows --release
 
       - name: Zip the app
