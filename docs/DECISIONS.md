@@ -229,6 +229,18 @@ the file is never re-guessed. Files such as `.py` or `.json` take their language
 **Rationale**: The user's request ("auto pick up language for typed/pasted code") with the picker as
 the override; a guess that keeps changing under a user who chose a language would be worse than none.
 
+### Every row's height is known before it is built (Task 8)
+**Decision**: The block list gives each row a fixed extent computed by `BlockMetrics`, which mirrors
+the row widgets exactly (theme input style merged like a TextField does, strut, paddings, marker
+sizes) and is verified against rendered rows by a test. Rows are wrapped in an `OverflowBox` so a
+wrong number could only overlap, never squeeze a field. Pictures are shown in a fixed 300 px box.
+**Rationale**: Flutter's variable-height list lays out every child between the current position and
+a jump target, so dragging the scrollbar to the end of a 5,000-paragraph page took 60 s in the test
+VM (seconds in release). With known extents the jump costs a sum of numbers: 0.85 s for 50,000
+paragraphs in the test VM, immediate in the release build. The alternative of estimating heights and
+correcting them as rows appear would make the page jump under the user.
+**Status**: Done. Read-only threshold raised to 250,000 lines / 16 MB on the measurements.
+
 ### Captions live on the fence line
 **Decision**: A caption is stored after the language on the fence line (` ```python Download helper `),
 which CommonMark allows and GitHub ignores. A caption on a block with no language writes `text`

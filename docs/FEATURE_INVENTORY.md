@@ -97,7 +97,7 @@ This document outlines the features of AppFlowy as identified during the audit p
 |---|---|
 | Workspace, pages, folders, sidebar navigation | Implemented and tested (pages are files in a folder) |
 | Block editor: headings, paragraphs, bullet / numbered / todo lists with nesting, quotes, code blocks, dividers, images, tables (raw), inline bold / italic / code / strike / link styling, Markdown shortcuts, autosave | Implemented and tested (Task 3) |
-| Large scripts | Editable block by block; only the blocks on screen are built. Over 100k lines / 8 MB: read-only viewer. Measurements due in Task 8 |
+| Large scripts and pages | Editable block by block; only the blocks on screen are built and every row's height is known up front, so scrollbar drags and jumps are cheap (Task 8: a 50,000-paragraph page opens, jumps to its end and takes typing in the release build without a pause). Over 250k lines / 16 MB: read-only viewer |
 | AI assistant (local models via Ollama): chat, page/selection context, create/edit/rename/delete pages, undo | Implemented; tested against a fake Ollama, not yet a real model |
 | Search across pages | Partial: available to the assistant, no search box in the UI yet |
 | Keyboard shortcuts | Ctrl+J assistant, Ctrl+S save, Ctrl+N new page; in text: Ctrl+B bold, Ctrl+I italic, Ctrl+E inline code, Ctrl+Shift+X strikethrough, Ctrl+K link, Tab / Shift+Tab indent, Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z, Ctrl+Shift+Up / Down move a block, Shift+Enter soft break; in code: Ctrl+Enter leaves the block, arrows at the edges move between blocks (Task 7) |

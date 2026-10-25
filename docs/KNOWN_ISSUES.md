@@ -10,9 +10,11 @@ This document tracks known issues and problems identified during the audit phase
 fake Ollama server that follows the documented API. Small local models may call tools less reliably.
 
 ### Very large files are read-only in the editor
-**Status**: Open. Pages over 100,000 lines or 8 MB open in a virtualised read-only viewer. Below
-that, the block editor lays out only the blocks on screen. The assistant can still edit any size.
-The limit will be revisited with the Task 8 performance measurements.
+**Status**: Open. Pages over 250,000 lines or 16 MB open in a virtualised read-only viewer (raised
+from 100,000 / 8 MB after the Task 8 measurements). Below that, the block editor lays out only the
+blocks on screen and knows every row's height up front. The assistant can still edit any size.
+Pictures in image blocks are shown in a 300 px high box (scaled to fit) so the row height is known
+without decoding the file.
 
 ### Windows build not yet run
 **Status**: Open. `flutter build windows` needs a Windows machine with Visual Studio C++ tools.

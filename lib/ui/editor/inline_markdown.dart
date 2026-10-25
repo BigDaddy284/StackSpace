@@ -60,10 +60,18 @@ class InlineMarkdownController extends TextEditingController {
 
   @override
   TextSpan buildTextSpan({required BuildContext context, TextStyle? style, required bool withComposing}) {
-    if (!styled || text.isEmpty) {
+    if (!styled || text.isEmpty || (withComposing && value.composing.isValid)) {
       return super.buildTextSpan(context: context, style: style, withComposing: withComposing);
     }
-    final base = style ?? const TextStyle();
+    return spanFor(text, style ?? const TextStyle(),
+        styled: true, markerColor: markerColor, codeColor: codeColor, linkColor: linkColor);
+  }
+
+  /// The styled span for [text], also used to measure a block's height
+  /// before it is built, so it must match what the field shows exactly.
+  static TextSpan spanFor(String text, TextStyle base,
+      {required bool styled, required Color markerColor, required Color codeColor, required Color linkColor}) {
+    if (!styled || text.isEmpty) return TextSpan(text: text, style: base);
     final marker = base.copyWith(color: markerColor);
     final spans = <InlineSpan>[];
     var last = 0;
@@ -99,7 +107,7 @@ class InlineMarkdownController extends TextEditingController {
     return TextSpan(style: base, children: spans);
   }
 
-  List<InlineSpan> _wrapped(String s, int n, TextStyle marker, TextStyle inner) => [
+  static List<InlineSpan> _wrapped(String s, int n, TextStyle marker, TextStyle inner) => [
         TextSpan(text: s.substring(0, n), style: marker),
         TextSpan(text: s.substring(n, s.length - n), style: inner),
         TextSpan(text: s.substring(s.length - n), style: marker),

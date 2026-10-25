@@ -94,7 +94,18 @@ class PageDocument extends ChangeNotifier {
     return index < _lineStarts!.length ? _lineStarts![index] : 1;
   }
 
-  int indexOf(int id) => _blocks.indexWhere((b) => b.id == id);
+  Map<int, int>? _index;
+  int _indexVersion = -1;
+
+  /// Index of the block with [id], or -1. A map built once per edit makes
+  /// this cheap for the list, which asks for every visible row on each build.
+  int indexOf(int id) {
+    if (_index == null || _indexVersion != version) {
+      _index = {for (var i = 0; i < _blocks.length; i++) _blocks[i].id: i};
+      _indexVersion = version;
+    }
+    return _index![id] ?? -1;
+  }
 
   // ---- edits ----------------------------------------------------------------
 

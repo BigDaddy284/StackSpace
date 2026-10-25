@@ -26,6 +26,8 @@ class CodeBlockView extends StatefulWidget {
     required this.onWrap,
     required this.onDelete,
     required this.onMoveOut,
+    required this.showCaption,
+    required this.onShowCaption,
   });
 
   final Block block;
@@ -52,6 +54,55 @@ class CodeBlockView extends StatefulWidget {
   /// editor moved the focus to a neighbouring block.
   final bool Function(AxisDirection direction) onMoveOut;
 
+  /// Whether the caption field is shown (kept by the editor, which needs it
+  /// to know the block's height before building it).
+  final bool showCaption;
+  final VoidCallback onShowCaption;
+
+  static const headerHeight = 34.0;
+
+  /// Height of the whole block at [width] (the row width), mirroring [build].
+  static double heightFor(Block block, double width,
+      {required bool wrap, required bool caption, required TextScaler textScaler, required TextStyle inputStyle}) {
+    var height = headerHeight + bodyHeight(block.text.split('\n'), width, wrap: wrap);
+    if (caption) height += captionHeight(block.caption, width, textScaler, inputStyle);
+    return height;
+  }
+
+  static const _captionStyle = TextStyle(fontSize: StackType.hint, height: 1.4, fontStyle: FontStyle.italic);
+
+  /// Height of the caption field: its text (or the hint) as the field lays it
+  /// out, on top of the theme's input style, plus 8 px below.
+  static double captionHeight(String caption, double width, TextScaler textScaler, TextStyle inputStyle) {
+    final style = inputStyle.merge(_captionStyle);
+    final painter = TextPainter(
+      text: TextSpan(text: caption.isEmpty ? 'Caption' : caption, style: style),
+      textDirection: TextDirection.ltr,
+      textScaler: textScaler,
+      strutStyle: StrutStyle.fromTextStyle(style, forceStrutHeight: true),
+    )..layout(maxWidth: width - 24);
+    final height = painter.height < painter.preferredLineHeight ? painter.preferredLineHeight : painter.height;
+    painter.dispose();
+    return 8 + height;
+  }
+
+  /// The editor needs a fixed height: enough for its lines, up to a limit,
+  /// after which it scrolls inside the block.
+  static double bodyHeight(List<String> lines, double width, {required bool wrap}) {
+    const line = fontSize * lineHeight;
+    var rows = 0;
+    if (wrap) {
+      final usable = (width - 80).clamp(80.0, double.infinity);
+      final perRow = (usable / (fontSize * 0.62)).floor().clamp(8, 1 << 20);
+      for (final l in lines) {
+        rows += (l.length / perRow).ceil().clamp(1, 1 << 20);
+      }
+    } else {
+      rows = lines.length;
+    }
+    return (rows * line + 14 + (wrap ? 0 : 12)).clamp(line + 14, maxBodyHeight);
+  }
+
   static const fontSize = 13.5;
   static const lineHeight = 1.5;
   static const maxBodyHeight = 640.0;
@@ -63,14 +114,12 @@ class CodeBlockView extends StatefulWidget {
 class _CodeBlockViewState extends State<CodeBlockView> {
   final _captionController = TextEditingController();
   final _captionFocus = FocusNode(debugLabel: 'code caption');
-  bool _showCaption = false;
   bool _copied = false;
 
   @override
   void initState() {
     super.initState();
     _captionController.text = widget.block.caption;
-    _showCaption = widget.block.caption.isNotEmpty;
   }
 
   @override
@@ -78,7 +127,6 @@ class _CodeBlockViewState extends State<CodeBlockView> {
     super.didUpdateWidget(old);
     if (widget.block.caption != _captionController.text && !_captionFocus.hasFocus) {
       _captionController.text = widget.block.caption;
-      if (widget.block.caption.isNotEmpty) _showCaption = true;
     }
   }
 
@@ -111,7 +159,7 @@ class _CodeBlockViewState extends State<CodeBlockView> {
   }
 
   void _toggleCaption() {
-    setState(() => _showCaption = true);
+    widget.onShowCaption();
     WidgetsBinding.instance.addPostFrameCallback((_) => _captionFocus.requestFocus());
   }
 
@@ -208,7 +256,7 @@ class _CodeBlockViewState extends State<CodeBlockView> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(
-                height: 34,
+                height: CodeBlockView.headerHeight,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(8, 4, 6, 0),
                   child: Row(children: [
@@ -255,7 +303,9 @@ class _CodeBlockViewState extends State<CodeBlockView> {
                 ),
               ),
               LayoutBuilder(builder: (context, constraints) {
-                final height = _bodyHeight(constraints.maxWidth);
+                final height = CodeBlockView.bodyHeight([
+                  for (var i = 0; i < widget.controller.codeLines.length; i++) widget.controller.codeLines[i].text
+                ], constraints.maxWidth, wrap: widget.wrap);
                 return SizedBox(
                   height: height,
                   child: CodeEditor(
@@ -289,19 +339,19 @@ class _CodeBlockViewState extends State<CodeBlockView> {
                   ),
                 );
               }),
-              if (_showCaption && !widget.plain)
+              if (widget.showCaption && !widget.plain)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                   child: TextField(
                     controller: _captionController,
                     focusNode: _captionFocus,
                     readOnly: widget.readOnly,
-                    style: TextStyle(color: palette.subText, fontSize: StackType.hint, fontStyle: FontStyle.italic),
+                    style: CodeBlockView._captionStyle.copyWith(color: palette.subText),
                     decoration: InputDecoration(
                       isDense: true,
                       filled: false,
                       hintText: 'Caption',
-                      hintStyle: TextStyle(color: palette.subText.withAlpha(140), fontSize: StackType.hint),
+                      hintStyle: CodeBlockView._captionStyle.copyWith(color: palette.subText.withAlpha(140)),
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: InputBorder.none,
@@ -315,24 +365,6 @@ class _CodeBlockViewState extends State<CodeBlockView> {
         ),
       ),
     );
-  }
-
-  /// The editor needs a fixed height: enough for its lines, up to a limit,
-  /// after which it scrolls inside the block.
-  double _bodyHeight(double width) {
-    const line = CodeBlockView.fontSize * CodeBlockView.lineHeight;
-    final lines = widget.controller.codeLines;
-    var rows = 0;
-    if (widget.wrap) {
-      final usable = (width - 80).clamp(80.0, double.infinity);
-      final perRow = (usable / (CodeBlockView.fontSize * 0.62)).floor().clamp(8, 1 << 20);
-      for (var i = 0; i < lines.length; i++) {
-        rows += (lines[i].text.length / perRow).ceil().clamp(1, 1 << 20);
-      }
-    } else {
-      rows = lines.length;
-    }
-    return (rows * line + 14 + (widget.wrap ? 0 : 12)).clamp(line + 14, CodeBlockView.maxBodyHeight);
   }
 }
 

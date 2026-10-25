@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -13,6 +14,7 @@ import '../../editor/code_languages.dart';
 import '../../editor/page_document.dart';
 import '../../editor/page_editor_controller.dart';
 import '../../editor/slash_commands.dart';
+import 'block_metrics.dart';
 import 'code_block.dart';
 import 'inline_markdown.dart';
 import 'slash_menu.dart';
@@ -90,9 +92,18 @@ class _BlockEditorState extends State<BlockEditor> {
 
   GlobalKey _fieldKeyFor(Block block) => _fieldKeys.putIfAbsent(block.id, GlobalKey.new);
 
+  /// Code blocks whose caption field is open although the caption is empty.
+  final _captions = <int>{};
+
+  /// Measured row heights, keyed by block id; valid while the block object,
+  /// width, text scale and code options are the same.
+  final _heights = <int, _Measured>{};
+
   void _prune() {
     final live = {for (final b in doc.blocks) b.id};
     _fieldKeys.removeWhere((id, _) => !live.contains(id));
+    _heights.removeWhere((id, _) => !live.contains(id));
+    _captions.removeWhere((id) => !live.contains(id));
     for (final id in _texts.keys.where((id) => !live.contains(id)).toList()) {
       _texts.remove(id)!.dispose();
     }
@@ -437,6 +448,70 @@ class _BlockEditorState extends State<BlockEditor> {
     );
   }
 
+  /// The file of an image block when it exists next to the page.
+  File? _imageFile(Block block) {
+    final page = widget.controller.path;
+    if (page == null || block.url.isEmpty || block.url.contains('://')) return null;
+    final rel = p.posix.join(p.posix.dirname(page), Uri.decodeFull(block.url));
+    final f = File(widget.controller.workspace.resolve(rel));
+    return f.existsSync() ? f : null;
+  }
+
+  bool _captionShown(Block block) => block.caption.isNotEmpty || _captions.contains(block.id);
+
+  /// Row heights for the current document, width and options, so a scroll
+  /// frame reads a number per row instead of measuring. Rebuilt in one pass
+  /// when any of those change; unchanged blocks keep their measured height.
+  Float64List? _extents;
+  int _extentsVersion = -1;
+  double _extentsWidth = -1;
+  TextScaler? _extentsScale;
+  int _extentsOptions = -1;
+  int _options = 0; // bumped when wrap or caption state changes
+
+  Float64List _extentsFor(BlockMetrics metrics, double width) {
+    if (_extents != null &&
+        _extents!.length == doc.length &&
+        _extentsVersion == doc.version &&
+        _extentsWidth == width &&
+        _extentsScale == metrics.textScaler &&
+        _extentsOptions == _options) {
+      return _extents!;
+    }
+    final extents = Float64List(doc.length);
+    for (var i = 0; i < doc.length; i++) {
+      extents[i] = _rowHeight(metrics, i, width);
+    }
+    _extents = extents;
+    _extentsVersion = doc.version;
+    _extentsWidth = width;
+    _extentsScale = metrics.textScaler;
+    _extentsOptions = _options;
+    return extents;
+  }
+
+  /// The row's height, computed before it is built so the list can give
+  /// every row a fixed extent (see [BlockMetrics]).
+  double _rowHeight(BlockMetrics metrics, int index, double width) {
+    final block = doc[index];
+    final previous = index > 0 ? doc[index - 1] : null;
+    final wrap = _wrap[block.id] ?? false;
+    final caption = block.kind == BlockKind.code && _captionShown(block);
+    final gap = BlockMetrics.gapAbove(block, previous);
+    final cached = _heights[block.id];
+    if (cached != null &&
+        identical(cached.block, block) &&
+        cached.width == width &&
+        cached.scale == metrics.textScaler &&
+        cached.wrap == wrap &&
+        cached.caption == caption) {
+      return gap + cached.body;
+    }
+    final body = metrics.bodyHeight(block, width, wrap: wrap, caption: caption);
+    _heights[block.id] = _Measured(block, width, metrics.textScaler, wrap, caption, body);
+    return gap + body;
+  }
+
   Widget _codeBlock(int index, Block block) {
     final code = _codeFor(block);
     if (code.text != block.text) code.text = block.text;
@@ -455,12 +530,20 @@ class _BlockEditorState extends State<BlockEditor> {
         final i = doc.indexOf(block.id);
         if (i >= 0 && doc[i].caption != caption) doc.replace(i, doc[i].copyWith(caption: caption));
       },
-      onWrap: (wrap) => setState(() => _wrap[block.id] = wrap),
+      onWrap: (wrap) => setState(() {
+        _wrap[block.id] = wrap;
+        _options++;
+      }),
       onDelete: () {
         final i = doc.indexOf(block.id);
         if (i >= 0) _moveCaret(doc.remove(i));
       },
       onMoveOut: (direction) => _leaveCode(block, direction),
+      showCaption: _captionShown(block),
+      onShowCaption: () => setState(() {
+        _captions.add(block.id);
+        _options++;
+      }),
     );
   }
 
@@ -784,10 +867,15 @@ class _BlockEditorState extends State<BlockEditor> {
   @override
   Widget build(BuildContext context) {
     final palette = StackColors.of(context);
+    final metrics = BlockMetrics(
+        palette: palette, textScaler: MediaQuery.textScalerOf(context), inputStyle: BlockMetrics.inputStyleOf(context))
+      ..resolvesImage = (block) => _imageFile(block) != null;
     return ListenableBuilder(
       listenable: doc,
       builder: (context, _) {
-        _prune();
+        // Controllers outlive their blocks only after a removal; pruning is a
+        // pass over every block, so it waits for that.
+        if (_focus.length > doc.length) _prune();
         return OverlayPortal(
             controller: _slashPortal,
             overlayChildBuilder: (context) {
@@ -809,8 +897,12 @@ class _BlockEditorState extends State<BlockEditor> {
               controller: _scroll,
               child: ListView.builder(
                 controller: _scroll,
-                padding: const EdgeInsets.fromLTRB(22, 6, 22, 0),
+                padding: const EdgeInsets.fromLTRB(BlockMetrics.listPadding, 6, BlockMetrics.listPadding, 0),
                 itemCount: doc.length + 1,
+                // Every row's height is known up front, so a jump to any point
+                // of a long page lays out only the rows that show there.
+                itemExtentBuilder: (i, dimensions) =>
+                    i == doc.length ? BlockMetrics.tailHeight : _extentsFor(metrics, dimensions.crossAxisExtent)[i],
                 // Rows are keyed by block id, so a block that moves (after a split
                 // or an insert above it) keeps its widgets, focus and text input.
                 findChildIndexCallback: (key) {
@@ -845,7 +937,7 @@ class _BlockEditorState extends State<BlockEditor> {
                   _moveCaret((block: doc.length - 1, offset: 0));
                 }
               },
-        child: const SizedBox(height: 120, width: double.infinity),
+        child: const SizedBox(height: BlockMetrics.tailHeight, width: double.infinity),
       ));
 
   Widget _row(BuildContext context, StackPalette palette, int index, Block block) {
@@ -863,7 +955,7 @@ class _BlockEditorState extends State<BlockEditor> {
         body = _NonTextBlock(
           focusNode: node,
           label: 'Image ${block.alt.isEmpty ? block.url : block.alt}',
-          child: _ImageBlock(block: block, controller: widget.controller),
+          child: _ImageBlock(block: block, file: _imageFile(block)),
         );
       case BlockKind.code:
         body = _codeBlock(index, block);
@@ -893,15 +985,26 @@ class _BlockEditorState extends State<BlockEditor> {
           fieldKey: _fieldKeyFor(block),
         );
     }
-    final gap = index == 0 ? 0.0 : (block.isList && doc[index - 1].isList ? 2.0 : 10.0);
+    final gap = BlockMetrics.gapAbove(block, index > 0 ? doc[index - 1] : null);
     return Padding(
       key: ValueKey('row-${block.id}'),
       padding: EdgeInsets.only(top: gap),
-      child: Focus(
-        skipTraversal: true,
-        canRequestFocus: false,
-        onKeyEvent: (_, event) => _onKey(block, event),
-        child: body,
+      // The row's slot has a fixed height; the body lays out at its natural
+      // height, so a measurement that is off by a pixel can never squeeze a
+      // field or make it scroll inside itself.
+      child: OverflowBox(
+        alignment: Alignment.topLeft,
+        minHeight: 0,
+        maxHeight: double.infinity,
+        child: KeyedSubtree(
+          key: ValueKey('body-${block.id}'),
+          child: Focus(
+            skipTraversal: true,
+            canRequestFocus: false,
+            onKeyEvent: (_, event) => _onKey(block, event),
+            child: body,
+          ),
+        ),
       ),
     );
   }
@@ -943,28 +1046,22 @@ class _NonTextBlock extends StatelessWidget {
 }
 
 class _ImageBlock extends StatelessWidget {
-  const _ImageBlock({required this.block, required this.controller});
+  const _ImageBlock({required this.block, required this.file});
   final Block block;
-  final PageEditorController controller;
+  final File? file;
 
   @override
   Widget build(BuildContext context) {
     final palette = StackColors.of(context);
-    final page = controller.path;
-    File? file;
-    if (page != null && !block.url.contains('://')) {
-      final rel = p.posix.join(p.posix.dirname(page), Uri.decodeFull(block.url));
-      final f = File(controller.workspace.resolve(rel));
-      if (f.existsSync()) file = f;
-    }
+    final file = this.file;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (file != null)
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 480),
+            SizedBox(
+              height: ImageBlockMetrics.imageHeight,
               child: ClipRRect(
                   borderRadius: BorderRadius.circular(6),
                   child: Image.file(file, fit: BoxFit.contain, alignment: Alignment.centerLeft)),
@@ -976,13 +1073,20 @@ class _ImageBlock extends StatelessWidget {
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Icon(Icons.image_outlined, size: 18, color: palette.subText),
                 const SizedBox(width: 8),
-                Text(block.url, style: TextStyle(color: palette.subText, fontSize: StackType.button)),
+                Flexible(
+                    child: Text(block.url,
+                        style: ImageBlockMetrics.pathStyle.copyWith(color: palette.subText),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis)),
               ]),
             ),
           if (block.alt.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 4),
-              child: Text(block.alt, style: TextStyle(color: palette.subText, fontSize: StackType.hint)),
+              child: Text(block.alt,
+                  style: ImageBlockMetrics.altStyle.copyWith(color: palette.subText),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
             ),
         ],
       ),
@@ -1053,29 +1157,11 @@ class _TextBlockState extends State<_TextBlock> {
     if (mounted) setState(() {});
   }
 
-  static const _mono =
-      TextStyle(fontFamily: 'Cascadia Mono', fontFamilyFallback: StackType.mono, fontSize: 14, height: 1.45);
-
-  TextStyle _style(StackPalette palette) {
-    final block = widget.block;
-    switch (block.kind) {
-      case BlockKind.heading:
-        final size = switch (block.level) { 1 => 30.0, 2 => 24.0, 3 => 20.0, 4 => 17.0, _ => 15.5 };
-        return StackType.display(size, palette.text).copyWith(height: 1.3);
-      case BlockKind.code || BlockKind.table || BlockKind.raw:
-        return _mono.copyWith(color: palette.text);
-      case BlockKind.quote:
-        return TextStyle(fontSize: 15.5, height: 1.5, color: palette.subText, fontStyle: FontStyle.italic);
-      default:
-        return TextStyle(fontSize: 15.5, height: 1.5, color: palette.text);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final palette = StackColors.of(context);
     final block = widget.block;
-    final style = _style(palette);
+    final style = BlockMetrics.styleFor(block, palette);
     widget.text.markerColor = palette.subText;
     widget.text.codeColor = palette.accentB;
     widget.text.linkColor = palette.accentA;
@@ -1131,11 +1217,20 @@ class _TextBlockState extends State<_TextBlock> {
       marker = SizedBox(
         width: 24,
         child: Text('${block.number ?? _numberOf()}.',
-            style: style.copyWith(color: palette.subText), textAlign: TextAlign.right),
+            style: style.copyWith(color: palette.subText),
+            textAlign: TextAlign.right,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.clip),
       );
     } else if (block.kind == BlockKind.bullet) {
       marker = SizedBox(
-          width: 24, child: Text('•', style: style.copyWith(color: palette.subText), textAlign: TextAlign.center));
+          width: 24,
+          child: Text('•',
+              style: style.copyWith(color: palette.subText),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              softWrap: false));
     } else {
       marker = const SizedBox.shrink();
     }
@@ -1210,4 +1305,14 @@ class _SlashSession {
   List<SlashCommand> items;
   int selected = 0;
   Rect? anchor;
+}
+
+class _Measured {
+  const _Measured(this.block, this.width, this.scale, this.wrap, this.caption, this.body);
+  final Block block;
+  final double width;
+  final TextScaler scale;
+  final bool wrap;
+  final bool caption;
+  final double body;
 }

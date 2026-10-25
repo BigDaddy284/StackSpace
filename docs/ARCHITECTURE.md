@@ -40,7 +40,15 @@ BlockEditor (lib/ui/editor/block_editor.dart)
          updates are reconciled
 ```
 
-Pages over 100,000 lines or 8 MB open in the read-only line viewer; the assistant can still edit them.
+Every row of the list has a height computed before it is built (`lib/ui/editor/block_metrics.dart`:
+the same styles, struts, paddings and marker sizes as the widgets, measured with a TextPainter at
+the row's width; short single-line rows skip the layout). The list is a `ListView.builder` with
+`itemExtentBuilder`, so dragging the scrollbar to the end of a 50,000-block page lays out only the
+rows that show there. Heights are cached per block object and recomputed in one pass per edit;
+`test/block_metrics_test.dart` checks them against the rendered rows to the pixel. Each row is an
+`OverflowBox`, so a height that was off would overlap the next row rather than squeeze a field.
+
+Pages over 250,000 lines or 16 MB open in the read-only line viewer; the assistant can still edit them.
 
 ## Proposed Architecture for Replacement
 

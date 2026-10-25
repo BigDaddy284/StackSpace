@@ -1,21 +1,22 @@
 # PROJECT STATUS
 
-_Last updated: 2026-10-25 (Improvement Phase 1, Tasks 1-7 done)_
+_Last updated: 2026-10-25 (Improvement Phase 1, Tasks 1-8 done)_
 
 ## Current phase
 Improvement Phase 1: advanced editor, slash menu, code spaces. Working one task at a time.
 Test build 1 (v0.1.0-test.1) is published on GitHub and loads the user's AppFlowy workspace.
 
 ## Current task and scope
-Tasks 1-7 done: research, plan, the block editor, the slash menu, code spaces, and the Task 7
-round of formatting keys, code-space navigation and clipboard tests.
-Next: Task 8, performance on 5k / 10k / 50k-line pages and a regression pass.
+Tasks 1-8 done: research, plan, the block editor, the slash menu, code spaces, formatting keys,
+and the performance pass with its fix for long pages.
+Next: Task 9, the floating formatting toolbar and the block option menu.
 
 ## Task log (Phase 1)
 | Task | Status | Tests | Files |
 | --- | --- | --- | --- |
 | 1. Baseline + research | Done 2026-10-25. `flutter analyze` clean, `flutter test` 49 passed, Linux debug build OK, Git checkpoint on `main`. | 49/49 | `docs/EDITOR_FEATURE_RESEARCH.md`, docs copied into `docs/` |
 | 2. Matrix + plan + spikes | Done 2026-10-25. Feature matrix (§8), spikes (§11: `re_editor` handles 100k lines in ~30 ms per operation; `appflowy_editor` compiles from git but is ruled out), prioritised plan (§12). | 49/49 | `docs/EDITOR_FEATURE_RESEARCH.md` |
+| 8. Performance + regression | Done 2026-10-25. Timing tests for 5k-100k lines; found and fixed the O(n) jump in long pages with pre-measured row heights (`lib/ui/editor/block_metrics.dart`, `block_editor.dart` list with `itemExtentBuilder`, cached extents per edit, id→index map in `PageDocument`, lazy pruning); image rows fixed at 300 px; read-only threshold 250k lines / 16 MB. Live run in the release build with 10k-line code, 10k-line mixed and 50k-paragraph pages. | 114/114 (+4 metrics) + 21 timing tests | `lib/ui/editor/block_metrics.dart`, `block_editor.dart`, `code_block.dart`, `inline_markdown.dart`, `page_document.dart`, `page_editor_controller.dart`, tests |
 | 7. Formatting keys + code space tests | Done 2026-10-25. Ctrl+B / Ctrl+I / Ctrl+E / Ctrl+Shift+X wrap or unwrap the selection (`**`, `_`, `` ` ``, `~~`), Ctrl+K inserts `[text](url)`; arrows at the first / last line or character of a code space move to the neighbouring block (found that `re_editor` consumed arrows on desktop, so the editor's cursor-move action is overridden); context-menu Copy all / Cut / Paste tested with tabs and Unicode. | 110/110 (+3) | `lib/ui/editor/block_editor.dart`, `lib/ui/editor/code_block.dart`, tests |
 | 6. Code spaces | Done 2026-10-25. `lib/ui/editor/code_block.dart` (header with language label + "auto", wrap, copy, menu; `re_editor` body with line numbers and `re_highlight` colours; caption field; context menu; searchable language picker with "Auto-detect"), `lib/editor/code_languages.dart` (30 languages, fence aliases, extensions, `detectLanguage`), fence captions in `blocks.dart`, language from the file extension for `.py` / `.json` / ..., keys in `block_editor.dart` (Ctrl+Enter leaves the block, Backspace on an empty block makes a paragraph, arrows at the edges, page-wide Ctrl+Z / Ctrl+Y). Packages `re_editor` 0.10.0 + `re_highlight` 0.0.3 (MIT) added. | 107/107 (+24) | see files; screenshots 11-13 |
 | 4-5. Slash menu + tests | Done 2026-10-25. `lib/editor/slash_commands.dart` (13 commands: Text, Heading 1-3, Quote, Callout, Bulleted, Numbered, To-do, Code block, Divider, Table, Image; aliases such as h1, ul, todo, ```), `lib/ui/editor/slash_menu.dart` (panel anchored to the slash, flips at the bottom edge, categories, icons, descriptions, hover and click), tracking in `block_editor.dart` (opens on `/` at the start of a block or after a space, filters while typing, closes on Escape / slash deleted / focus lost, never in code blocks or plain files). | 83/83 (+14) | see files |
@@ -45,6 +46,56 @@ Next: Task 8, performance on 5k / 10k / 50k-line pages and a regression pass.
 
 ## Files changed
 See `git log` in `windows_app/` (5 commits on `main`).
+
+## Tests executed and actual results (Task 8)
+- `flutter analyze`: no issues. `flutter test` (without the timing file): 114 passed (4 of them the new metrics checks), 2 skipped by
+  design. `test/performance_test.dart`: 21 timing tests passed.
+- Model timings (test VM, JIT debug; release is faster). Columns: blocks, parse, write, load, one
+  edit, toMarkdown, undo, in ms:
+
+| shape | lines | blocks | parse | write | load | edit | toMarkdown | undo |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| code | 5,000 | 2 | 14 | 2 | 3 | 1 | 0 | 0 |
+| paragraphs | 5,000 | 5,000 | 11 | 7 | 9 | 0 | 1 | 0 |
+| mixed | 5,000 | 2,310 | 3 | 0 | 3 | 0 | 4 | 0 |
+| code | 10,000 | 2 | 2 | 2 | 2 | 0 | 0 | 0 |
+| paragraphs | 10,000 | 10,000 | 9 | 1 | 8 | 0 | 0 | 0 |
+| mixed | 10,000 | 4,620 | 4 | 3 | 4 | 0 | 0 | 0 |
+| code | 50,000 | 2 | 18 | 8 | 36 | 0 | 0 | 0 |
+| paragraphs | 50,000 | 50,000 | 51 | 7 | 81 | 1 | 9 | 0 |
+| mixed | 50,000 | 23,082 | 25 | 26 | 44 | 0 | 8 | 0 |
+| code | 100,000 | 2 | 49 | 22 | 53 | 0 | 0 | 0 |
+| paragraphs | 100,000 | 100,000 | 122 | 16 | 137 | 4 | 16 | 0 |
+| mixed | 100,000 | 46,158 | 79 | 22 | 81 | 5 | 24 | 0 |
+
+- Editor timings (test VM; "key" includes the test's tap and two frames, "jump" is a scrollbar-style
+  jump to the end and "scroll" that plus the jump back), in ms:
+
+| shape | lines | first frame | key | jump to end | jump + back |
+| --- | --- | --- | --- | --- | --- |
+| code | 5,000 | 728 | 220 | 3 | 5 |
+| paragraphs | 5,000 | 583 | 330 | 559 | 939 |
+| mixed | 5,000 | 311 | 194 | 358 | 672 |
+| code | 10,000 | 109 | 65 | 1 | 2 |
+| paragraphs | 10,000 | 553 | 354 | 694 | 1,170 |
+| mixed | 10,000 | 607 | 359 | 402 | 707 |
+| code | 50,000 | 373 | 249 | 1 | 3 |
+| paragraphs | 50,000 | 624 | 437 | 852 | 1,351 |
+| mixed | 50,000 | 646 | 314 | 597 | 999 |
+
+  Before the fix the 5,000-paragraph jump took 59,424 ms and the mixed one 31,928 ms (every block
+  between the top and the end was laid out). The first jump still measures each row once (a text
+  layout for rows that may wrap, nothing for short ones); later jumps and scrolling read cached
+  numbers.
+- Release build under Xvfb: a 50,000-paragraph page (1.4 MB) opened from the sidebar, dragging the
+  scrollbar thumb to the bottom showed the last paragraphs within the 0.7 s wait of the script,
+  typing there saved at line 99,997; a 10,000-line mixed page (headings, lists, code blocks) dragged
+  to its end likewise; a 10,000-line Python page took Ctrl+End and typing at the end. Screenshot
+  `docs/screenshots/14-50k-paragraphs-end-dark.png`.
+- Regression: every earlier test green; the metrics test pins row heights for all block kinds at
+  two widths and two text scales. The user's imported pages were not re-run here (they live on the
+  user's machine); the fence parser did not change in this task.
+- Not measured: Windows itself (no Windows machine in this environment) and memory use.
 
 ## Tests executed and actual results (Task 7)
 - `flutter analyze`: no issues. `flutter test`: 110 passed, 2 skipped by design.
@@ -113,10 +164,9 @@ See KNOWN_ISSUES.md. Main ones: no real-model test yet; large files are read-onl
 Analyzer clean and tests green on Linux. `flutter build windows` not yet run.
 
 ## Next single task
-Task 8: measure 5k / 10k / 50k-line pages (one code block, many paragraphs, mixed) in tests and in
-the release build: open time, typing latency, scroll, autosave; revisit the 100k-line read-only
-threshold now that code spaces use `re_editor`; run the full regression (all tests, the user's
-imported pages round trip, launch / close).
+Task 9: floating formatting toolbar on a text selection (bold, italic, strike, code, link, heading
+levels, turn into) and the block option menu (turn into, duplicate, delete, move up / down), with
+tests and screenshots.
 
 ## Exact commands to resume
 ```bash

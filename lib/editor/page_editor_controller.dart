@@ -22,8 +22,11 @@ class PageEditorController extends ChangeNotifier {
   late final StreamSubscription<WorkspaceChange> _changes;
 
   /// Pages bigger than this open in a read-only line viewer.
-  static const largeLineCount = 100000;
-  static const largeCharCount = 8 * 1024 * 1024;
+  // Above this a page opens in the read-only line viewer. Task 8 measured the
+  // block editor at 100,000 one-line paragraphs (parse 122 ms, first frame
+  // under a second in the test VM), so the limit sits well above that.
+  static const largeLineCount = 250000;
+  static const largeCharCount = 16 * 1024 * 1024;
   static const _autosaveDelay = Duration(milliseconds: 600);
 
   static bool isMarkdown(String path) {
