@@ -76,7 +76,9 @@ class _ComposerState extends State<Composer> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  ListenableBuilder(listenable: widget.editor, builder: (context, _) => _contextChips()),
+                  ListenableBuilder(
+                      listenable: Listenable.merge([widget.editor, widget.editor.caretChanges]),
+                      builder: (context, _) => _contextChips()),
                   CallbackShortcuts(
                     bindings: {const SingleActivator(LogicalKeyboardKey.enter): _send},
                     child: Focus(

@@ -237,7 +237,7 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                 ),
-                _statusBar(p),
+                ListenableBuilder(listenable: _editor.caretChanges, builder: (context, _) => _statusBar(p)),
               ],
             ),
           ),

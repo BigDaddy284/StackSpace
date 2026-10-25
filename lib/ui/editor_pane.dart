@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../app/theme.dart';
 import '../editor/page_editor_controller.dart';
+import 'editor/block_editor.dart';
 import 'widgets/controls.dart';
 
-const _codeStyle = TextStyle(fontFamily: 'Cascadia Mono', fontFamilyFallback: StackType.mono, fontSize: 14, height: 1.45);
+const _codeStyle =
+    TextStyle(fontFamily: 'Cascadia Mono', fontFamilyFallback: StackType.mono, fontSize: 14, height: 1.45);
 
 class EditorPane extends StatelessWidget {
   const EditorPane({super.key, required this.controller, required this.locked, required this.onNewPage});
@@ -47,28 +49,15 @@ class EditorPane extends StatelessWidget {
                     ),
                     if (locked) _Badge(icon: Icons.lock_outline, text: 'Assistant is working'),
                     if (controller.isLarge) _Badge(icon: Icons.visibility_outlined, text: 'Large file: read-only'),
-                    if (controller.error != null) _Badge(icon: Icons.error_outline, text: controller.error!, error: true),
+                    if (controller.error != null)
+                      _Badge(icon: Icons.error_outline, text: controller.error!, error: true),
                   ],
                 ),
               ),
               Expanded(
                 child: controller.isLarge
                     ? _LargeFileView(lines: controller.largeLines!)
-                    : TextField(
-                        controller: controller.text,
-                        readOnly: locked,
-                        expands: true,
-                        maxLines: null,
-                        textAlignVertical: TextAlignVertical.top,
-                        style: _codeStyle.copyWith(color: p.text),
-                        decoration: const InputDecoration(
-                          filled: false,
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          contentPadding: EdgeInsets.fromLTRB(22, 6, 22, 60),
-                        ),
-                      ),
+                    : BlockEditor(controller: controller, readOnly: locked),
               ),
             ],
           );

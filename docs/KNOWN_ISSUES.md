@@ -9,16 +9,28 @@ This document tracks known issues and problems identified during the audit phase
 **Status**: Open. The cloud environment can't download models, so the assistant was tested against a
 fake Ollama server that follows the documented API. Small local models may call tools less reliably.
 
-### Large files are read-only in the editor
-**Status**: Open. Pages over 20,000 lines or 2 MB open in a virtualised read-only viewer, because
-Flutter's TextField lays out the whole text. The assistant can still edit them. Next task.
+### Very large files are read-only in the editor
+**Status**: Open. Pages over 100,000 lines or 8 MB open in a virtualised read-only viewer. Below
+that, the block editor lays out only the blocks on screen. The assistant can still edit any size.
+The limit will be revisited with the Task 8 performance measurements.
 
 ### Windows build not yet run
 **Status**: Open. `flutter build windows` needs a Windows machine with Visual Studio C++ tools.
 
-### Editor is plain text
-**Status**: Open. No rich text, syntax highlighting, line numbers in the editable view or databases.
-Imported AppFlowy pages are Markdown, so links and tables show as Markdown text.
+### Editor limits after Task 3 (block editor)
+**Status**: Open, being worked through Phase 1.
+- No slash menu yet (Task 4), no syntax highlighting, language picker, copy or wrap toggle in code
+  blocks yet (Task 6). Code blocks show the fence language as a label.
+- Tables and raw HTML are edited as their Markdown / HTML text in a boxed field.
+- Links are styled but not clickable; images show when the file exists next to the page, otherwise
+  the path is shown.
+- Selection cannot span blocks; Ctrl+A selects the current block.
+- Arrow Up / Down move to the neighbouring block from the first / last *logical* line of a block.
+  In a long paragraph that wraps, Up on the first logical line jumps to the previous block even if
+  the caret is on a lower wrapped line.
+- If the editor changes a field's text itself (a `- ` shortcut, Enter) while characters are still
+  on their way from the platform, the late characters are mapped onto the new text. On a very slow
+  machine one character can still be lost in that instant; it never corrupts other blocks.
 
 ### AppFlowy import limits
 **Status**: Open. File > Import reads AppFlowy's workspace export (`relation_map.json` +

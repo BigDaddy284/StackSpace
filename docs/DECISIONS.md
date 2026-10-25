@@ -138,6 +138,52 @@ and the Windows title bar colour. An earlier version sampled colours from a scre
   the same as Stills & Reels. It passes the large-text level only; left as is to match.
 **Status**: Done. `test/theme_contrast_test.dart` pins the palette and checks the pairs.
 
+## Decisions made 2026-10-25 (Improvement Phase 1, Task 3)
+
+### No code from other note apps; StackSpace has its own block editor
+**Decision**: The editor is written for StackSpace (`lib/editor/`, `lib/ui/editor/`). Nothing is
+copied from AppFlowy, Notion or any other note app, and `appflowy_editor` (AGPL-3.0 / MPL-2.0) is
+not used, even though it compiles from git. Ordinary open-source Flutter packages under permissive
+licences (MIT, BSD, Apache-2.0) may be used; each one is listed here when it is added.
+**Rationale**: The user's rule ("we can't reuse code from other apps", "fine if the Flutter licences
+allow it"). It also keeps the whole editor under the MIT licence of the repo.
+**Status**: Done. Packages in use: `http`, `shared_preferences`, `path`, `archive`, `collection`,
+`file_selector` (all BSD-3). `flutter_svg`, `provider` and `intl` were unused and removed.
+
+### Markdown stays the file format; blocks are the editing view
+**Decision**: A page file stays plain Markdown. The editor reads it into a list of blocks (heading,
+paragraph, bullet / numbered / todo item with nesting, quote, code fence with language, divider,
+image, table, raw HTML) and writes blocks back. The reader records the blank lines between blocks
+and the bullet character, so an unedited page writes back byte for byte. Anything unknown is kept
+verbatim as a raw block. Files that are not Markdown (`.py`, `.json`, ...) open as one code block.
+**Rationale**: The assistant and its tools keep working on plain text; the user's imported AppFlowy
+pages stay readable outside the app; and a page with thousands of lines of code lays out only the
+blocks on screen instead of one giant text run (AppFlowy's freeze).
+**Status**: Done. `test/blocks_test.dart` round-trips every one of the 45 imported pages identically
+when `STACKSPACE_PAGES` points at the import folder.
+
+### Enter, list continuation and Markdown shortcuts act on the text, not on key events
+**Decision**: The editor splits a block when a newline arrives *in the text update* from the
+platform, not when it sees the Enter key. The same goes for `# `, `- `, `1. `, `[ ] `, `> `,
+`---` and ``` shortcuts. When the editor changes a field's text itself (clearing `- `, moving the
+caret's text to a new block), it remembers the change and maps any late update from the platform
+that was still based on the old text onto the new one.
+**Rationale**: On desktop the platform's text input holds its own copy of the text and sends key
+events ahead of text updates. Handling Enter as a key dropped or misplaced characters typed in the
+same instant (found under a virtual display at 20 keys per second). The text-ordered path, the
+reconciliation and one stable widget tree around every field (so a paragraph turning into a
+heading never recreates its text field) fixed it: three replays at 40 keys per second in a release
+build came out identical.
+**Status**: Done. `test/block_editor_test.dart` covers it.
+
+### Caret moves do not rebuild the window
+**Decision**: Caret and selection changes fire a separate notifier (`caretChanges`) that only the
+status bar and the composer's context chip listen to. The page's Markdown and block line numbers
+are cached per document version.
+**Rationale**: Rebuilding the whole window and re-encoding the page on every keystroke made the
+editor fall behind fast typing.
+**Status**: Done.
+
 ## Next Steps Based on Decisions
 
 1. Complete analysis of original AppFlowy repository

@@ -11,12 +11,39 @@ We are currently in the audit phase where we're analyzing the original AppFlowy 
 - Storage and persistence systems
 - Performance bottlenecks in large document handling
 
+## Editor architecture as built (2026-10-25)
+
+```
+file on disk (Markdown)
+   │ Workspace.read / write (CRLF kept, paths checked)
+   ▼
+PageEditorController        opens a page, autosaves 600 ms after the last edit, reloads on AI changes,
+   │                        holds the caret (focused block + selection) and builds the assistant's context
+   ▼
+PageDocument                the list of Blocks, undo/redo snapshots (typing coalesced per second),
+   │                        split / merge / convert / indent / move, cached Markdown and line starts
+   ▼
+blocks.dart                 Block model + parseMarkdown / writeMarkdown (line based, exact round trip)
+
+BlockEditor (lib/ui/editor/block_editor.dart)
+   ListView.builder keyed by block id (findChildIndexCallback) → only visible blocks are built
+   one TextField per text / code / table / raw block, InlineMarkdownController styles **bold**,
+   _italic_, `code`, ~~strike~~ and [links] while keeping the markers in the text
+   divider and image blocks are focusable widgets
+   keys: Backspace at start (merge / demote), Tab / Shift+Tab (indent), arrows between blocks,
+         Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z, Ctrl+Shift+Up/Down (move block)
+   text: newline splits (Shift+Enter keeps a soft break), shortcuts convert, late platform
+         updates are reconciled
+```
+
+Pages over 100,000 lines or 8 MB open in the read-only line viewer; the assistant can still edit them.
+
 ## Proposed Architecture for Replacement
 
 ### Core Components
 
 #### 1. Application Framework
-- Windows 11 native application using appropriate UI framework (likely WinUI 3 or similar)
+- Flutter desktop app (Windows 11 first); the design is a port of the Stills & Reels look
 - Cross-platform compatibility layer if needed
 - Modern application lifecycle management
 

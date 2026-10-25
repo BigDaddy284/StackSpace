@@ -107,6 +107,19 @@ Focus on large document handling and responsiveness:
 - Performance benchmarks to ensure no regressions
 - Compatibility testing with various document types
 
+## Editor tests in place (Phase 1, Task 3)
+
+| File | What it checks |
+| --- | --- |
+| `test/blocks_test.dart` | Markdown → blocks → Markdown round trip: headings, inline marks kept as typed, lists (markers, nesting, numbers, checkboxes), blank-line counts kept exactly, quotes, callouts, dividers, code fences (language, tabs, CR, Unicode, Markdown characters inside, longer fences, `~~~`, unterminated), images, tables, HTML, block start lines. With `STACKSPACE_PAGES=<folder>` it round-trips every `.md` page in that folder (45/45 imported pages identical). |
+| `test/page_document_test.dart` | split / merge / convert keep the Markdown consistent; typing coalesces into one undo step; non-Markdown files save byte for byte; last block removal; indent, check, move. |
+| `test/block_editor_test.dart` | Typing keeps every character and autosaves; Enter splits, `- ` / `## ` / ``` shortcuts convert, Tab indents, Enter on an empty item outdents then ends the list, Shift+Enter keeps a soft break; Backspace at the start demotes then merges, Ctrl+Z / Ctrl+Y; a `.py` file is one plain field; a late platform update based on the old text is moved onto the new; a paragraph turning into a heading / list / code keeps the same text field. |
+| `test/home_page_test.dart`, `test/accessibility_test.dart` | Unchanged and still green with the block editor (dock, AI edit + reload, contrast, labels, 24 px targets, 150 % text). |
+
+Manual run (Linux release build under Xvfb, `xdotool` at 25 ms per key): typed text, a bullet with
+`- `, Tab, nested item, Enter ×3 to end the list, `## ` heading, ``` code block with two lines; three
+runs produced the same correct file. Screenshot: `docs/screenshots/8-block-editor-dark.png`.
+
 ## Test Execution Process
 
 ### Pre-Test Setup

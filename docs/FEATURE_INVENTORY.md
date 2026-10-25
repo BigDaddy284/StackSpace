@@ -96,17 +96,18 @@ This document outlines the features of AppFlowy as identified during the audit p
 | Feature | Status |
 |---|---|
 | Workspace, pages, folders, sidebar navigation | Implemented and tested (pages are files in a folder) |
-| Plain-text / code editing with autosave | Implemented and tested |
-| Large scripts (20k+ lines) | Partial: read-only virtualised viewer; editing is the next task |
+| Block editor: headings, paragraphs, bullet / numbered / todo lists with nesting, quotes, code blocks, dividers, images, tables (raw), inline bold / italic / code / strike / link styling, Markdown shortcuts, autosave | Implemented and tested (Task 3) |
+| Large scripts | Editable block by block; only the blocks on screen are built. Over 100k lines / 8 MB: read-only viewer. Measurements due in Task 8 |
 | AI assistant (local models via Ollama): chat, page/selection context, create/edit/rename/delete pages, undo | Implemented; tested against a fake Ollama, not yet a real model |
 | Search across pages | Partial: available to the assistant, no search box in the UI yet |
 | Keyboard shortcuts | Partial: Ctrl+J assistant, Ctrl+S save, Ctrl+N new page |
-| Undo/redo in the editor | Partial: TextField's built-in undo only |
+| Undo/redo in the editor | Implemented: document-level undo/redo (Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z), typing coalesced per second |
 | Settings | Partial: theme (Windows / light / dark), workspace folder, Ollama address, context length, delete confirmation |
 | Light / dark themes, accessibility (WCAG AA contrast, screen-reader labels, 150% text) | Implemented and tested |
-| Rich text, headings/lists formatting, tables, databases, views | Deferred |
+| Slash menu, code block language picker / highlighting / copy / wrap, formatting toolbar, table editing | Planned: Phase 1 Tasks 4-10 |
+| Databases, views | Deferred |
 | Images, attachments, templates | Deferred |
-| AppFlowy backup import / export | Deferred (prototype code in legacy/ never worked) |
+| AppFlowy backup import | Implemented (File > Import, zip or folder); export deferred |
 | Sync, collaboration, extensions | Deferred |
 
 ## Notes
