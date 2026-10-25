@@ -80,6 +80,7 @@ void main() {
     await typeCode(tester, '\nprint(f(1))');
     expect(editor.document[1].text, '$code\nprint(f(1))');
     await settle(tester);
+    await waitSaved(tester, editor);
     expect(saved('page.md'), '# T\n\n```python\n$code\nprint(f(1))\n```\n');
   });
 
@@ -94,6 +95,7 @@ void main() {
     expect(find.text('C#'), findsOneWidget);
     expect(find.text('auto'), findsOneWidget);
     await settle(tester);
+    await waitSaved(tester, editor);
     expect(saved('page.md'), startsWith('```csharp\n'));
 
     // Choosing a language by hand stops the guessing.
@@ -168,6 +170,7 @@ void main() {
     await tester.pump();
     expect(editor.document[0].caption, 'Counter setup');
     await settle(tester);
+    await waitSaved(tester, editor);
     expect(saved('page.md'), '```js Counter setup\nlet a = 1;\n```\n');
     expect(parseMarkdown(saved('page.md'))[0].caption, 'Counter setup');
   });
@@ -240,6 +243,7 @@ void main() {
     c.selection = const CodeLineSelection.collapsed(index: 0, offset: 5);
     await typeCode(tester, '\ny = 2');
     await settle(tester);
+    await waitSaved(tester, editor);
     expect(saved('s.py'), 'x = 1\ny = 2\n');
   });
 
@@ -328,6 +332,7 @@ void main() {
     await tester.pump();
     expect(editor.document[0].text, '\n  c ✓a\tb');
     await settle(tester);
+    await waitSaved(tester, editor);
     expect(saved('page.md'), '```\n\n  c ✓a\tb\n```\n');
   });
 }

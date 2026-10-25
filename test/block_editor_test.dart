@@ -89,6 +89,7 @@ void main() {
     expect(editor.document[1].text, 'End. Added text');
     expect(fieldAt(tester, 1).controller!.text, 'End. Added text');
     await settle(tester);
+    await waitSaved(tester, editor);
     expect(saved('page.md'), '# T\n\nEnd. Added text\n');
   });
 
@@ -147,6 +148,7 @@ void main() {
     expect(doc.length, 5);
     expect(doc[0].text, 'End.\n');
     await settle(tester);
+    await waitSaved(tester, editor);
     expect(saved('page.md'), 'End.\n\n\n- item one\n  - item two\n\n## Sub heading\n\n```\nlet x = 1;\n\n```\n');
   });
 
@@ -170,6 +172,7 @@ void main() {
     await key(tester, LogicalKeyboardKey.keyY, control: true);
     expect(doc[2].kind, BlockKind.paragraph);
     await settle(tester);
+    await waitSaved(tester, editor);
     expect(saved('page.md'), '# Title\n\n- a\n\nb\n');
   });
 
@@ -185,6 +188,7 @@ void main() {
     await tester.pump();
     expect(editor.document.length, 1);
     await settle(tester);
+    await waitSaved(tester, editor);
     expect(saved('s.py'), 'x = 1\ny = 2\n');
   });
 
@@ -278,6 +282,7 @@ void main() {
     expect(doc[0].text, '~~make~~ `this` [bold](url)****');
     expect(fieldAt(tester, 0).controller!.selection, const TextSelection(baseOffset: 23, extentOffset: 26));
     await settle(tester);
+    await waitSaved(tester, editor);
     expect(saved('page.md'), '~~make~~ `this` [bold](url)****\n');
   });
 }
