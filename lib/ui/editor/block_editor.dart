@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
@@ -8,15 +9,21 @@ import '../../app/theme.dart';
 import '../../editor/blocks.dart';
 import '../../editor/page_document.dart';
 import '../../editor/page_editor_controller.dart';
+import '../../editor/slash_commands.dart';
 import 'inline_markdown.dart';
+import 'slash_menu.dart';
 
 /// Edits a page block by block. Each block is its own text field, so a page
 /// with thousands of lines of code lays out only the blocks on screen.
 class BlockEditor extends StatefulWidget {
-  const BlockEditor({super.key, required this.controller, required this.readOnly});
+  const BlockEditor({super.key, required this.controller, required this.readOnly, this.pickImage});
 
   final PageEditorController controller;
   final bool readOnly;
+
+  /// Asks the user for an image path or link; null when they cancel. The
+  /// default is a small dialog.
+  final Future<String?> Function(BuildContext context)? pickImage;
 
   @override
   State<BlockEditor> createState() => _BlockEditorState();
@@ -31,6 +38,13 @@ class _BlockEditorState extends State<BlockEditor> {
 
   /// Where the caret goes once the target block has been built.
   Caret? _pending;
+
+  final _fieldKeys = <int, GlobalKey>{};
+  final _slashPortal = OverlayPortalController();
+  _SlashSession? _slash;
+
+  /// The open slash menu, for tests and the pane.
+  bool get slashMenuOpen => _slash != null;
 
   @override
   void dispose() {
@@ -49,8 +63,11 @@ class _BlockEditorState extends State<BlockEditor> {
 
   FocusNode _focusFor(Block block) => _focus.putIfAbsent(block.id, () => FocusNode(debugLabel: 'block ${block.id}'));
 
+  GlobalKey _fieldKeyFor(Block block) => _fieldKeys.putIfAbsent(block.id, GlobalKey.new);
+
   void _prune() {
     final live = {for (final b in doc.blocks) b.id};
+    _fieldKeys.removeWhere((id, _) => !live.contains(id));
     for (final id in _texts.keys.where((id) => !live.contains(id)).toList()) {
       _texts.remove(id)!.dispose();
     }
@@ -101,6 +118,26 @@ class _BlockEditorState extends State<BlockEditor> {
     final keys = HardwareKeyboard.instance;
     final ctrl = keys.isControlPressed || keys.isMetaPressed;
     final shift = keys.isShiftPressed;
+
+    final slash = _slash;
+    if (slash != null && slash.blockId == block.id) {
+      final items = slash.items;
+      if (key == LogicalKeyboardKey.arrowDown || key == LogicalKeyboardKey.arrowUp) {
+        if (items.isNotEmpty) {
+          final step = key == LogicalKeyboardKey.arrowDown ? 1 : -1;
+          setState(() => slash.selected = (slash.selected + step) % items.length);
+        }
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.numpadEnter || key == LogicalKeyboardKey.tab) {
+        _applySlash(index, block, slash.selected);
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.escape) {
+        _closeSlash();
+        return KeyEventResult.handled;
+      }
+    }
 
     if (ctrl && key == LogicalKeyboardKey.keyZ) {
       _moveCaret(shift ? doc.redo() : doc.undo());
@@ -258,6 +295,7 @@ class _BlockEditorState extends State<BlockEditor> {
       if (_pending?.block == index) _pending = null;
     }
     final sel = text.selection;
+    if (block.isText && !doc.plain) _trackSlash(index, block, value, sel);
     if (block.isText && _splitOnNewline(index, block, value, sel)) return;
     // Markdown shortcuts turn a paragraph into another block as you type.
     if (block.kind == BlockKind.paragraph && !doc.plain && sel.isCollapsed && sel.extentOffset == value.length) {
@@ -325,7 +363,157 @@ class _BlockEditorState extends State<BlockEditor> {
     final index = doc.indexOf(block.id);
     if (index < 0) return;
     final text = _textFor(block);
-    if (_focusFor(block).hasFocus) widget.controller.setSelection(index, text.selection);
+    final focused = _focusFor(block).hasFocus;
+    if (focused) widget.controller.setSelection(index, text.selection);
+    final slash = _slash;
+    if (slash != null && slash.blockId == block.id) {
+      if (!focused) {
+        _closeSlash();
+      } else if (!text.selection.isCollapsed || text.selection.extentOffset <= slash.offset) {
+        // The caret left the query.
+        _closeSlash();
+      }
+    }
+  }
+
+  // ---- slash menu ------------------------------------------------------------
+
+  /// Opens the menu when `/` is typed at the start of a block or after a
+  /// space, follows the query while typing, and closes it when the slash goes.
+  void _trackSlash(int index, Block block, String value, TextSelection sel) {
+    final slash = _slash;
+    if (slash != null && slash.blockId == block.id) {
+      final alive = sel.isValid &&
+          sel.isCollapsed &&
+          sel.extentOffset > slash.offset &&
+          value.length > slash.offset &&
+          value[slash.offset] == '/';
+      if (!alive) {
+        _closeSlash();
+        return;
+      }
+      final query = value.substring(slash.offset + 1, sel.extentOffset);
+      if (query.contains('\n')) {
+        _closeSlash();
+        return;
+      }
+      setState(() {
+        slash.query = query;
+        slash.items = filterSlashCommands(query);
+        slash.selected = 0;
+      });
+      return;
+    }
+    if (slash != null) _closeSlash();
+    final typedOne = value.length == block.text.length + 1;
+    if (!typedOne || !sel.isValid || !sel.isCollapsed || sel.extentOffset == 0) return;
+    final at = sel.extentOffset - 1;
+    if (value[at] != '/') return;
+    if (at > 0 && value[at - 1].trim().isNotEmpty) return;
+    _slash = _SlashSession(blockId: block.id, offset: at, items: filterSlashCommands(''));
+    _slashPortal.show();
+    _positionSlash(block);
+    setState(() {});
+  }
+
+  /// Finds the slash character on screen and anchors the menu to it.
+  void _positionSlash(Block block) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final slash = _slash;
+      if (!mounted || slash == null || slash.blockId != block.id) return;
+      final render = _fieldKeyFor(block).currentContext?.findRenderObject();
+      final editable = _findEditable(render);
+      Rect anchor;
+      if (editable != null) {
+        final local = editable.getLocalRectForCaret(TextPosition(offset: slash.offset));
+        final topLeft = editable.localToGlobal(local.topLeft);
+        anchor = Rect.fromLTWH(topLeft.dx, topLeft.dy, local.width, local.height);
+      } else if (render is RenderBox && render.hasSize) {
+        final topLeft = render.localToGlobal(Offset.zero);
+        anchor = Rect.fromLTWH(topLeft.dx, topLeft.dy, 8, render.size.height);
+      } else {
+        return;
+      }
+      setState(() => slash.anchor = anchor);
+    });
+  }
+
+  static RenderEditable? _findEditable(RenderObject? root) {
+    if (root == null) return null;
+    if (root is RenderEditable) return root;
+    RenderEditable? found;
+    root.visitChildren((child) {
+      found ??= _findEditable(child);
+    });
+    return found;
+  }
+
+  void _closeSlash() {
+    if (_slash == null) return;
+    _slash = null;
+    if (_slashPortal.isShowing) _slashPortal.hide();
+    if (mounted) setState(() {});
+  }
+
+  /// Runs the chosen command: removes `/query` from the block, then applies it.
+  Future<void> _applySlash(int index, Block block, int choice) async {
+    final slash = _slash;
+    if (slash == null || slash.blockId != block.id) return;
+    if (choice < 0 || choice >= slash.items.length) {
+      _closeSlash();
+      return;
+    }
+    final command = slash.items[choice];
+    final text = _textFor(block);
+    final current = text.text;
+    final caret = text.selection.isValid ? text.selection.extentOffset : current.length;
+    final end = caret.clamp(slash.offset, current.length);
+    final cleaned = current.replaceRange(slash.offset, end, '');
+    _closeSlash();
+    text.expectChange(current, cleaned);
+    text.value = TextEditingValue(text: cleaned, selection: TextSelection.collapsed(offset: slash.offset));
+    if (cleaned != doc[index].text) doc.updateText(index, cleaned);
+    if (command.id == 'image') {
+      final path = await (widget.pickImage ?? _askImagePath)(context);
+      if (!mounted || path == null || path.trim().isEmpty) return;
+      final at = doc.indexOf(block.id);
+      if (at < 0) return;
+      final result = command.apply(doc, at);
+      final imageIndex = doc.blocks.indexWhere((b) => b.kind == BlockKind.image && b.url.isEmpty);
+      if (imageIndex >= 0) {
+        final name = p.basename(path.trim());
+        doc.replace(imageIndex, doc[imageIndex].copyWith(url: path.trim(), alt: name));
+      }
+      _moveCaret(result);
+      return;
+    }
+    _moveCaret(command.apply(doc, index));
+  }
+
+  static Future<String?> _askImagePath(BuildContext context) {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Insert image'),
+        content: SizedBox(
+          width: 420,
+          child: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'File path or link',
+              hintText: 'images/photo.png or https://...',
+            ),
+            onSubmitted: (v) => Navigator.of(context).pop(v),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(controller.text), child: const Text('Insert')),
+        ],
+      ),
+    );
   }
 
   // ---- building --------------------------------------------------------------
@@ -337,25 +525,42 @@ class _BlockEditorState extends State<BlockEditor> {
       listenable: doc,
       builder: (context, _) {
         _prune();
-        return Scrollbar(
-          controller: _scroll,
-          child: ListView.builder(
-            controller: _scroll,
-            padding: const EdgeInsets.fromLTRB(22, 6, 22, 0),
-            itemCount: doc.length + 1,
-            // Rows are keyed by block id, so a block that moves (after a split
-            // or an insert above it) keeps its widgets, focus and text input.
-            findChildIndexCallback: (key) {
-              if (key is! ValueKey<String> || !key.value.startsWith('row-')) return null;
-              final index = doc.indexOf(int.parse(key.value.substring(4)));
-              return index < 0 ? null : index;
+        return OverlayPortal(
+            controller: _slashPortal,
+            overlayChildBuilder: (context) {
+              final slash = _slash;
+              if (slash == null || slash.anchor == null) return const SizedBox.shrink();
+              final block = doc.indexOf(slash.blockId);
+              return SlashMenuPanel(
+                anchor: slash.anchor!,
+                items: slash.items,
+                selected: slash.selected,
+                query: slash.query,
+                onHover: (i) => setState(() => slash.selected = i),
+                onPick: (i) {
+                  if (block >= 0) _applySlash(block, doc[block], i);
+                },
+              );
             },
-            itemBuilder: (context, i) {
-              if (i == doc.length) return _tail(palette);
-              return _row(context, palette, i, doc[i]);
-            },
-          ),
-        );
+            child: Scrollbar(
+              controller: _scroll,
+              child: ListView.builder(
+                controller: _scroll,
+                padding: const EdgeInsets.fromLTRB(22, 6, 22, 0),
+                itemCount: doc.length + 1,
+                // Rows are keyed by block id, so a block that moves (after a split
+                // or an insert above it) keeps its widgets, focus and text input.
+                findChildIndexCallback: (key) {
+                  if (key is! ValueKey<String> || !key.value.startsWith('row-')) return null;
+                  final index = doc.indexOf(int.parse(key.value.substring(4)));
+                  return index < 0 ? null : index;
+                },
+                itemBuilder: (context, i) {
+                  if (i == doc.length) return _tail(palette);
+                  return _row(context, palette, i, doc[i]);
+                },
+              ),
+            ));
       },
     );
   }
@@ -420,6 +625,7 @@ class _BlockEditorState extends State<BlockEditor> {
           onSelection: () => _reportSelection(block),
           onToggle: () => doc.toggleChecked(doc.indexOf(block.id)),
           plain: doc.plain,
+          fieldKey: _fieldKeyFor(block),
         );
     }
     final gap = index == 0 ? 0.0 : (block.isList && doc[index - 1].isList ? 2.0 : 10.0);
@@ -531,8 +737,10 @@ class _TextBlock extends StatefulWidget {
     required this.onSelection,
     required this.onToggle,
     required this.plain,
+    required this.fieldKey,
   });
 
+  final GlobalKey fieldKey;
   final Block block;
   final int index;
   final InlineMarkdownController text;
@@ -576,7 +784,7 @@ class _TextBlockState extends State<_TextBlock> {
   }
 
   void _onFocus() {
-    if (widget.focusNode.hasFocus) widget.onSelection();
+    widget.onSelection(); // the editor reads the focus state itself
     if (mounted) setState(() {});
   }
 
@@ -615,6 +823,7 @@ class _TextBlockState extends State<_TextBlock> {
       _ => '',
     };
     final field = TextField(
+      key: widget.fieldKey,
       controller: widget.text,
       focusNode: widget.focusNode,
       readOnly: widget.readOnly,
@@ -735,4 +944,18 @@ class _TextBlockState extends State<_TextBlock> {
     }
     return n;
   }
+}
+
+/// The state of an open slash menu.
+class _SlashSession {
+  _SlashSession({required this.blockId, required this.offset, required this.items});
+
+  final int blockId;
+
+  /// Where the `/` is in the block's text.
+  final int offset;
+  String query = '';
+  List<SlashCommand> items;
+  int selected = 0;
+  Rect? anchor;
 }

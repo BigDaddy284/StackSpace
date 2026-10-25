@@ -116,6 +116,10 @@ Focus on large document handling and responsiveness:
 | `test/block_editor_test.dart` | Typing keeps every character and autosaves; Enter splits, `- ` / `## ` / ``` shortcuts convert, Tab indents, Enter on an empty item outdents then ends the list, Shift+Enter keeps a soft break; Backspace at the start demotes then merges, Ctrl+Z / Ctrl+Y; a `.py` file is one plain field; a late platform update based on the old text is moved onto the new; a paragraph turning into a heading / list / code keeps the same text field. |
 | `test/home_page_test.dart`, `test/accessibility_test.dart` | Unchanged and still green with the block editor (dock, AI edit + reload, contrast, labels, 24 px targets, 150 % text). |
 
+| `test/slash_menu_test.dart` (Task 5) | Filtering (category order, label prefix beats alias prefix beats contains, no match); in the editor: `/` opens, typing filters, arrows wrap, Enter applies and removes `/query`, Escape keeps the text, mid-text query turns the block into a quote, no menu inside a word / in a code block / in a plain file, deleting the slash closes it, empty state and Enter on no match, click inserts a divider and focuses a new paragraph, an empty paragraph is replaced by an inserted table, image asks for a path, the panel opens below the slash and flips above it near the bottom edge, losing focus closes it. |
+
+Manual slash run (release build under Xvfb): Enter, `/hea`, Down, Enter, heading text, `/tod` to-do items, `/div`, `/code` and code text produced the expected Markdown. Screenshots `9-slash-menu-dark.png`, `10-slash-result-dark.png`.
+
 Manual run (Linux release build under Xvfb, `xdotool` at 25 ms per key): typed text, a bullet with
 `- `, Tab, nested item, Enter ×3 to end the list, `## ` heading, ``` code block with two lines; three
 runs produced the same correct file. Screenshot: `docs/screenshots/8-block-editor-dark.png`.

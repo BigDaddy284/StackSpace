@@ -1,20 +1,22 @@
 # PROJECT STATUS
 
-_Last updated: 2026-10-25 (Improvement Phase 1, Tasks 1-3 done)_
+_Last updated: 2026-10-25 (Improvement Phase 1, Tasks 1-5 done)_
 
 ## Current phase
 Improvement Phase 1: advanced editor, slash menu, code spaces. Working one task at a time.
 Test build 1 (v0.1.0-test.1) is published on GitHub and loads the user's AppFlowy workspace.
 
 ## Current task and scope
-Tasks 1-3 done: research, plan, and the block editor that replaces the single text box.
-Next: Task 4, the slash menu.
+Tasks 1-5 done: research, plan, the block editor, and the slash menu with its tests.
+Next: Task 6, code spaces (language picker with search, auto-detected language for typed or
+pasted code, syntax highlighting, copy, wrap toggle, caption, context menu).
 
 ## Task log (Phase 1)
 | Task | Status | Tests | Files |
 | --- | --- | --- | --- |
 | 1. Baseline + research | Done 2026-10-25. `flutter analyze` clean, `flutter test` 49 passed, Linux debug build OK, Git checkpoint on `main`. | 49/49 | `docs/EDITOR_FEATURE_RESEARCH.md`, docs copied into `docs/` |
 | 2. Matrix + plan + spikes | Done 2026-10-25. Feature matrix (§8), spikes (§11: `re_editor` handles 100k lines in ~30 ms per operation; `appflowy_editor` compiles from git but is ruled out), prioritised plan (§12). | 49/49 | `docs/EDITOR_FEATURE_RESEARCH.md` |
+| 4-5. Slash menu + tests | Done 2026-10-25. `lib/editor/slash_commands.dart` (13 commands: Text, Heading 1-3, Quote, Callout, Bulleted, Numbered, To-do, Code block, Divider, Table, Image; aliases such as h1, ul, todo, ```), `lib/ui/editor/slash_menu.dart` (panel anchored to the slash, flips at the bottom edge, categories, icons, descriptions, hover and click), tracking in `block_editor.dart` (opens on `/` at the start of a block or after a space, filters while typing, closes on Escape / slash deleted / focus lost, never in code blocks or plain files). | 83/83 (+14) | see files |
 | 3. Block editor | Done 2026-10-25. Own block model with exact Markdown round trip, document with undo/redo, block-by-block editor pane, controller refactor, caret path made cheap. Live-tested in a Linux release build at 40 keys/s (3 identical runs). | 69/69 (+20) | `lib/editor/blocks.dart`, `lib/editor/page_document.dart`, `lib/editor/page_editor_controller.dart`, `lib/ui/editor/block_editor.dart`, `lib/ui/editor/inline_markdown.dart`, `lib/ui/editor_pane.dart`, `lib/ui/home_page.dart`, `lib/ui/chat/composer.dart`, tests, docs |
 
 ## Completed work
@@ -41,6 +43,11 @@ Next: Task 4, the slash menu.
 
 ## Files changed
 See `git log` in `windows_app/` (5 commits on `main`).
+
+## Tests executed and actual results (Tasks 4-5)
+- `flutter analyze`: no issues. `flutter test`: 83 passed, 2 skipped by design.
+- Release build under Xvfb: `/hea` + Down + Enter made a Heading 2, `/tod` a to-do list that
+  continued on Enter, `/div` a divider, `/code` a code block; the saved Markdown matched.
 
 ## Tests executed and actual results (Task 3)
 - `flutter analyze`: no issues.
@@ -75,9 +82,11 @@ See KNOWN_ISSUES.md. Main ones: no real-model test yet; large files are read-onl
 Analyzer clean and tests green on Linux. `flutter build windows` not yet run.
 
 ## Next single task
-Task 4: the slash menu (open on `/` in an empty or mid-text block, caret-positioned, filtering with
-aliases, categories, icons, descriptions, keyboard and mouse, Enter / Esc, `/query` replaced, edge
-flipping, not inside code blocks). Then Task 5: its tests and TEST_PLAN.md section.
+Task 6: code spaces. Distinct background, monospace, syntax highlighting, searchable language
+picker (JS/TS, Python, JSON, HTML/CSS, SQL, Bash/PowerShell, C#, YAML, Markdown, plain and more),
+**automatic language detection for typed or pasted code** (user request 2026-10-25) with the picker
+as the override, copy button, wrap toggle, caption, context menu, exact paste/copy, undo/redo,
+language saved in the fence. Then Task 7: its tests.
 
 ## Exact commands to resume
 ```bash

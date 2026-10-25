@@ -19,8 +19,10 @@ The limit will be revisited with the Task 8 performance measurements.
 
 ### Editor limits after Task 3 (block editor)
 **Status**: Open, being worked through Phase 1.
-- No slash menu yet (Task 4), no syntax highlighting, language picker, copy or wrap toggle in code
-  blocks yet (Task 6). Code blocks show the fence language as a label.
+- No syntax highlighting, language picker, copy or wrap toggle in code blocks yet (Task 6). Code
+  blocks show the fence language as a label.
+- The slash menu opens only when `/` is typed at the start of a block or after a space, so
+  `http://` never opens it. It does not open on a pasted `/`.
 - Tables and raw HTML are edited as their Markdown / HTML text in a boxed field.
 - Links are styled but not clickable; images show when the file exists next to the page, otherwise
   the path is shown.
