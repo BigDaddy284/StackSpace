@@ -8,6 +8,8 @@
 /// apart from blank-line normalisation between blocks.
 library;
 
+import 'table_data.dart';
+
 enum BlockKind { paragraph, heading, bullet, numbered, todo, quote, code, divider, image, table, raw }
 
 class Block {
@@ -235,6 +237,10 @@ List<Block> parseMarkdown(String markdown) {
       final rows = <String>[];
       while (i < lines.length && _tableRow.hasMatch(lines[i])) {
         rows.add(lines[i]);
+        i++;
+      }
+      if (i < lines.length && TableData.widthsLine.hasMatch(lines[i].trim())) {
+        rows.add(lines[i]); // the column widths
         i++;
       }
       add(Block(kind: BlockKind.table, text: rows.join('\n')));

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -64,6 +65,82 @@ void main() {
       expect(data.removeColumn(0), isTrue);
       expect(data.removeColumn(0), isFalse);
       expect(data.columns, 1);
+    });
+
+    test('column widths are kept on a comment line under the rows and follow added and removed columns', () {
+      const markdown = '| a   | b   |\n| --- | --- |\n| 1   | 2   |\n<!-- table-widths: 120,200 -->';
+      final data = TableData.parse(markdown)!;
+      expect(data.rowCount, 2, reason: 'the widths line is not a row');
+      expect(data.widths, [120, 200]);
+      expect(data.toMarkdown(), markdown);
+      data.insertColumn(1);
+      expect(data.widths, [120, TableData.defaultWidth, 200]);
+      data.removeColumn(0);
+      expect(data.toMarkdown().split('\n').last, '<!-- table-widths: 160,200 -->');
+      data.widths = null;
+      expect(data.toMarkdown(), isNot(contains('table-widths')));
+      expect(TableData.parse('| a | b | c |\n<!-- table-widths: 10 -->')!.widths,
+          [TableData.minWidth, TableData.defaultWidth, TableData.defaultWidth],
+          reason: 'too narrow is widened, missing widths are filled');
+
+      final blocks = parseMarkdown('# T\n\n$markdown\n\nAfter\n');
+      expect(blocks.map((b) => b.kind), [BlockKind.heading, BlockKind.table, BlockKind.paragraph]);
+      expect(blocks[1].text, markdown);
+      expect(writeMarkdown(blocks), '# T\n\n$markdown\n\nAfter\n');
+    });
+
+    test('cells copy as tab-separated text and paste back like a spreadsheet', () {
+      final data = TableData.parse('| a | b | c |\n| --- | --- | --- |\n| 1 | 2 | 3 |\n| 4 | 5 | 6 |')!;
+      expect(data.toTsv(1, 0, 2, 1), '1\t2\n4\t5');
+      data.setCell(1, 0, 'say "hi"\tthere');
+      expect(data.toTsv(1, 0, 1, 1), '"say ""hi""\tthere"\t2');
+      expect(TableData.parseTsv('"say ""hi""\tthere"\t2'), [
+        ['say "hi"\tthere', '2']
+      ]);
+      expect(
+          TableData.parseTsv('x\ty\r\nz\r\n'),
+          [
+            ['x', 'y'],
+            ['z']
+          ],
+          reason: 'Excel ends with a line break and uses CRLF');
+      expect(TableData.parseTsv('"two\nlines"'), [
+        ['two lines']
+      ]);
+
+      // One value fills the selection.
+      expect(
+          data.paste(1, 0, 2, 1, [
+            ['x']
+          ]),
+          (1, 0, 2, 1));
+      expect(data.rows.sublist(1), [
+        ['x', 'x', '3'],
+        ['x', 'x', '6']
+      ]);
+      // A grid that fits a whole number of times repeats.
+      data.paste(1, 0, 2, 2, [
+        ['p', 'q', 'r']
+      ]);
+      expect(data.rows.sublist(1), [
+        ['p', 'q', 'r'],
+        ['p', 'q', 'r']
+      ]);
+      // Past the edge, rows and columns are added.
+      expect(
+          data.paste(2, 2, 2, 2, [
+            ['m', 'n'],
+            ['o', 'p']
+          ]),
+          (2, 2, 3, 3));
+      expect(data.rows, [
+        ['a', 'b', 'c', 'Column 4'],
+        ['p', 'q', 'r', ''],
+        ['p', 'q', 'm', 'n'],
+        ['', '', 'o', 'p']
+      ]);
+      data.clear(2, 2, 3, 3);
+      expect(data.rows[3], ['', '', '', '']);
     });
   });
 
@@ -199,6 +276,156 @@ void main() {
       await settle(tester);
       await waitSaved(tester, editor);
       expect(saved(), '# T\n\nAfter\n');
+    });
+
+    String? mockClipboard(WidgetTester tester, [String? initial]) {
+      String? clipboard = initial;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') clipboard = (call.arguments as Map)['text'] as String;
+        if (call.method == 'Clipboard.getData') return {'text': clipboard};
+        if (call.method == 'Clipboard.hasStrings') return {'value': clipboard != null};
+        return null;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+      return clipboard;
+    }
+
+    Future<String?> clipboardText() async => (await Clipboard.getData(Clipboard.kTextPlain))?.text;
+
+    TableBlockViewState tableState(WidgetTester tester) =>
+        tester.state<TableBlockViewState>(find.byType(TableBlockView));
+
+    /// Drags the mouse from the middle of one cell to the middle of another.
+    Future<void> dragCells(WidgetTester tester, (int, int) from, (int, int) to) async {
+      final gesture =
+          await tester.startGesture(tester.getCenter(cell(from.$1, from.$2)), kind: PointerDeviceKind.mouse);
+      await tester.pump();
+      await gesture.moveTo(tester.getCenter(cell(to.$1, to.$2)));
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+      await tester.pump();
+    }
+
+    testWidgets('dragging across cells selects them; Ctrl+C copies, Ctrl+V pastes over, Delete empties',
+        (tester) async {
+      await pumpEditor(tester, table);
+      mockClipboard(tester);
+      await dragCells(tester, (0, 0), (1, 1));
+      expect(tableState(tester).cellRange, (0, 0, 1, 1));
+      expect(focused(tester, cell(0, 0)), isFalse, reason: 'no cell shows a caret while cells are selected');
+      await key(tester, LogicalKeyboardKey.keyC, control: true);
+      expect(await tester.runAsync(clipboardText), 'Name\tCount\na\t1');
+
+      await key(tester, LogicalKeyboardKey.arrowDown, shift: true);
+      expect(tableState(tester).cellRange, (0, 0, 2, 1), reason: 'Shift+arrows grow the selection');
+      await key(tester, LogicalKeyboardKey.delete);
+      expect(editor.document[1].text.split('\n').sublist(2), ['|     |     |', '|     |     |']);
+      expect(tester.widget<TextField>(cell(1, 0)).controller!.text, '');
+
+      // A copied block pastes from the top left of the selection.
+      await tester.runAsync(() => Clipboard.setData(const ClipboardData(text: 'x\ty\r\nz\tw\r\n')));
+      await key(tester, LogicalKeyboardKey.keyV, control: true);
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+      await tester.pump();
+      expect(editor.document[1].text, '| x   | y   |\n| --- | --- |\n| z   | w   |\n|     |     |');
+      expect(tableState(tester).cellRange, (0, 0, 1, 1), reason: 'the pasted cells stay selected');
+      expect(tester.widget<TextField>(cell(1, 1)).controller!.text, 'w');
+
+      await key(tester, LogicalKeyboardKey.keyZ, control: true);
+      expect(editor.document[1].text.split('\n')[0], '|     |     |', reason: 'the paste is one undo step');
+      await key(tester, LogicalKeyboardKey.keyZ, control: true);
+      expect(editor.document[1].text.split('\n')[0], '| Name | Count |', reason: 'and so is the delete');
+
+      await key(tester, LogicalKeyboardKey.escape);
+      await settle(tester);
+    });
+
+    testWidgets('Shift+click selects from the caret; typing over a selection starts the first cell afresh',
+        (tester) async {
+      await pumpEditor(tester, table);
+      mockClipboard(tester);
+      await tester.tap(cell(1, 0));
+      await tester.pump();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.tap(cell(2, 1), kind: PointerDeviceKind.mouse);
+      await tester.pump();
+      await tester.pump();
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      expect(tableState(tester).cellRange, (1, 0, 2, 1));
+      expect(focused(tester, cell(2, 1)), isFalse, reason: 'the click does not leave a caret in the cell');
+      await key(tester, LogicalKeyboardKey.keyQ);
+      expect(tableState(tester).hasCellRange, isFalse);
+      expect(focused(tester, cell(1, 0)), isTrue);
+      expect(tester.widget<TextField>(cell(1, 0)).controller!.text, 'q');
+      await settle(tester);
+    });
+
+    testWidgets('pasting rows copied from a spreadsheet into one cell fills the cells from there, adding rows',
+        (tester) async {
+      await pumpEditor(tester, table);
+      mockClipboard(tester, '7\n8\n9\n');
+      await tester.tap(cell(2, 1));
+      await tester.pump();
+      await key(tester, LogicalKeyboardKey.keyV, control: true);
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+      await tester.pump();
+      expect(
+          editor.document[1].text.split('\n').sublist(3), ['| b    | 7     |', '|      | 8     |', '|      | 9     |']);
+      expect(tableState(tester).cellRange, (2, 1, 4, 1));
+
+      // Plain text still pastes at the caret.
+      await key(tester, LogicalKeyboardKey.escape);
+      expect(focused(tester, cell(2, 1)), isTrue);
+      expect(tester.widget<TextField>(cell(2, 1)).controller!.selection, const TextSelection.collapsed(offset: 1));
+      await tester.runAsync(() => Clipboard.setData(const ClipboardData(text: '0')));
+      await key(tester, LogicalKeyboardKey.keyV, control: true);
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+      expect(tester.widget<TextField>(cell(2, 1)).controller!.text, '70');
+      expect(editor.document[1].text.split('\n')[3], '| b    | 70    |');
+      await settle(tester);
+    });
+
+    testWidgets('a column border drags to set its width, which is saved; double-click makes columns even',
+        (tester) async {
+      await pumpEditor(tester, table);
+      final before = tester.getSize(cell(0, 0)).width;
+      var handle = find.byKey(ValueKey('resize-${editor.document[1].id}-0'));
+      expect(handle, findsOneWidget);
+      final gesture = await tester.startGesture(tester.getCenter(handle), kind: PointerDeviceKind.mouse);
+      await tester.pump();
+      for (var i = 0; i < 5; i++) {
+        await gesture.moveBy(const Offset(-30, 0));
+        await tester.pump();
+      }
+      await gesture.up();
+      await tester.pump();
+      final after = tester.getSize(cell(0, 0)).width;
+      expect(after, lessThan(before - 100));
+      final lines = editor.document[1].text.split('\n');
+      expect(lines.last, startsWith('<!-- table-widths: '));
+      final widths = TableData.parse(editor.document[1].text)!.widths!;
+      expect(widths[0], closeTo(after, 1));
+      expect(widths[1], closeTo(before, 1), reason: 'only the dragged column changes');
+      await settle(tester);
+      await waitSaved(tester, editor);
+      expect(saved(), contains('| b    | 2     |\n<!-- table-widths: '));
+
+      // Reopened, the widths are back.
+      await pumpEditor(tester, saved());
+      expect(tester.getSize(cell(0, 0)).width, closeTo(after, 1));
+      handle = find.byKey(ValueKey('resize-${editor.document[1].id}-0'));
+
+      await tester.tap(handle);
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(handle);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(editor.document[1].text, isNot(contains('table-widths')));
+      expect(tester.getSize(cell(0, 0)).width, closeTo(before, 1));
+      await settle(tester);
     });
 
     testWidgets('the slash menu inserts a table and the caret lands in its first cell', (tester) async {

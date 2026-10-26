@@ -1,6 +1,6 @@
 # PROJECT STATUS
 
-_Last updated: 2026-10-26 (Bug-fix phase: Bugs 1-5 fixed; Bug 5 confirmed with test build 9)_
+_Last updated: 2026-10-26 (Bug-fix phase: Bugs 1-5 fixed; Bug 5 confirmed with test build 9; table widths and cell copy/paste confirmed with v0.3.6-test.1)_
 
 ## Current phase
 Bug-fix phase (2026-10-26): five bugs reported from test build 2 on Windows, fixed one at a time in
@@ -293,10 +293,18 @@ view and puts it back. Build 8's blank launches look like an older copy of the a
 (no guard lines at all); test build 9 (v0.3.5-test.2, version 0.3.5+9) logs the version and exe
 path per launch. See `docs/KNOWN_ISSUES.md`, Bug 5.
 
+## Table column widths and multi-cell copy and paste (2026-10-26)
+Table build (v0.3.6-test.1, version 0.3.6+10) makes table columns resizable by dragging their borders (widths
+are kept on a `<!-- table-widths: ... -->` line under the table) and adds spreadsheet-style cell
+selection with copy, cut, delete and paste of tab-separated text. Built on top of test build 9 (v0.3.5-test.2).
+See `docs/DECISIONS.md`, "Table column widths and multi-cell copy and paste". Confirmed working
+on Windows by the user (2026-10-26).
+
 ## Next single task
 Bug 5 is confirmed fixed with test build 9 (v0.3.5-test.2). If a blank launch ever returns, send `native.log` and
-`startup.log` from `%APPDATA%\com.stackspace\stack_space\`. No code task is queued; the next
-phase starts from the user's next request.
+`startup.log` from `%APPDATA%\com.stackspace\stack_space\`. Table widths and cell copy/paste are
+confirmed with v0.3.6-test.1. No code task is queued; the next phase starts from the user's next
+request.
 
 ## Exact commands to resume
 ```bash

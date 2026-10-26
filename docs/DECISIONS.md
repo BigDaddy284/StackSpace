@@ -263,6 +263,21 @@ an unedited table writes back exactly as read. Copying pictures in keeps a works
 and portable, which is what the AppFlowy export did too.
 **Status**: Done; `test/table_image_test.dart`.
 
+### Table column widths and multi-cell copy and paste (v0.3.6-test.1)
+**Decision**: Column borders drag to set a width in logical pixels; the widths are written on one
+`<!-- table-widths: 120,200 -->` line right under the table's rows, and only once a border has been
+dragged (double-clicking a border removes the line and the columns are even again). A table wider
+than the page scrolls sideways. Cells are selected like a spreadsheet: a mouse drag across cells,
+Shift+click, Shift+Up/Down, or Ctrl+A twice. A selection copies (Ctrl+C) and cuts as tab-separated
+text, Delete empties it, typing starts the first cell afresh, and Ctrl+V pastes tab-separated text
+over it: one value fills every cell, a block that fits a whole number of times repeats, anything
+else pastes once from the top-left, adding rows and columns past the edge. Pasting tab-separated
+text into a single cell fills the cells from there; plain text still pastes at the caret.
+**Rationale**: Tab-separated text is what Excel, Google Sheets and Notion put on the clipboard, so
+cells move both ways. An HTML comment is hidden by other Markdown readers, so the page still reads
+as a plain table; a table that was never resized writes back exactly as before.
+**Status**: Done; `test/table_image_test.dart`.
+
 ### Folding is view state, not a file format (Task 11)
 **Decision**: A heading folds the blocks up to the next heading of the same or a higher level. The
 folded state lives in the editor for the open page and is never written to the file; there is no

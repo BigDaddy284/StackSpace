@@ -3,14 +3,30 @@
 ///
 /// `| a | b |` lines are read and written here; the block keeps the lines
 /// as its text, so a page that is never edited writes back exactly as read.
+/// Column widths set by dragging are kept on one HTML comment line right
+/// under the rows (`<!-- table-widths: 120,200 -->`), which other Markdown
+/// readers hide.
 enum TableAlign { none, left, center, right }
 
 class TableData {
-  TableData(this.rows, this.aligns) : assert(rows.isNotEmpty);
+  TableData(this.rows, this.aligns, [this.widths]) : assert(rows.isNotEmpty);
 
   /// Row 0 is the header; every row has [columns] cells.
   final List<List<String>> rows;
   final List<TableAlign> aligns;
+
+  /// Each column's width in logical pixels, or null for even columns that
+  /// fill the page width.
+  List<double>? widths;
+
+  /// The width a column added to a table with set widths starts at.
+  static const defaultWidth = 160.0;
+
+  /// The narrowest a column can be dragged.
+  static const minWidth = 48.0;
+
+  /// The line that keeps the column widths, under the table's rows.
+  static final widthsLine = RegExp(r'^<!--\s*table-widths:\s*([\d.,\s]*?)\s*-->\s*$');
 
   int get columns => aligns.length;
   int get rowCount => rows.length;
@@ -22,6 +38,19 @@ class TableData {
   /// first. Null when there is no row at all.
   static TableData? parse(String markdown) {
     final lines = markdown.split('\n').where((l) => l.trim().isNotEmpty).toList();
+    List<double>? widths;
+    lines.removeWhere((line) {
+      final match = widthsLine.firstMatch(line.trim());
+      if (match == null) return false;
+      widths = match
+          .group(1)!
+          .split(',')
+          .map((w) => double.tryParse(w.trim()))
+          .whereType<double>()
+          .map((w) => w < minWidth ? minWidth : w)
+          .toList();
+      return true;
+    });
     if (lines.isEmpty) return null;
     final rows = <List<String>>[];
     List<TableAlign>? aligns;
@@ -43,7 +72,14 @@ class TableData {
     }
     final filled =
         List<TableAlign>.generate(columns, (i) => aligns != null && i < aligns.length ? aligns[i] : TableAlign.none);
-    return TableData(rows, filled);
+    final read = widths;
+    if (read != null && read.isNotEmpty) {
+      while (read.length < columns) {
+        read.add(defaultWidth);
+      }
+      read.length = columns;
+    }
+    return TableData(rows, filled, read == null || read.isEmpty ? null : read);
   }
 
   static TableAlign _alignOf(String cell) {
@@ -98,10 +134,17 @@ class TableData {
           TableAlign.none => '-' * widths[c],
         }
     ].join(' | ')} |';
-    return [line(escaped[0]), separator, for (var r = 1; r < escaped.length; r++) line(escaped[r])].join('\n');
+    final set = this.widths;
+    return [
+      line(escaped[0]),
+      separator,
+      for (var r = 1; r < escaped.length; r++) line(escaped[r]),
+      if (set != null) '<!-- table-widths: ${set.map((w) => w.round()).join(',')} -->',
+    ].join('\n');
   }
 
-  TableData copy() => TableData([for (final r in rows) List.of(r)], List.of(aligns));
+  TableData copy() =>
+      TableData([for (final r in rows) List.of(r)], List.of(aligns), widths == null ? null : List.of(widths!));
 
   void setCell(int row, int column, String value) => rows[row][column] = value;
 
@@ -120,6 +163,7 @@ class TableData {
       rows[r].insert(c, r == 0 ? header : '');
     }
     aligns.insert(c, TableAlign.none);
+    widths?.insert(c, defaultWidth);
   }
 
   /// Removes a column; the last one stays. False when it is the only column.
@@ -129,6 +173,109 @@ class TableData {
       row.removeAt(at);
     }
     aligns.removeAt(at);
+    widths?.removeAt(at);
     return true;
+  }
+
+  /// The cells from ([top], [left]) to ([bottom], [right]) as tab-separated
+  /// lines, the way spreadsheets copy them. A cell with a tab, a line break
+  /// or a quote is quoted.
+  String toTsv(int top, int left, int bottom, int right) {
+    String field(String cell) => cell.contains(RegExp('[\t\n\r"]')) ? '"${cell.replaceAll('"', '""')}"' : cell;
+    return [
+      for (var r = top; r <= bottom; r++) [for (var c = left; c <= right; c++) field(rows[r][c])].join('\t'),
+    ].join('\n');
+  }
+
+  /// Reads tab-separated text (from a spreadsheet, or [toTsv]) as rows of
+  /// cells. Quoted cells may hold tabs, line breaks and `""` for a quote; a
+  /// line break inside a cell becomes a space, as cells hold one line.
+  static List<List<String>> parseTsv(String text) {
+    var s = text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    if (s.endsWith('\n')) s = s.substring(0, s.length - 1);
+    final rows = <List<String>>[];
+    var row = <String>[];
+    final cell = StringBuffer();
+    var i = 0;
+    var atCellStart = true;
+    while (i < s.length) {
+      final ch = s[i];
+      if (atCellStart && ch == '"') {
+        // A quoted cell runs to the quote before a tab, a line break or the end.
+        i++;
+        while (i < s.length) {
+          if (s[i] == '"') {
+            if (i + 1 < s.length && s[i + 1] == '"') {
+              cell.write('"');
+              i += 2;
+              continue;
+            }
+            i++;
+            break;
+          }
+          cell.write(s[i] == '\n' ? ' ' : s[i]);
+          i++;
+        }
+        atCellStart = false;
+        continue;
+      }
+      atCellStart = false;
+      if (ch == '\t') {
+        row.add(cell.toString());
+        cell.clear();
+        atCellStart = true;
+      } else if (ch == '\n') {
+        row.add(cell.toString());
+        cell.clear();
+        rows.add(row);
+        row = <String>[];
+        atCellStart = true;
+      } else {
+        cell.write(ch);
+      }
+      i++;
+    }
+    row.add(cell.toString());
+    rows.add(row);
+    return rows;
+  }
+
+  /// Empties the cells from ([top], [left]) to ([bottom], [right]).
+  void clear(int top, int left, int bottom, int right) {
+    for (var r = top; r <= bottom; r++) {
+      for (var c = left; c <= right; c++) {
+        rows[r][c] = '';
+      }
+    }
+  }
+
+  /// Pastes [grid] into the cells from ([top], [left]) to ([bottom],
+  /// [right]), the way a spreadsheet does: one value fills every selected
+  /// cell, a grid that fits the selection a whole number of times repeats,
+  /// and anything else is pasted once from the top left corner. Rows and
+  /// columns are added when the grid runs past the table's edge. Returns the
+  /// cells written as (top, left, bottom, right).
+  (int, int, int, int) paste(int top, int left, int bottom, int right, List<List<String>> grid) {
+    final height = grid.length;
+    final width = grid.map((r) => r.length).fold(0, (a, b) => a > b ? a : b);
+    if (height == 0 || width == 0) return (top, left, bottom, right);
+    final selRows = bottom - top + 1, selColumns = right - left + 1;
+    final repeats = selRows % height == 0 && selColumns % width == 0;
+    final lastRow = repeats ? bottom : top + height - 1;
+    final lastColumn = repeats ? right : left + width - 1;
+    while (rowCount <= lastRow) {
+      insertRow(rowCount);
+    }
+    while (columns <= lastColumn) {
+      insertColumn(columns, header: 'Column ${columns + 1}');
+    }
+    for (var r = top; r <= lastRow; r++) {
+      final source = grid[(r - top) % height];
+      for (var c = left; c <= lastColumn; c++) {
+        final i = (c - left) % width;
+        rows[r][c] = i < source.length ? source[i].replaceAll(RegExp('[\t\n\r]'), ' ') : '';
+      }
+    }
+    return (top, left, lastRow, lastColumn);
   }
 }
