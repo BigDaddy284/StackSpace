@@ -216,7 +216,8 @@ class _HomePageState extends State<HomePage> {
   void _showAbout() => showAboutDialog(
         context: context,
         applicationName: 'StackSpace',
-        applicationLegalese: 'A local notes and code workspace with an Ollama assistant.',
+        applicationLegalese: 'A local notes and code workspace with an Ollama assistant.\n\n'
+            'Built with Flutter (flutter.dev). View licenses lists every open-source package it uses.',
       );
 
   @override
