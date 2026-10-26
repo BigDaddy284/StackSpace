@@ -72,6 +72,10 @@ class Win32Window {
   // Called when Destroy is called.
   virtual void OnDestroy();
 
+  // Puts the hosted content back over the whole client area, shown, if
+  // something moved or hid it. Returns true if it had to.
+  bool RestoreChildContent();
+
  private:
   friend class WindowClassRegistrar;
 
