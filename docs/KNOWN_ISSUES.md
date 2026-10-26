@@ -45,9 +45,9 @@ Now: a themed frame is drawn before any loading, a bad settings file falls back 
 workspace that cannot be opened shows a message with Try again, the Windows window paints its
 background in the theme colour, and `startup.log` (app support folder) records every step and
 error of each launch. If it happens again, that file says where the launch stopped.
+The user reports no freezes with test build 3 on Windows so far.
 
 ## Current issues in the StackSpace app (2026-10-25)
-The user reports no freezes with test build 3 on Windows so far.
 
 ### Not tested with a real Ollama model
 **Status**: Open. The cloud environment can't download models, so the assistant was tested against a
