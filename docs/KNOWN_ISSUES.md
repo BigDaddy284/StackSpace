@@ -36,7 +36,9 @@ hidden. Test in `test/home_page_test.dart`.
 Confirmed by the user on Windows with test build 3.
 
 ### Bug 5 — Intermittent black-and-white startup (2nd-4th launch)
-**Status**: Hardened 2026-10-26; root cause not established (no Windows machine here; 14 Linux
+**Status**: Confirmed fixed on the user's Windows machine with test build 7 (v0.3.4-test.1,
+2026-10-26): launches snapped in FancyZones now open correctly every time. The exact mechanism is
+not proven; see the end of this section. Earlier status: hardened 2026-10-26; root cause not established (no Windows machine here; 14 Linux
 launches all fine). The screenshot shows a window Flutter never painted (white parent strip, black
 child view, dark title bar from the runner). Most likely a start that failed before the first
 frame: the old `main()` awaited the settings file before `runApp`, so a damaged settings file
@@ -69,6 +71,17 @@ the window and view state 1 s and 4 s in). The user was also asked to try exclud
 Build 6 itself did not start on Windows: the log redirect called
 `FlutterDesktopResyncOutputStreams`, which reopens stderr on a console and ends a process that has
 none, leaving an empty `native.log`. Test build 7 (v0.3.4-test.1) drops that call.
+
+**Result**: the user reports that build 7 opens correctly every time when snapped. Why each build
+was needed: build 4 (last bounds + re-size) and build 5 (start Flutter after the window settles)
+did not fix it; build 6 added logging but crashed at start; build 7 is build 6 with that crash
+fixed. Build 7's only change over build 5 is the logging: stderr, which a release build otherwise
+leaves unset, now points at `native.log` for the runner and the engine. So either the engine
+needed a working stderr on this machine (it writes there when rendering hits a problem), or the
+extra logging changed start-up timing enough to hide a race. Both builds 5 and 7 keep showing the
+window before Flutter starts and reopening at the last bounds. `native.log` stays in the app so
+that a recurrence is diagnosable; if a blank launch returns, its `native.log` says whether Flutter
+started, presented its first frame, and where the window and view were.
 
 ## Current issues in the StackSpace app (2026-10-25)
 

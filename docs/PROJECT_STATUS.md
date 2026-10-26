@@ -1,6 +1,6 @@
 # PROJECT STATUS
 
-_Last updated: 2026-10-26 (Bug-fix phase: Bugs 1-4 fixed and verified; Bug 5 hardened, root cause not reproducible here)_
+_Last updated: 2026-10-26 (Bug-fix phase: Bugs 1-5 fixed; Bug 5 confirmed on Windows with test build 7)_
 
 ## Current phase
 Bug-fix phase (2026-10-26): five bugs reported from test build 2 on Windows, fixed one at a time in
@@ -286,11 +286,15 @@ on resizes in the first ten seconds. Built and tested on GitHub Actions only; se
 build 6 (v0.3.3-test.1, version 0.3.3+6) adds a native log (`windows/runner/native_log.cpp/.h`,
 `native.log` next to `startup.log`) with the engine's error output and the window's state.
 Build 6 did not start (the log redirect ended the process); test build 7 (v0.3.4-test.1, version
-0.3.4+7) fixes that.
+0.3.4+7) fixes that. **The user confirmed build 7 opens correctly every time when snapped.** Its
+only change over build 5 is that stderr (runner and engine) now goes to `native.log` instead of
+nowhere, so either a working stderr or the changed timing made the difference; the mechanism is
+not proven. See `docs/KNOWN_ISSUES.md`, Bug 5.
 
 ## Next single task
-Run test build 7 on Windows with the window snapped in FancyZones until a launch is blank, then
-send `native.log` and `startup.log` from `%APPDATA%\com.stackspace\stack_space\`.
+Keep using test build 7 on Windows. If a blank launch ever returns, send `native.log` and
+`startup.log` from `%APPDATA%\com.stackspace\stack_space\`. No code task is queued; the next
+phase starts from the user's next request.
 
 ## Exact commands to resume
 ```bash
