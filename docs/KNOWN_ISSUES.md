@@ -19,6 +19,9 @@ them in the system browser (http, https and mailto only); a URL pasted over sele
 them; Ctrl+K links, and unlinks an existing link. Remaining limit: text copied from a web page
 pastes as plain text, because Flutter's desktop clipboard exposes no HTML, so those hyperlinks
 lose their destinations (a URL copied from the address bar works). `test/links_test.dart`.
+A regression from this fix, caught in the combined pass: typing a URL letter by letter became a
+Markdown link halfway through. Fixed the same day (a one-character change is never a paste) and
+covered by a test.
 
 ### Bug 3 — The pages panel forgets folder expansion when hidden and reopened
 **Status**: Fixed 2026-10-26. The folded folders are saved per workspace in the settings, survive
