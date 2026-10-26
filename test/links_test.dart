@@ -52,6 +52,9 @@ void main() {
       expect(pastedUrl('see here now', 'see https://here.io now'), (start: 4, removed: 'here', url: 'https://here.io'),
           reason: 'shared letters between the words and the URL');
       expect(pastedUrl('abc', 'abcd'), isNull, reason: 'typing');
+      expect(pastedUrl('https://', 'https://e'), isNull, reason: 'typing a URL one letter at a time');
+      expect(pastedUrl('see https://exa', 'see https://exam'), isNull, reason: 'typing on inside a URL');
+      expect(pastedUrl('see https://exa.io', 'see https://exam.io'), isNull, reason: 'typing in the middle');
       expect(pastedUrl('abc', 'ab'), isNull, reason: 'deleting');
       expect(pastedUrl('x', 'xsome text https://a.io'), isNull, reason: 'a longer paste');
     });
@@ -185,6 +188,21 @@ void main() {
           saved(),
           'Read the [manual](https://docs.example.com/manual) today.\n\nMore https://example.com/x\n'
           'line two https://two.io\nline [three](https://three.io) plain words\n');
+    });
+
+    testWidgets('a URL typed one letter at a time stays as typed', (tester) async {
+      // Regression: the paste check once took "https://e" for a paste over
+      // "https://" and turned the half-typed URL into a Markdown link.
+      await pumpEditor(tester, 'Go to \n');
+      await tester.tap(find.byType(TextField).at(0));
+      await tester.pump();
+      fieldAt(tester, 0).controller!.selection = const TextSelection.collapsed(offset: 6);
+      for (final ch in 'https://example.com/page now'.split('')) {
+        await paste(tester, 0, ch);
+      }
+      expect(editor.document[0].text, 'Go to https://example.com/page now');
+      expect(linksIn(editor.document[0].text).single.url, 'https://example.com/page');
+      await settle(tester);
     });
 
     testWidgets('Ctrl+click opens the link under the caret with its exact destination; a plain click only edits',

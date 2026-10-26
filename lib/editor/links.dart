@@ -60,6 +60,20 @@ bool isUrl(String text) {
 /// replaced. Null for any other change (typing, a longer paste, a deletion).
 ({int start, String removed, String url})? pastedUrl(String before, String after) {
   if (after.length <= before.length) return null;
+  // Typing adds one character at a time; a paste adds the whole URL at once.
+  // Without this, typing the "e" of "https://e" would be taken for a paste
+  // of "https://e" over "https://".
+  var prefix = 0;
+  while (prefix < before.length && prefix < after.length && before[prefix] == after[prefix]) {
+    prefix++;
+  }
+  var suffix = 0;
+  while (suffix < before.length - prefix &&
+      suffix < after.length - prefix &&
+      before[before.length - 1 - suffix] == after[after.length - 1 - suffix]) {
+    suffix++;
+  }
+  if (after.length - prefix - suffix < 2) return null;
   // The URL and the text around it can share characters ("here" → "https"),
   // so try every URL in the result rather than the longest common prefix.
   for (final m in bareUrlPattern.allMatches(after)) {
