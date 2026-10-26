@@ -49,8 +49,12 @@ void OpenNativeLog() {
     return;
   }
   setvbuf(stderr, nullptr, _IONBF, 0);
-  _dup2(_fileno(stderr), 2);
-  FlutterDesktopResyncOutputStreams();
+  // Point file descriptor 2 at the file too, for code that writes to it
+  // directly. Not FlutterDesktopResyncOutputStreams: it reopens stderr on a
+  // console, and without one it ends the process.
+  if (_fileno(stderr) >= 0 && _fileno(stderr) != 2) {
+    _dup2(_fileno(stderr), 2);
+  }
 
   SYSTEMTIME now;
   GetLocalTime(&now);

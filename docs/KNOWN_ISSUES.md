@@ -66,6 +66,9 @@ plus the runner's view of the window (bounds, visibility, DWM cloaking, DPI, oth
 windows or processes still running, when Flutter starts, when its first frame is presented, and
 the window and view state 1 s and 4 s in). The user was also asked to try excluding
 `stack_space.exe` in FancyZones to confirm whether FancyZones is involved at all.
+Build 6 itself did not start on Windows: the log redirect called
+`FlutterDesktopResyncOutputStreams`, which reopens stderr on a console and ends a process that has
+none, leaving an empty `native.log`. Test build 7 (v0.3.4-test.1) drops that call.
 
 ## Current issues in the StackSpace app (2026-10-25)
 
