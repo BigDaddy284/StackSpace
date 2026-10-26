@@ -62,6 +62,16 @@ void OpenNativeLog() {
           "---- launch %04d-%02d-%02dT%02d:%02d:%02d.%03d pid %lu ----\n",
           now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute,
           now.wSecond, now.wMilliseconds, GetCurrentProcessId());
+  // Which build is running, and from where, so a launch of an older copy
+  // (an old shortcut or taskbar pin) can be told apart from the current one.
+#ifdef FLUTTER_VERSION
+  const char* version = FLUTTER_VERSION;
+#else
+  const char* version = "unknown";
+#endif
+  wchar_t exe[MAX_PATH] = L"";
+  GetModuleFileName(nullptr, exe, MAX_PATH);
+  fprintf(stderr, "version %s, exe %ls\n", version, exe);
 }
 
 void NativeLog(const char* format, ...) {
