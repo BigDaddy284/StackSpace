@@ -290,7 +290,7 @@ Build 6 did not start (the log redirect ended the process); test build 7 (v0.3.4
 FancyZones moves and hides the Flutter view window itself (it sees it as a new StackSpace window
 for a moment while Flutter creates it). Test build 8 (v0.3.5-test.1, version 0.3.5+8) guards the
 view and puts it back. Build 8's blank launches look like an older copy of the app being started
-(no guard lines at all); test build 9 (v0.3.6-test.1, version 0.3.6+9) logs the version and exe
+(no guard lines at all); test build 9 (v0.3.5-test.2, version 0.3.5+9) logs the version and exe
 path per launch. See `docs/KNOWN_ISSUES.md`, Bug 5.
 
 ## Next single task
