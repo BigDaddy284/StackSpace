@@ -10,8 +10,8 @@ This document tracks known issues and problems identified during the audit phase
 shortcut map in place once an empty block got text and Flutter never re-indexed it, so Backspace
 was ignored in every code block that started empty; and a paragraph turned into a code block kept
 its focus node, so the code editor never opened its keyboard input (typed text went nowhere, pasted
-text arrived). Covered by two tests in `test/code_block_test.dart`; verified live on Linux. Not yet
-confirmed on a Windows machine: the key handling is framework code, the same on both.
+text arrived). Covered by two tests in `test/code_block_test.dart`; verified live on Linux and confirmed by
+the user on Windows with test build 3.
 
 ### Bug 2 — Links cannot be pasted as links and are not clickable
 **Status**: Fixed 2026-10-26. Bare URLs and `[label](url)` render as links; Ctrl+click opens
@@ -33,6 +33,7 @@ are the identity (a folder on disk has nothing else). Test in `test/home_page_te
 them (a Task 12 rule meant for picture folders). Empty folders now show; duplicate and invalid
 names are reported; "New folder here" in a folder's menu; File > New folder works with the panel
 hidden. Test in `test/home_page_test.dart`.
+Confirmed by the user on Windows with test build 3.
 
 ### Bug 5 — Intermittent black-and-white startup (2nd-4th launch)
 **Status**: Hardened 2026-10-26; root cause not established (no Windows machine here; 14 Linux
@@ -46,6 +47,7 @@ background in the theme colour, and `startup.log` (app support folder) records e
 error of each launch. If it happens again, that file says where the launch stopped.
 
 ## Current issues in the StackSpace app (2026-10-25)
+The user reports no freezes with test build 3 on Windows so far.
 
 ### Not tested with a real Ollama model
 **Status**: Open. The cloud environment can't download models, so the assistant was tested against a

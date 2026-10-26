@@ -266,9 +266,16 @@ See KNOWN_ISSUES.md. Main ones: no real-model test yet; large files are read-onl
 ## Current build status
 Analyzer clean and 136 tests green on Linux; the Windows build runs on GitHub Actions.
 
+## Windows confirmation of test build 3 (2026-10-26)
+The user ran v0.3.0-test.1 on Windows: no app freezes, folders appear when created, Backspace
+works in code blocks. Bugs 1 and 4 are therefore confirmed on the target machine; Bug 5 has not
+recurred so far. Links (Bug 2) and fold state (Bug 3) were not mentioned either way; they are
+verified by tests and Linux runs only.
+
 ## Next single task
-Try test build 3 on Windows: the five bug areas, and if a launch ever shows a blank window again,
-send `%APPDATA%\com.stackspace\stack_space\startup.log`.
+Keep using test build 3 on Windows. Report anything about links, folder fold state, or a blank
+launch (send `%APPDATA%\com.stackspace\stack_space\startup.log` for the latter). No code task is
+queued; the next phase starts from the user's next request.
 
 ## Exact commands to resume
 ```bash
