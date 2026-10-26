@@ -89,6 +89,9 @@ class _BlockEditorState extends State<BlockEditor> {
     for (final f in _focus.values) {
       f.dispose();
     }
+    for (final f in _codeFocus.values) {
+      f.dispose();
+    }
     for (final c in _codes.values) {
       c.dispose();
     }
@@ -102,7 +105,13 @@ class _BlockEditorState extends State<BlockEditor> {
   InlineMarkdownController _textFor(Block block) =>
       _texts.putIfAbsent(block.id, () => InlineMarkdownController(text: block.text));
 
-  FocusNode _focusFor(Block block) => _focus.putIfAbsent(block.id, () => FocusNode(debugLabel: 'block ${block.id}'));
+  /// A code space has its own node (Bug 1): a block turned into a code space
+  /// keeps its id, and with the paragraph's still-focused node the code
+  /// editor would see no focus change and never open its keyboard input.
+  final _codeFocus = <int, FocusNode>{};
+  FocusNode _focusFor(Block block) => _isCode(block)
+      ? _codeFocus.putIfAbsent(block.id, () => FocusNode(debugLabel: 'block ${block.id}'))
+      : _focus.putIfAbsent(block.id, () => FocusNode(debugLabel: 'block ${block.id}'));
 
   final _tableKeys = <int, GlobalKey<TableBlockViewState>>{};
   GlobalKey<TableBlockViewState> _tableKeyFor(Block block) => _tableKeys.putIfAbsent(block.id, GlobalKey.new);
@@ -151,6 +160,9 @@ class _BlockEditorState extends State<BlockEditor> {
     }
     for (final id in _focus.keys.where((id) => !live.contains(id)).toList()) {
       _focus.remove(id)!.dispose();
+    }
+    for (final id in _codeFocus.keys.where((id) => !live.contains(id)).toList()) {
+      _codeFocus.remove(id)!.dispose();
     }
     for (final id in _codes.keys.where((id) => !live.contains(id)).toList()) {
       _codes.remove(id)!.dispose();
@@ -791,6 +803,12 @@ class _BlockEditorState extends State<BlockEditor> {
         final i = doc.indexOf(block.id);
         if (i >= 0) _moveCaret(doc.remove(i));
       },
+      onBackspaceEmpty: () {
+        final i = doc.indexOf(block.id);
+        if (i < 0 || doc.plain) return;
+        doc.convert(i, BlockKind.paragraph, caret: (block: i, offset: 0));
+        _moveCaret((block: i, offset: 0));
+      },
       onMoveOut: (direction) => _leaveCode(block, direction),
       showCaption: _captionShown(block),
       onShowCaption: () => setState(() {
@@ -1234,7 +1252,7 @@ class _BlockEditorState extends State<BlockEditor> {
       builder: (context, _) {
         // Controllers outlive their blocks only after a removal; pruning is a
         // pass over every block, so it waits for that.
-        if (_focus.length > doc.length) _prune();
+        if (_focus.length + _codeFocus.length > doc.length) _prune();
         return OverlayPortal(
           controller: _toolbarPortal,
           overlayChildBuilder: (context) {

@@ -3,6 +3,29 @@
 ## Overview
 This document tracks known issues and problems identified during the audit phase of the AppFlowy replacement project. Issues are categorized by severity and impact.
 
+## Bugs reported from test build 2 on Windows (2026-10-26)
+
+### Bug 1 — Backspace does not work in code blocks
+**Status**: Fixed 2026-10-26. Two causes: the code editor's Backspace shortcut was added to its
+shortcut map in place once an empty block got text and Flutter never re-indexed it, so Backspace
+was ignored in every code block that started empty; and a paragraph turned into a code block kept
+its focus node, so the code editor never opened its keyboard input (typed text went nowhere, pasted
+text arrived). Covered by two tests in `test/code_block_test.dart`; verified live on Linux. Not yet
+confirmed on a Windows machine: the key handling is framework code, the same on both.
+
+### Bug 2 — Links cannot be pasted as links and are not clickable
+**Status**: Open, next.
+
+### Bug 3 — The pages panel forgets folder expansion when hidden and reopened
+**Status**: Open.
+
+### Bug 4 — The New folder button does not create a folder
+**Status**: Open.
+
+### Bug 5 — Intermittent black-and-white startup (2nd-4th launch)
+**Status**: Open. Screenshot from the reporter: window titled `stack_space`, white sidebar area,
+black editor area, no text.
+
 ## Current issues in the StackSpace app (2026-10-25)
 
 ### Not tested with a real Ollama model

@@ -1,9 +1,22 @@
 # PROJECT STATUS
 
-_Last updated: 2026-10-25 (Improvement Phase 1, Tasks 1-12 done; test build 2 tagged)_
+_Last updated: 2026-10-26 (Bug-fix phase: Bug 1 fixed; Bugs 2-5 pending)_
 
 ## Current phase
-Improvement Phase 1: advanced editor, slash menu, code spaces. Working one task at a time.
+Bug-fix phase (2026-10-26): five bugs reported from test build 2 on Windows, fixed one at a time in
+the order given (code block keys, links, folder state, New folder, startup rendering). Phase 1 is
+complete; see the Phase 1 sections below.
+
+## Bug-fix log
+| Bug | Status | Root cause | Fix and files | Tests and actual results |
+| --- | --- | --- | --- | --- |
+| 1. Backspace in code blocks | **Fixed 2026-10-26** (verified by tests and a live run on Linux; the reporter's machine is Windows, where the same framework code runs). | Two causes, both confirmed by a test that failed before the fix. (a) The code editor (`re_editor`) builds its shortcut map once and mutates it in place when its key set changes; our key set dropped Backspace while the block was empty and added it once text was typed, and Flutter's `ShortcutManager` compares the old and new map by content, so a map changed in place was never re-indexed. Any code block created empty (slash menu, ``` shortcut, Turn into) and typed into therefore ignored Backspace for good; a block emptied by deleting kept swallowing it instead of becoming a paragraph. (b) A paragraph turned into a code block keeps its id and so kept its `FocusNode`; the code editor only opens its text-input connection on a focus *change*, so a code block made from a focused paragraph never received typed text at all (keys that are shortcuts, such as paste, still worked, which is how code could get in and then not be deleted). | (a) `lib/ui/editor/code_block.dart`: the key set is now constant (`_CodeShortcuts()` always includes Backspace); the empty-block case is decided at key time in an override of the delete action, which calls `onBackspaceEmpty` (new `CodeBlockView` callback) and the block editor converts the block. (b) `lib/ui/editor/block_editor.dart`: code spaces get their own focus nodes (`_codeFocus`), so a conversion in either direction is a focus change and the new editor attaches its input. | `test/code_block_test.dart` +2: "Backspace deletes in a code block that started empty, and still converts it once emptied" (a key event before typing indexes the shortcuts the way a real keyboard does; Backspace at the end, in the middle, over a multi-line selection; Delete, Home, End; emptying then converting) and "a code space made from a paragraph takes the keyboard input straight away" (the attached input client must be the delta-model one, text sent through the platform channel lands in the block, Backspace works, and after converting back the paragraph takes input). Both failed before the fix (`Actual: 'abc'` / no delta client) and pass after. Full suite 136 passed, 2 skipped; analyzer clean. Live (Linux release build, real X key events): ``` → typed `print(1)` → three Backspaces left `print` → Delete at Home → `rint` → six Backspaces emptied and converted the block → one more merged with the paragraph above → typing continued there; saved file correct. Enter, Tab, arrows, undo / redo covered by the existing code block tests. |
+| 2. Links: paste, create, open | Pending | | | |
+| 3. Folder expand / collapse state | Pending | | | |
+| 4. New folder button | Pending | | | |
+| 5. Black-and-white startup | Pending | | | |
+
+## Phase 1 (complete)
 Test build 1 (v0.1.0-test.1) is published on GitHub and loads the user's AppFlowy workspace.
 Test build 2 (v0.2.0-test.1, version 0.2.0+2) carries everything from Phase 1; see the GitHub release.
 
@@ -247,12 +260,11 @@ See `git log` in `windows_app/` (5 commits on `main`).
 See KNOWN_ISSUES.md. Main ones: no real-model test yet; large files are read-only; no rich text.
 
 ## Current build status
-Analyzer clean and tests green on Linux. `flutter build windows` not yet run.
+Analyzer clean and 136 tests green on Linux; the Windows build runs on GitHub Actions.
 
 ## Next single task
-Try test build 2 on Windows with a real Ollama model and record what is found. Columns
-(side-by-side blocks) stay deferred: Markdown has no syntax for them, so they would need HTML in
-the page.
+Bug 2: links (paste a URL as a link, create / edit / remove links, click to open with a safe scheme
+check). Then Bugs 3-5 in order.
 
 ## Exact commands to resume
 ```bash

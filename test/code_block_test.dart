@@ -59,6 +59,34 @@ void main() {
 
   String saved(String name) => File('${dir.path}/$name').readAsStringSync();
 
+  /// Sends [text] through the platform text input channel to whichever client
+  /// is attached, as a delta insertion at the start of an empty field.
+  Future<void> platformTypes(WidgetTester tester, String text) async {
+    final setClient = tester.testTextInput.log.lastWhere((c) => c.method == 'TextInput.setClient');
+    final id = (setClient.arguments as List<dynamic>)[0];
+    final call = const JSONMethodCodec().encodeMethodCall(MethodCall('TextInputClient.updateEditingStateWithDeltas', [
+      id,
+      {
+        'deltas': [
+          {
+            'oldText': '',
+            'deltaText': text,
+            'deltaStart': 0,
+            'deltaEnd': 0,
+            'selectionBase': text.length,
+            'selectionExtent': text.length,
+            'selectionAffinity': 'TextAffinity.downstream',
+            'selectionIsDirectional': false,
+            'composingBase': -1,
+            'composingExtent': -1,
+          }
+        ]
+      }
+    ]));
+    await tester.binding.defaultBinaryMessenger.handlePlatformMessage(SystemChannels.textInput.name, call, (_) {});
+    await tester.pump();
+  }
+
   /// Types into the code editor the way the platform does: through its text
   /// input client, replacing the selection.
   Future<void> typeCode(WidgetTester tester, String text, {int i = 0}) async {
@@ -217,6 +245,101 @@ void main() {
     await tester.pump();
     expect(editor.document[0].kind, BlockKind.paragraph);
     expect(find.byType(CodeEditor), findsNothing);
+    await settle(tester);
+  });
+
+  testWidgets('Backspace deletes in a code block that started empty, and still converts it once emptied',
+      (tester) async {
+    // Bug 1: the code editor used to add its Backspace shortcut in place when
+    // the block got text, and Flutter never re-indexed the change.
+    await pumpEditor(tester, '```\n\n```\n');
+    await tester.tap(find.byType(CodeEditor));
+    await tester.pump();
+    // A real keyboard sends key events for the typed letters (the text itself
+    // arrives through the text input); the first one indexes the shortcuts.
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyA);
+    await typeCode(tester, 'abc');
+    expect(editor.document[0].text, 'abc');
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pump();
+    expect(editor.document[0].text, 'ab', reason: 'Backspace deletes the character before the caret');
+    expect(editor.document[0].kind, BlockKind.code);
+
+    // In the middle of a line and over a selection.
+    final c = codeController(tester);
+    c.selection = const CodeLineSelection.collapsed(index: 0, offset: 1);
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pump();
+    expect(editor.document[0].text, 'b');
+    await typeCode(tester, 'xyz\nsecond');
+    expect(editor.document[0].text, 'xyz\nsecondb');
+    c.selection = const CodeLineSelection(baseIndex: 0, baseOffset: 2, extentIndex: 1, extentOffset: 3);
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pump();
+    expect(editor.document[0].text, 'xyondb', reason: 'Backspace removes the selection');
+    // Delete, Home and End keep working.
+    c.selection = const CodeLineSelection.collapsed(index: 0, offset: 0);
+    await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+    await tester.pump();
+    expect(editor.document[0].text, 'yondb');
+    await tester.sendKeyEvent(LogicalKeyboardKey.end);
+    await tester.pump();
+    expect(c.selection.extentOffset, 5);
+    await tester.sendKeyEvent(LogicalKeyboardKey.home);
+    await tester.pump();
+    expect(c.selection.extentOffset, 0);
+
+    // Empty it with Backspace: the last one turns the block into a paragraph.
+    c.selection = const CodeLineSelection.collapsed(index: 0, offset: 5);
+    for (var i = 0; i < 5; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+      await tester.pump();
+    }
+    expect(editor.document[0].text, '');
+    expect(editor.document[0].kind, BlockKind.code, reason: 'emptying the block keeps it');
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pump();
+    expect(editor.document[0].kind, BlockKind.paragraph, reason: 'Backspace in the empty block converts it');
+    expect(editor.document.length, 1);
+    await settle(tester);
+  });
+
+  testWidgets('a code space made from a paragraph takes the keyboard input straight away', (tester) async {
+    // Bug 1, second cause: the block kept its focus node across the
+    // conversion, so the code editor saw no focus change and never opened
+    // its text input connection; typing went nowhere.
+    await pumpEditor(tester, '# T\n\nx\n');
+    await tester.tap(find.byType(TextField).at(1));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField).at(1), '');
+    await tester.enterText(find.byType(TextField).at(1), '```');
+    await tester.pump();
+    await tester.pump();
+    expect(editor.document[1].kind, BlockKind.code);
+    expect(find.byType(CodeEditor), findsOneWidget);
+    final node = tester.binding.focusManager.primaryFocus;
+    expect(node?.debugLabel, contains('block ${editor.document[1].id}'));
+    // The platform delivers typed text to the current input client, which
+    // must now be the code editor (it uses the delta model).
+    expect(tester.testTextInput.setClientArgs?['enableDeltaModel'], true);
+    await platformTypes(tester, 'abc');
+    expect(editor.document[1].text, 'abc', reason: 'typed text reaches the new code space');
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pump();
+    expect(editor.document[1].text, 'ab');
+    // And back: emptying it and one more Backspace gives a paragraph that takes input.
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pump();
+    await tester.pump();
+    expect(editor.document[1].kind, BlockKind.paragraph);
+    tester.testTextInput.updateEditingValue(const TextEditingValue(
+      text: 'plain',
+      selection: TextSelection.collapsed(offset: 5),
+    ));
+    await tester.pump();
+    expect(editor.document[1].text, 'plain', reason: 'typed text reaches the paragraph again');
     await settle(tester);
   });
 

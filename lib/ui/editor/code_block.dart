@@ -26,6 +26,7 @@ class CodeBlockView extends StatefulWidget {
     required this.onCaption,
     required this.onWrap,
     required this.onDelete,
+    required this.onBackspaceEmpty,
     required this.onMoveOut,
     required this.showCaption,
     required this.onShowCaption,
@@ -49,6 +50,10 @@ class CodeBlockView extends StatefulWidget {
   final ValueChanged<String> onCaption;
   final ValueChanged<bool> onWrap;
   final VoidCallback onDelete;
+
+  /// Backspace in an empty code space (the block editor turns it back into a
+  /// paragraph).
+  final VoidCallback onBackspaceEmpty;
 
   /// Called when an arrow key would move the caret past the first or last
   /// line (or the first or last character). Returns true when the block
@@ -310,10 +315,22 @@ class _CodeBlockViewState extends State<CodeBlockView> {
                 return SizedBox(
                   height: height,
                   child: CodeEditor(
-                    // An empty code space hands Backspace to the block editor, which turns it back into a paragraph.
-                    shortcutsActivatorsBuilder:
-                        _CodeShortcuts(passBackspace: !widget.plain && widget.block.text.isEmpty),
+                    // The key set never changes: the code editor rebuilds its shortcut map in
+                    // place, and Flutter does not re-index a map that changes in place (Bug 1).
+                    // What varies (Backspace in an empty code space) is decided in the action.
+                    shortcutsActivatorsBuilder: const _CodeShortcuts(),
                     shortcutOverrideActions: {
+                      CodeShortcutDeleteIntent: CallbackAction<CodeShortcutDeleteIntent>(onInvoke: (intent) {
+                        final c = widget.controller;
+                        if (intent.forward) {
+                          c.deleteForward();
+                        } else if (!widget.plain && c.text.isEmpty) {
+                          widget.onBackspaceEmpty();
+                        } else {
+                          c.deleteBackward();
+                        }
+                        return null;
+                      }),
                       // Arrows at the edges of the code leave the block.
                       CodeShortcutCursorMoveIntent: CallbackAction<CodeShortcutCursorMoveIntent>(onInvoke: (intent) {
                         if (!widget.onMoveOut(intent.direction)) widget.controller.moveCursor(intent.direction);
@@ -509,17 +526,15 @@ class _LanguagePickerState extends State<_LanguagePicker> {
 }
 
 /// The editor's default keys, except that Ctrl+Enter is left for the block
-/// editor, which uses it to leave the code space on a new paragraph, and
-/// Backspace is left to it too while the code space is empty. Undo and redo
-/// also go to the block editor, so the page has one history.
+/// editor, which uses it to leave the code space on a new paragraph. Undo and
+/// redo also go to the block editor, so the page has one history. The set is
+/// constant: see the note at the `CodeEditor` in [CodeBlockView].
 class _CodeShortcuts extends DefaultCodeShortcutsActivatorsBuilder {
-  const _CodeShortcuts({required this.passBackspace});
-  final bool passBackspace;
+  const _CodeShortcuts();
 
   @override
   List<ShortcutActivator>? build(CodeShortcutType type) {
     final activators = super.build(type);
-    if (type == CodeShortcutType.backspace && passBackspace) return null;
     // One history for the whole page: the block editor undoes code edits too.
     if (type == CodeShortcutType.undo || type == CodeShortcutType.redo) return null;
     if (type != CodeShortcutType.newLine || activators == null) return activators;
@@ -530,8 +545,8 @@ class _CodeShortcuts extends DefaultCodeShortcutsActivatorsBuilder {
   }
 
   @override
-  bool operator ==(Object other) => other is _CodeShortcuts && other.passBackspace == passBackspace;
+  bool operator ==(Object other) => other is _CodeShortcuts;
 
   @override
-  int get hashCode => passBackspace.hashCode;
+  int get hashCode => 0;
 }
