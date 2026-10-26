@@ -294,9 +294,9 @@ view and puts it back. Build 8's blank launches look like an older copy of the a
 path per launch. See `docs/KNOWN_ISSUES.md`, Bug 5.
 
 ## Table column widths and multi-cell copy and paste (2026-10-26)
-Test build 9 (version 0.3.6+9) makes table columns resizable by dragging their borders (widths
+Test build 10 (v0.3.7-test.1, version 0.3.7+10) makes table columns resizable by dragging their borders (widths
 are kept on a `<!-- table-widths: ... -->` line under the table) and adds spreadsheet-style cell
-selection with copy, cut, delete and paste of tab-separated text. Built on top of test build 8.
+selection with copy, cut, delete and paste of tab-separated text. Built on top of test build 9.
 See `docs/DECISIONS.md`, "Table column widths and multi-cell copy and paste".
 
 ## Next single task

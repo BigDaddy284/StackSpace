@@ -109,7 +109,7 @@ This document outlines the features of AppFlowy as identified during the audit p
 | Floating formatting toolbar on a selection (bold, italic, strikethrough, inline code, link, turn into) | Implemented and tested (Task 9) |
 | Block handle and menu (turn into, duplicate, move up / down, delete) | Implemented and tested (Task 9) |
 | Table editing as a grid (Tab / Enter / arrows between cells, add / remove row and column, padded Markdown kept in the page) | Implemented and tested (Task 10) |
-| Table column widths by dragging the borders (kept in the page), multi-cell selection, copy / cut / paste as tab-separated text (Excel compatible) | Implemented and tested (test build 9) |
+| Table column widths by dragging the borders (kept in the page), multi-cell selection, copy / cut / paste as tab-separated text (Excel compatible) | Implemented and tested (test build 10) |
 | Images: insert from a file picker, path or link; outside files copied next to the page; alt-text field | Implemented and tested (Task 10) |
 | Links: bare URLs and `[label](url)` shown as links, Ctrl+click opens (http / https / mailto), URL pasted over words links them, Ctrl+K links / unlinks | Implemented and tested (Bug 2) |
 | Folding sections: a chevron beside every heading hides the blocks up to the next heading of the same level; Collapse / Expand in the block menu | Implemented and tested (Task 11) |
