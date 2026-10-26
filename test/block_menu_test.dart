@@ -84,7 +84,7 @@ void main() {
       await tester.tap(find.byTooltip('Inline code (Ctrl+E)'));
       await tester.pump();
       expect(doc[0].text, 'make this **`bold`**');
-      await tester.tap(find.byTooltip('Link (Ctrl+K)'));
+      await tester.tap(find.byTooltip('Link (Ctrl+K); Ctrl+click opens'));
       await tester.pump();
       expect(doc[0].text, 'make this **`[bold](url)`**');
       expect(fieldAt(tester, 0).controller!.selection, const TextSelection(baseOffset: 20, extentOffset: 23));

@@ -48,8 +48,8 @@ class WorkspaceTools {
   static const maxSearchHits = 50;
   static const _maxSearchFileBytes = 2 * 1024 * 1024;
 
-  static Map<String, dynamic> _fn(String name, String description, Map<String, dynamic> properties,
-          List<String> required) =>
+  static Map<String, dynamic> _fn(
+          String name, String description, Map<String, dynamic> properties, List<String> required) =>
       {
         'type': 'function',
         'function': {
@@ -74,46 +74,77 @@ class WorkspaceTools {
               'start_line': {'type': 'integer', 'description': 'First line to read (1-based). Default 1.'},
               'end_line': {'type': 'integer', 'description': 'Last line to read, inclusive.'},
             },
-            ['path']),
+            [
+              'path'
+            ]),
         _fn('search_pages', 'Find lines containing some text (case-insensitive) across all pages.', {
           'query': {'type': 'string', 'description': 'Text to look for.'},
-        }, ['query']),
+        }, [
+          'query'
+        ]),
         _fn('create_page', 'Create a new page. Fails if it already exists. Missing folders are created.', {
           'path': _path,
           'content': {'type': 'string', 'description': 'Full text of the new page.'},
-        }, ['path', 'content']),
-        _fn('write_page', 'Replace the whole text of an existing page. Prefer replace_text or edit_lines for small changes.', {
+        }, [
+          'path',
+          'content'
+        ]),
+        _fn('write_page',
+            'Replace the whole text of an existing page. Prefer replace_text or edit_lines for small changes.', {
           'path': _path,
           'content': {'type': 'string', 'description': 'New full text of the page.'},
-        }, ['path', 'content']),
+        }, [
+          'path',
+          'content'
+        ]),
+        _fn('replace_text',
+            'Replace an exact piece of text in a page. old_text must match exactly once unless replace_all is true.', {
+          'path': _path,
+          'old_text': {'type': 'string', 'description': 'Exact text to find, including whitespace.'},
+          'new_text': {'type': 'string', 'description': 'Text to put in its place.'},
+          'replace_all': {'type': 'boolean', 'description': 'Replace every match. Default false.'},
+        }, [
+          'path',
+          'old_text',
+          'new_text'
+        ]),
         _fn(
-            'replace_text',
-            'Replace an exact piece of text in a page. old_text must match exactly once unless replace_all is true.',
+            'edit_lines',
+            'Replace lines start_line..end_line (inclusive, 1-based) of a page with new_text. Use an empty new_text to delete the lines.',
             {
               'path': _path,
-              'old_text': {'type': 'string', 'description': 'Exact text to find, including whitespace.'},
-              'new_text': {'type': 'string', 'description': 'Text to put in its place.'},
-              'replace_all': {'type': 'boolean', 'description': 'Replace every match. Default false.'},
+              'start_line': {'type': 'integer'},
+              'end_line': {'type': 'integer'},
+              'new_text': {'type': 'string'},
             },
-            ['path', 'old_text', 'new_text']),
-        _fn('edit_lines', 'Replace lines start_line..end_line (inclusive, 1-based) of a page with new_text. Use an empty new_text to delete the lines.', {
-          'path': _path,
-          'start_line': {'type': 'integer'},
-          'end_line': {'type': 'integer'},
-          'new_text': {'type': 'string'},
-        }, ['path', 'start_line', 'end_line', 'new_text']),
+            [
+              'path',
+              'start_line',
+              'end_line',
+              'new_text'
+            ]),
         _fn('insert_lines', 'Insert text after a line of a page. Use after_line 0 to insert at the top.', {
           'path': _path,
           'after_line': {'type': 'integer'},
           'text': {'type': 'string'},
-        }, ['path', 'after_line', 'text']),
+        }, [
+          'path',
+          'after_line',
+          'text'
+        ]),
         _fn('rename_page', 'Rename or move a page or folder.', {
           'path': _path,
           'new_path': {'type': 'string', 'description': 'New path relative to the workspace.'},
-        }, ['path', 'new_path']),
-        _fn('delete_page', 'Delete a page or folder. It is moved to the workspace trash, and the user may be asked to approve.', {
+        }, [
+          'path',
+          'new_path'
+        ]),
+        _fn('delete_page',
+            'Delete a page or folder. It is moved to the workspace trash, and the user may be asked to approve.', {
           'path': _path,
-        }, ['path']),
+        }, [
+          'path'
+        ]),
       ];
 
   Future<ToolOutcome> run(String name, Map<String, dynamic> args) async {
@@ -363,8 +394,8 @@ class WorkspaceTools {
       final ok = await ask('Delete ${folder ? 'folder' : 'page'}?',
           'The assistant wants to delete "$path". It will be moved to the workspace trash.');
       if (!ok) {
-        return _error('The user declined to delete "$path". Do not try again unless they ask.',
-            'Delete $path declined');
+        return _error(
+            'The user declined to delete "$path". Do not try again unless they ask.', 'Delete $path declined');
       }
     }
     final trash = await workspace.delete(path, source: ChangeSource.ai);

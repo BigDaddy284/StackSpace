@@ -148,8 +148,8 @@ licences (MIT, BSD, Apache-2.0) may be used; each one is listed here when it is 
 **Rationale**: The user's rule ("we can't reuse code from other apps", "fine if the Flutter licences
 allow it"). It also keeps the whole editor under the MIT licence of the repo.
 **Status**: Done. Packages in use: `http`, `shared_preferences`, `path`, `archive`, `collection`,
-`file_selector` (all BSD-3); from Task 6 also `re_editor` 0.10.0 and `re_highlight` 0.0.3 (both MIT,
-Reqable). `flutter_svg`, `provider` and `intl` were unused and removed.
+`file_selector`, `url_launcher` (all BSD-3); from Task 6 also `re_editor` 0.10.0 and `re_highlight`
+0.0.3 (both MIT, Reqable). `flutter_svg`, `provider` and `intl` were unused and removed.
 
 ### Markdown stays the file format; blocks are the editing view
 **Decision**: A page file stays plain Markdown. The editor reads it into a list of blocks (heading,
@@ -279,3 +279,13 @@ that the fold is forgotten when the page is closed, noted in KNOWN_ISSUES.md.
 which CommonMark allows and GitHub ignores. A caption on a block with no language writes `text`
 first so the caption can be read back. Plain script files have no caption.
 **Rationale**: Keeps pages plain Markdown with nothing hidden in comments or side files.
+
+### Links are Markdown text; Ctrl+click opens them (Bug 2)
+**Decision**: A link is its Markdown (`[label](url)`) or a bare URL in the text; there is no link
+object or hidden metadata. A URL pasted over selected words becomes `[words](url)`; Ctrl+K wraps or
+unwraps. In the editor a plain click places the caret and Ctrl+click opens the link, so editing a
+link's text never opens it; on a read-only page any click opens. Only `http`, `https` and `mailto`
+are opened, through `url_launcher` as an external application.
+**Rationale**: The page stays plain Markdown and saves byte for byte; Ctrl+click is what VS Code,
+Word and most editors do in edit mode. Unsafe schemes are refused before reaching the OS.
+**Status**: Done; `lib/editor/links.dart`, `test/links_test.dart`.

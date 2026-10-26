@@ -369,7 +369,8 @@ class _ModeCellView extends StatelessWidget {
                   glowSpread: 6,
                 )
               : hover || focused
-                  ? _RRectPainter(radius: 16, fill: pressed ? p.pressed : p.hover, strokeColor: focused ? p.accentA : null)
+                  ? _RRectPainter(
+                      radius: 16, fill: pressed ? p.pressed : p.hover, strokeColor: focused ? p.accentA : null)
                   : null,
           child: Container(
             height: 34,
@@ -451,7 +452,8 @@ class SsRow extends StatelessWidget {
           painter: selected
               ? _RRectPainter(radius: 8, fillGradient: p.checkedGradient, stroke: p.accentGradient, strokeWidth: 1.4)
               : hover || focused
-                  ? _RRectPainter(radius: 8, fill: pressed ? p.pressed : p.hover, strokeColor: focused ? p.accentA : null)
+                  ? _RRectPainter(
+                      radius: 8, fill: pressed ? p.pressed : p.hover, strokeColor: focused ? p.accentA : null)
                   : null,
           child: SizedBox(height: height, child: child),
         ),
@@ -492,7 +494,9 @@ class EmptyState extends StatelessWidget {
                   if (showIcon) ...[
                     ShaderMask(
                       shaderCallback: (r) => p.accentGradient.createShader(r),
-                      child: Icon(icon, size: 72, color: Colors.white,
+                      child: Icon(icon,
+                          size: 72,
+                          color: Colors.white,
                           shadows: [Shadow(color: p.accentB.withAlpha(110), blurRadius: 18)]),
                     ),
                     const SizedBox(height: 22),

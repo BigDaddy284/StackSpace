@@ -217,8 +217,7 @@ class OllamaClient {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  String _connectionMessage(http.ClientException e) =>
-      "Can't reach Ollama at $baseUrl. Is it running? (${e.message})";
+  String _connectionMessage(http.ClientException e) => "Can't reach Ollama at $baseUrl. Is it running? (${e.message})";
 
   static String _errorFrom(String body, int status) {
     try {

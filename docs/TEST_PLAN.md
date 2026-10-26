@@ -130,6 +130,8 @@ Focus on large document handling and responsiveness:
 
 | Bug-fix phase, Bug 1 | `code_block_test.dart`: a code block that started empty handles Backspace after a key event has been seen (end, middle, multi-line selection), Delete / Home / End, emptying then converting to a paragraph; a code space made from a paragraph attaches the delta-model input client and takes text sent through the platform channel, and the paragraph takes input again after converting back. Live (Linux release build, `xdotool`): see PROJECT_STATUS.md Bug-fix log. |
 
+| Bug-fix phase, Bug 2 | `links_test.dart`: link finding and caret lookup, pasted-URL detection, safe schemes, launcher called only with safe URIs, renderer styles; in the editor: URL pasted over words → `[words](url)`, URL alone stays bare, multi-line and plain pastes untouched, file exact; Ctrl+click opens the exact destination (Markdown and bare), plain click only edits, nothing opens on plain text, read-only page opens on a click; Ctrl+K link / link a selected URL / unlink, save and reopen. Live: Ctrl+click launched the registered system handler with the exact URLs; in-app copy and paste over a word produced the link. |
+
 Manual run for Task 7 (release build under Xvfb): Ctrl+B on a selected word wrote `**bold**`; Up from
 the first code line moved to the paragraph above and Down from the last line to the paragraph below;
 text typed after each landed in the right block and the saved file was correct.

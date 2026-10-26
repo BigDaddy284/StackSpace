@@ -10,6 +10,7 @@ import 'package:re_editor/re_editor.dart';
 
 import '../../app/theme.dart';
 import '../../editor/blocks.dart';
+import '../../editor/links.dart';
 import '../../editor/code_languages.dart';
 import '../../editor/page_document.dart';
 import '../../editor/page_editor_controller.dart';
@@ -896,18 +897,47 @@ class _BlockEditorState extends State<BlockEditor> {
     doc.updateText(index, next, caret: (block: index, offset: after.extentOffset));
   }
 
-  /// Turns the selection into a Markdown link with the URL part selected.
+  /// Turns the selection into a Markdown link with the URL part selected;
+  /// on a Markdown link already, removes it and keeps its label (Bug 2).
   void _insertLink(int index, Block block) {
     final text = _textFor(block);
     final value = text.text;
     final sel = text.selection.isValid ? text.selection : TextSelection.collapsed(offset: value.length);
-    final label = sel.isCollapsed ? 'text' : value.substring(sel.start, sel.end);
-    final next = value.replaceRange(sel.start, sel.end, '[$label](url)');
-    final urlStart = sel.start + label.length + 3;
-    final after = TextSelection(baseOffset: urlStart, extentOffset: urlStart + 3);
+    final existing = linkAt(value, sel.start);
+    if (existing != null && existing.isMarkdown && sel.end <= existing.end) {
+      final next = value.replaceRange(existing.start, existing.end, existing.label);
+      final after = TextSelection(baseOffset: existing.start, extentOffset: existing.start + existing.label.length);
+      text.expectChange(value, next);
+      text.value = TextEditingValue(text: next, selection: after);
+      doc.updateText(index, next, caret: (block: index, offset: after.extentOffset));
+      return;
+    }
+    final selected = sel.isCollapsed ? '' : value.substring(sel.start, sel.end);
+    // A selected URL becomes the destination, with the label to fill in.
+    final selectedUrl = isUrl(selected);
+    final label = selected.isEmpty ? 'text' : (selectedUrl ? 'text' : selected);
+    final url = selectedUrl ? selected.trim() : 'url';
+    final next = value.replaceRange(sel.start, sel.end, '[$label]($url)');
+    final TextSelection after;
+    if (selectedUrl) {
+      after = TextSelection(baseOffset: sel.start + 1, extentOffset: sel.start + 1 + label.length);
+    } else {
+      final urlStart = sel.start + label.length + 3;
+      after = TextSelection(baseOffset: urlStart, extentOffset: urlStart + 3);
+    }
     text.expectChange(value, next);
     text.value = TextEditingValue(text: next, selection: after);
     doc.updateText(index, next, caret: (block: index, offset: after.extentOffset));
+  }
+
+  /// Ctrl+click (or any click on a read-only page) on a link opens it.
+  Future<void> _openLinkAt(Block block, int offset) async {
+    final link = linkAt(block.text, offset);
+    if (link == null) return;
+    final problem = await openLink(link.url);
+    if (problem != null && mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(problem)));
+    }
   }
 
   // ---- typing --------------------------------------------------------------
@@ -936,6 +966,23 @@ class _BlockEditorState extends State<BlockEditor> {
     final sel = text.selection;
     if (block.isText && !doc.plain) _trackSlash(index, block, value, sel);
     if (block.isText && _splitOnNewline(index, block, value, sel)) return;
+    // A URL pasted over selected words links them (Bug 2). A URL pasted on
+    // its own stays as typed; bare URLs are shown and opened as links.
+    if (block.isText && !doc.plain) {
+      final paste = pastedUrl(block.text, value);
+      if (paste != null &&
+          paste.removed.trim().isNotEmpty &&
+          !paste.removed.contains('\n') &&
+          linkAt(block.text, paste.start)?.isMarkdown != true) {
+        final linked = '[${paste.removed}](${paste.url.trim()})';
+        final next = value.replaceRange(paste.start, paste.start + paste.url.length, linked);
+        final after = TextSelection.collapsed(offset: paste.start + linked.length);
+        text.expectChange(value, next);
+        text.value = TextEditingValue(text: next, selection: after);
+        doc.updateText(index, next, caret: (block: index, offset: after.extentOffset));
+        return;
+      }
+    }
     // Markdown shortcuts turn a paragraph into another block as you type.
     if (block.kind == BlockKind.paragraph && !doc.plain && sel.isCollapsed && sel.extentOffset == value.length) {
       for (final entry in _shortcuts.entries) {
@@ -1420,6 +1467,7 @@ class _BlockEditorState extends State<BlockEditor> {
           onChanged: (v) => _onChanged(block, v),
           onSelection: () => _reportSelection(block),
           onToggle: () => doc.toggleChecked(doc.indexOf(block.id)),
+          onOpenLink: (offset) => _openLinkAt(doc[doc.indexOf(block.id)], offset),
           plain: doc.plain,
           fieldKey: _fieldKeyFor(block),
         );
@@ -1656,6 +1704,7 @@ class _TextBlock extends StatefulWidget {
     required this.onChanged,
     required this.onSelection,
     required this.onToggle,
+    required this.onOpenLink,
     required this.plain,
     required this.fieldKey,
   });
@@ -1669,6 +1718,9 @@ class _TextBlock extends StatefulWidget {
   final ValueChanged<String> onChanged;
   final VoidCallback onSelection;
   final VoidCallback onToggle;
+
+  /// Called with the caret offset of a click that should open a link there.
+  final ValueChanged<int> onOpenLink;
   final bool plain;
 
   @override
@@ -1735,6 +1787,14 @@ class _TextBlockState extends State<_TextBlock> {
       style: style,
       cursorColor: palette.accentA,
       onChanged: widget.onChanged,
+      // The tap has already put the caret where it landed. Ctrl+click opens
+      // the link there; a plain click only edits. Read-only: any click opens.
+      onTap: () {
+        final keys = HardwareKeyboard.instance;
+        if (widget.plain || !(widget.readOnly || keys.isControlPressed || keys.isMetaPressed)) return;
+        final sel = widget.text.selection;
+        if (sel.isValid) widget.onOpenLink(sel.extentOffset);
+      },
       decoration: InputDecoration(
         isDense: true,
         filled: false,

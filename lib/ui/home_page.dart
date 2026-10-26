@@ -179,6 +179,8 @@ class _HomePageState extends State<HomePage> {
           title: const Text('Keyboard shortcuts'),
           content: const Text('Ctrl+N  New page\nCtrl+S  Save now\nCtrl+J  Show or hide the assistant\n'
               'F2  Rename the selected page\nDelete  Delete the selected page\n'
+              'Ctrl+B / I / E  Bold / italic / inline code\nCtrl+K  Link the selection (again: unlink)\n'
+              'Ctrl+click  Open a link\n'
               'Enter  Send a message\nShift+Enter  New line in a message'),
           actions: [SsButton(label: 'Close', primary: true, onPressed: () => Navigator.pop(context))],
         ),

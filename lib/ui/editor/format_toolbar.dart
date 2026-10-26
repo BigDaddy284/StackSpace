@@ -92,7 +92,10 @@ class FormatToolbar extends StatelessWidget {
                       onPressed: () => onAction(FormatAction.strike)),
                   _ToolButton(
                       tooltip: 'Inline code (Ctrl+E)', icon: Icons.code, onPressed: () => onAction(FormatAction.code)),
-                  _ToolButton(tooltip: 'Link (Ctrl+K)', icon: Icons.link, onPressed: () => onAction(FormatAction.link)),
+                  _ToolButton(
+                      tooltip: 'Link (Ctrl+K); Ctrl+click opens',
+                      icon: Icons.link,
+                      onPressed: () => onAction(FormatAction.link)),
                 ]),
               ),
             ),

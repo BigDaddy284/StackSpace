@@ -121,12 +121,14 @@ CodeLanguage? languageForExtension(String extension) {
         'h': 'c',
         'hpp': 'cpp',
         'cc': 'cpp',
-      }
-      .map((k, v) => MapEntry(k, languageFor(v)))[ext] ??
+      }.map((k, v) => MapEntry(k, languageFor(v)))[ext] ??
       languageFor(ext);
 }
 
-List<CodeLanguage> filterLanguages(String query) => [for (final l in codeLanguages) if (l.matches(query)) l];
+List<CodeLanguage> filterLanguages(String query) => [
+      for (final l in codeLanguages)
+        if (l.matches(query)) l
+    ];
 
 Highlight? _detector;
 
@@ -147,7 +149,11 @@ final List<(RegExp, String)> _signatures = [
   (RegExp(r'^package \w+\s*$.*\bfunc\b', multiLine: true, dotAll: true), 'go'),
   (RegExp(r'#include\s*<.*>.*\b(std::|class |template\s*<)', dotAll: true), 'cpp'),
   (RegExp(r'#include\s*<.*>'), 'c'),
-  (RegExp(r'\b(SELECT|INSERT INTO|UPDATE|DELETE FROM|CREATE TABLE)\b.*\b(FROM|VALUES|SET|WHERE)\b', caseSensitive: false, dotAll: true), 'sql'),
+  (
+    RegExp(r'\b(SELECT|INSERT INTO|UPDATE|DELETE FROM|CREATE TABLE)\b.*\b(FROM|VALUES|SET|WHERE)\b',
+        caseSensitive: false, dotAll: true),
+    'sql'
+  ),
   (RegExp(r'\blocal function\b|\bipairs\(|\bfunction\b.*\n.*\bend\b', dotAll: true), 'lua'),
   (RegExp(r'^\s*(public |private )?(static )?(void|int|String) \w+\(.*\)\s*\{', multiLine: true), 'java'),
   (RegExp(r'^FROM \S+\n', multiLine: true), 'dockerfile'),
@@ -180,7 +186,10 @@ CodeLanguage? detectLanguage(String code) {
     if (pattern.hasMatch(sample)) return languageFor(id);
   }
   final detector = _detector ??= Highlight()
-    ..registerLanguages({for (final l in codeLanguages) if (l.detectable) l.id: l.mode});
+    ..registerLanguages({
+      for (final l in codeLanguages)
+        if (l.detectable) l.id: l.mode
+    });
   final result = detector.highlightAuto(sample);
   final id = result.language;
   if (id == null || result.relevance < 5) return null;

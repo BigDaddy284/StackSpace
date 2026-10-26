@@ -110,6 +110,7 @@ This document outlines the features of AppFlowy as identified during the audit p
 | Block handle and menu (turn into, duplicate, move up / down, delete) | Implemented and tested (Task 9) |
 | Table editing as a grid (Tab / Enter / arrows between cells, add / remove row and column, padded Markdown kept in the page) | Implemented and tested (Task 10) |
 | Images: insert from a file picker, path or link; outside files copied next to the page; alt-text field | Implemented and tested (Task 10) |
+| Links: bare URLs and `[label](url)` shown as links, Ctrl+click opens (http / https / mailto), URL pasted over words links them, Ctrl+K links / unlinks | Implemented and tested (Bug 2) |
 | Folding sections: a chevron beside every heading hides the blocks up to the next heading of the same level; Collapse / Expand in the block menu | Implemented and tested (Task 11) |
 | Drag and drop: drag the block handle to move a block, insertion line, auto-scroll at the edges | Implemented and tested (Task 11) |
 | Sidebar shows pages only: pictures, archives and other binary files (and folders holding only those) are hidden | Implemented and tested (Task 12) |

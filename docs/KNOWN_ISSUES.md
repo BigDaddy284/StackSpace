@@ -14,7 +14,11 @@ text arrived). Covered by two tests in `test/code_block_test.dart`; verified liv
 confirmed on a Windows machine: the key handling is framework code, the same on both.
 
 ### Bug 2 — Links cannot be pasted as links and are not clickable
-**Status**: Open, next.
+**Status**: Fixed 2026-10-26. Bare URLs and `[label](url)` render as links; Ctrl+click opens
+them in the system browser (http, https and mailto only); a URL pasted over selected words links
+them; Ctrl+K links, and unlinks an existing link. Remaining limit: text copied from a web page
+pastes as plain text, because Flutter's desktop clipboard exposes no HTML, so those hyperlinks
+lose their destinations (a URL copied from the address bar works). `test/links_test.dart`.
 
 ### Bug 3 — The pages panel forgets folder expansion when hidden and reopened
 **Status**: Open.
@@ -63,8 +67,8 @@ machine with Ollama; that is the first thing to check with test build 2.
   bottom edge; there is no drop onto a folded section's hidden blocks (they unfold on the drop).
 - Pictures and other binary files are hidden from the sidebar (Task 12); there is no way to open
   them from the app yet. A text file with an unusual extension still shows and opens as text.
-- Links are styled but not clickable; images show when the file exists next to the page, otherwise
-  the path is shown.
+- Links open with Ctrl+click (Bug 2); a hover does not yet show the destination. Images show when
+  the file exists next to the page, otherwise the path is shown.
 - Selection cannot span blocks; Ctrl+A selects the current block.
 - Arrow Up / Down move to the neighbouring block from the first / last *logical* line of a block.
   In a long paragraph that wraps, Up on the first logical line jumps to the previous block even if

@@ -46,8 +46,7 @@ class AppSettings extends ChangeNotifier {
   String? get model => _prefs.getString('model');
   set model(String? value) => _set('model', value);
 
-  ThinkLevel get thinkLevel =>
-      ThinkLevel.values.asNameMap()[_prefs.getString('thinkLevel')] ?? ThinkLevel.medium;
+  ThinkLevel get thinkLevel => ThinkLevel.values.asNameMap()[_prefs.getString('thinkLevel')] ?? ThinkLevel.medium;
   set thinkLevel(ThinkLevel value) => _set('thinkLevel', value.name);
 
   /// Sent to Ollama as `num_ctx`. Bigger lets the model see more of a page but uses more memory.

@@ -100,8 +100,15 @@ class StackPalette {
       ]);
 
   /// Surfaces text sits on, for the contrast test.
-  Map<String, Color> get surfaces =>
-      {'window': window, 'bar': bar, 'canvas': canvas, 'panel': panel, 'pill': pill, 'control': control, 'hover': hover};
+  Map<String, Color> get surfaces => {
+        'window': window,
+        'bar': bar,
+        'canvas': canvas,
+        'panel': panel,
+        'pill': pill,
+        'control': control,
+        'hover': hover
+      };
 
   static const darkPalette = StackPalette(
     dark: true,

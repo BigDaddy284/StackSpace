@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../editor/links.dart';
+
 /// A text controller that shows inline Markdown (bold, italic, code, strike,
 /// links) styled while keeping the markers in the text, so what is saved is
 /// exactly what was typed.
@@ -55,7 +57,7 @@ class InlineMarkdownController extends TextEditingController {
   Color linkColor = const Color(0xFF4488FF);
 
   static final _pattern = RegExp(
-    r'(\*\*[^*\n]+?\*\*)|(`[^`\n]+?`)|(~~[^~\n]+?~~)|(\[[^\]\n]+?\]\([^)\n]+?\))|(?<![\w*])(\*[^*\n]+?\*)(?![\w*])|(?<![\w_])(_[^_\n]+?_)(?![\w_])',
+    '${r'(\*\*[^*\n]+?\*\*)|(`[^`\n]+?`)|(~~[^~\n]+?~~)|(\[[^\]\n]+?\]\([^)\n]+?\))|(?<![\w*])(\*[^*\n]+?\*)(?![\w*])|(?<![\w_])(_[^_\n]+?_)(?![\w_])|('}${bareUrlPattern.pattern})',
   );
 
   @override
@@ -98,6 +100,11 @@ class InlineMarkdownController extends TextEditingController {
             text: s.substring(1, close),
             style: base.copyWith(color: linkColor, decoration: TextDecoration.underline, decorationColor: linkColor)));
         spans.add(TextSpan(text: s.substring(close), style: marker));
+      } else if (m.group(7) != null) {
+        // A bare URL is a link too (Bug 2); Ctrl+click opens it.
+        spans.add(TextSpan(
+            text: s,
+            style: base.copyWith(color: linkColor, decoration: TextDecoration.underline, decorationColor: linkColor)));
       } else {
         spans.addAll(_wrapped(s, 1, marker, base.copyWith(fontStyle: FontStyle.italic)));
       }
