@@ -37,6 +37,7 @@ class Win32Window {
   bool Create(const std::wstring& title, const Point& origin, const Size& size);
 
   // Show the current window. Returns true if the window was successfully shown.
+  // A window that was maximised when it last closed opens maximised again.
   bool Show();
 
   // Release OS resources associated with window.
@@ -89,6 +90,17 @@ class Win32Window {
 
   // Update the window frame's theme to match the system theme.
   void UpdateTheme(HWND const window);
+
+  // Reads the bounds the window had when it last closed (physical pixels,
+  // screen coordinates). Returns false when there are none, or when they no
+  // longer fit on a connected monitor.
+  static bool LoadPlacement(RECT* bounds, bool* maximized);
+
+  // Saves the window's current bounds for the next launch.
+  void SavePlacement();
+
+  // Whether Show should open the window maximised.
+  bool show_maximized_ = false;
 
   bool quit_on_close_ = false;
 

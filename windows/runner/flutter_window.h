@@ -30,6 +30,12 @@ class FlutterWindow : public Win32Window {
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
 
+  // Starts Flutter in the window. Returns false if Flutter could not start.
+  bool CreateFlutterView();
+
+  // When the window was shown (GetTickCount64).
+  ULONGLONG shown_at_ = 0;
+
   // Lets Dart colour the Windows title bar to match the app theme.
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> window_channel_;
 };

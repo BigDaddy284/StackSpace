@@ -1,6 +1,6 @@
 # PROJECT STATUS
 
-_Last updated: 2026-10-26 (Bug-fix phase: Bugs 1-4 fixed and verified; Bug 5 hardened, root cause not reproducible here)_
+_Last updated: 2026-10-26 (Bug-fix phase: Bugs 1-5 fixed; Bug 5 confirmed on Windows with test build 7)_
 
 ## Current phase
 Bug-fix phase (2026-10-26): five bugs reported from test build 2 on Windows, fixed one at a time in
@@ -272,10 +272,29 @@ works in code blocks. Bugs 1 and 4 are therefore confirmed on the target machine
 recurred so far. Links (Bug 2) and fold state (Bug 3) were not mentioned either way; they are
 verified by tests and Linux runs only.
 
+## Blank window after a FancyZones snap (2026-10-26)
+The user found the trigger for Bug 5: a window snapped into a PowerToys FancyZones zone opens
+blank on the next launch, and the launch after that is fine. Test build 4 (v0.3.1-test.1:
+reopen at last bounds, re-size the view after start-up moves) did not fix it; its `startup.log`
+showed FancyZones resizing the window 29 ms into start-up and the view never drawing again even
+though Dart saw every later size. Test build 5 (v0.3.2-test.1, version 0.3.2+5) shows the window
+first and starts Flutter only after the window has stopped moving
+(`windows/runner/flutter_window.cpp/.h`); the last-bounds restore stays
+(`windows/runner/win32_window.cpp/.h`). `lib/main.dart` logs the view size at the first frame and
+on resizes in the first ten seconds. Built and tested on GitHub Actions only; see
+`docs/KNOWN_ISSUES.md`, Bug 5. Build 5 still opened blank with no start-up resize at all, so test
+build 6 (v0.3.3-test.1, version 0.3.3+6) adds a native log (`windows/runner/native_log.cpp/.h`,
+`native.log` next to `startup.log`) with the engine's error output and the window's state.
+Build 6 did not start (the log redirect ended the process); test build 7 (v0.3.4-test.1, version
+0.3.4+7) fixes that. **The user confirmed build 7 opens correctly every time when snapped.** Its
+only change over build 5 is that stderr (runner and engine) now goes to `native.log` instead of
+nowhere, so either a working stderr or the changed timing made the difference; the mechanism is
+not proven. See `docs/KNOWN_ISSUES.md`, Bug 5.
+
 ## Next single task
-Keep using test build 3 on Windows. Report anything about links, folder fold state, or a blank
-launch (send `%APPDATA%\com.stackspace\stack_space\startup.log` for the latter). No code task is
-queued; the next phase starts from the user's next request.
+Keep using test build 7 on Windows. If a blank launch ever returns, send `native.log` and
+`startup.log` from `%APPDATA%\com.stackspace\stack_space\`. No code task is queued; the next
+phase starts from the user's next request.
 
 ## Exact commands to resume
 ```bash

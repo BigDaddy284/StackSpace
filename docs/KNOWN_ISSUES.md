@@ -36,7 +36,9 @@ hidden. Test in `test/home_page_test.dart`.
 Confirmed by the user on Windows with test build 3.
 
 ### Bug 5 — Intermittent black-and-white startup (2nd-4th launch)
-**Status**: Hardened 2026-10-26; root cause not established (no Windows machine here; 14 Linux
+**Status**: Confirmed fixed on the user's Windows machine with test build 7 (v0.3.4-test.1,
+2026-10-26): launches snapped in FancyZones now open correctly every time. The exact mechanism is
+not proven; see the end of this section. Earlier status: hardened 2026-10-26; root cause not established (no Windows machine here; 14 Linux
 launches all fine). The screenshot shows a window Flutter never painted (white parent strip, black
 child view, dark title bar from the runner). Most likely a start that failed before the first
 frame: the old `main()` awaited the settings file before `runApp`, so a damaged settings file
@@ -46,6 +48,40 @@ workspace that cannot be opened shows a message with Try again, the Windows wind
 background in the theme colour, and `startup.log` (app support folder) records every step and
 error of each launch. If it happens again, that file says where the launch stopped.
 The user reports no freezes with test build 3 on Windows so far.
+
+**Lead found 2026-10-26**: the user reproduced it reliably with PowerToys FancyZones. With the
+window snapped into a zone (one zone, or two zones spanning top to bottom), closing and reopening
+the app showed an empty window in the app's background colour; the launch after that was fine.
+Test build 4 (v0.3.1-test.1) reopened the window at its last bounds and re-sized the Flutter view
+after start-up moves; it did not help. Its `startup.log` showed why: on the blank launches
+FancyZones resized the window 29 ms after the first frame, Dart then received every later size
+(including the user dragging the window edge) and still nothing was drawn for the rest of that
+run. So a resize that reaches the Flutter view while it is still starting breaks the view for
+the whole run. Test build 5 (v0.3.2-test.1): the window is shown in the app's background colour
+first, and Flutter starts only once the window has been still for 150 ms (at most 1 s after it
+appears), so FancyZones' move lands before there is any Flutter view to break. The last-bounds
+restore (`HKCU\Software\StackSpace\Window`) stays. Build 5 did not fix it either: its log shows
+no resize at all at start-up (the window already had its zone's size) and the window still came
+up blank on some launches, so the FancyZones move is not the cause. Test build 6
+(v0.3.3-test.1) adds `native.log` next to `startup.log`: the Flutter engine's own error output
+plus the runner's view of the window (bounds, visibility, DWM cloaking, DPI, other StackSpace
+windows or processes still running, when Flutter starts, when its first frame is presented, and
+the window and view state 1 s and 4 s in). The user was also asked to try excluding
+`stack_space.exe` in FancyZones to confirm whether FancyZones is involved at all.
+Build 6 itself did not start on Windows: the log redirect called
+`FlutterDesktopResyncOutputStreams`, which reopens stderr on a console and ends a process that has
+none, leaving an empty `native.log`. Test build 7 (v0.3.4-test.1) drops that call.
+
+**Result**: the user reports that build 7 opens correctly every time when snapped. Why each build
+was needed: build 4 (last bounds + re-size) and build 5 (start Flutter after the window settles)
+did not fix it; build 6 added logging but crashed at start; build 7 is build 6 with that crash
+fixed. Build 7's only change over build 5 is the logging: stderr, which a release build otherwise
+leaves unset, now points at `native.log` for the runner and the engine. So either the engine
+needed a working stderr on this machine (it writes there when rendering hits a problem), or the
+extra logging changed start-up timing enough to hide a race. Both builds 5 and 7 keep showing the
+window before Flutter starts and reopening at the last bounds. `native.log` stays in the app so
+that a recurrence is diagnosable; if a blank launch returns, its `native.log` says whether Flutter
+started, presented its first frame, and where the window and view were.
 
 ## Current issues in the StackSpace app (2026-10-25)
 
