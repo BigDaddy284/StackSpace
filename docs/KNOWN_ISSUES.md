@@ -21,7 +21,9 @@ pastes as plain text, because Flutter's desktop clipboard exposes no HTML, so th
 lose their destinations (a URL copied from the address bar works). `test/links_test.dart`.
 
 ### Bug 3 — The pages panel forgets folder expansion when hidden and reopened
-**Status**: Open.
+**Status**: Fixed 2026-10-26. The folded folders are saved per workspace in the settings, survive
+hiding the panel and restarts, follow renames and moves, and are dropped on delete. Folder paths
+are the identity (a folder on disk has nothing else). Test in `test/home_page_test.dart`.
 
 ### Bug 4 — The New folder button does not create a folder
 **Status**: Open.

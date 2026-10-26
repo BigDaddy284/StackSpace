@@ -217,7 +217,12 @@ class _HomePageState extends State<HomePage> {
                       if (_showSidebar) ...[
                         SizedBox(
                           width: 260,
-                          child: Sidebar(key: _sidebarKey, workspace: _workspace, editor: _editor, onNewPage: _newPage),
+                          child: Sidebar(
+                              key: _sidebarKey,
+                              workspace: _workspace,
+                              editor: _editor,
+                              settings: settings,
+                              onNewPage: _newPage),
                         ),
                         Container(width: 1, color: p.barBorder),
                       ],

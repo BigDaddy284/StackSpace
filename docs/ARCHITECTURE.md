@@ -207,3 +207,5 @@ Pages over 250,000 lines or 16 MB open in the read-only line viewer; the assista
 2. Document specific performance bottlenecks identified
 3. Finalize architecture recommendations based on findings
 4. Begin implementation planning with smallest sensible task
+
+Folded folders in the pages panel are saved per workspace in the settings (`AppSettings.collapsedFolders`), keyed by the workspace root and holding folder paths (Bug 3).

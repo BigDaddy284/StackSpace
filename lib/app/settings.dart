@@ -70,6 +70,15 @@ class AppSettings extends ChangeNotifier {
   double get dockHeight => _prefs.getDouble('dockHeight') ?? 360;
   set dockHeight(double value) => _set('dockHeight', value);
 
+  /// Folders folded in the pages panel, per workspace (Bug 3). A folder on
+  /// disk has no identity but its path, so the paths are what is kept; the
+  /// panel moves them on a rename and drops them on a delete.
+  Set<String> collapsedFolders(String workspaceRoot) =>
+      (_prefs.getStringList('collapsedFolders:$workspaceRoot') ?? const []).toSet();
+
+  Future<void> setCollapsedFolders(String workspaceRoot, Set<String> folders) =>
+      _prefs.setStringList('collapsedFolders:$workspaceRoot', folders.toList()..sort());
+
   void _set(String key, Object? value) {
     switch (value) {
       case null:

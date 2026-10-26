@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../app/settings.dart';
 import '../app/theme.dart';
 import '../editor/page_editor_controller.dart';
 import '../workspace/workspace.dart';
@@ -10,10 +13,17 @@ import 'widgets/controls.dart';
 /// The left panel, laid out like Stills & Reels' "Edit picture" panel: a
 /// title, a hint, then labelled sections.
 class Sidebar extends StatefulWidget {
-  const Sidebar({super.key, required this.workspace, required this.editor, required this.onNewPage});
+  const Sidebar({
+    super.key,
+    required this.workspace,
+    required this.editor,
+    required this.settings,
+    required this.onNewPage,
+  });
 
   final Workspace workspace;
   final PageEditorController editor;
+  final AppSettings settings;
   final Future<void> Function([String folder]) onNewPage;
 
   @override
@@ -21,9 +31,73 @@ class Sidebar extends StatefulWidget {
 }
 
 class SidebarState extends State<Sidebar> {
-  final Set<String> _collapsed = {};
+  /// Folded folders. Kept in the settings per workspace (Bug 3), so the
+  /// state survives hiding the panel (which unmounts it) and a restart.
+  late Set<String> _collapsed;
+  StreamSubscription<WorkspaceChange>? _changes;
 
   Workspace get ws => widget.workspace;
+
+  @override
+  void initState() {
+    super.initState();
+    _collapsed = widget.settings.collapsedFolders(ws.root);
+    _changes = ws.changes.listen(_onWorkspaceChange);
+  }
+
+  @override
+  void didUpdateWidget(Sidebar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.workspace != widget.workspace) {
+      _changes?.cancel();
+      _collapsed = widget.settings.collapsedFolders(ws.root);
+      _changes = ws.changes.listen(_onWorkspaceChange);
+    }
+  }
+
+  @override
+  void dispose() {
+    _changes?.cancel();
+    super.dispose();
+  }
+
+  /// A renamed or moved folder keeps its folded state under its new path; a
+  /// deleted one leaves nothing behind.
+  void _onWorkspaceChange(WorkspaceChange change) {
+    bool under(String folder) => folder == change.path || folder.startsWith('${change.path}/');
+    if (!_collapsed.any(under)) return;
+    switch (change.kind) {
+      case WorkspaceChangeKind.renamed:
+        final to = change.newPath!;
+        _collapsed = {
+          for (final f in _collapsed) under(f) ? to + f.substring(change.path.length) : f,
+        };
+      case WorkspaceChangeKind.deleted:
+        _collapsed.removeWhere(under);
+      case WorkspaceChangeKind.created || WorkspaceChangeKind.modified:
+        return;
+    }
+    // The change arrives before the folder list is refreshed, so no pruning here.
+    _saveCollapsed(prune: false);
+    if (mounted) setState(() {});
+  }
+
+  void _toggleFolder(String path, {required bool collapsed}) {
+    setState(() => collapsed ? _collapsed.remove(path) : _collapsed.add(path));
+    _saveCollapsed();
+  }
+
+  /// Writes the folded set, without folders that no longer exist.
+  void _saveCollapsed({bool prune = true}) {
+    if (prune && ws.entries.isNotEmpty) {
+      final folders = {
+        for (final e in ws.entries)
+          if (e.isFolder) e.path
+      };
+      _collapsed.removeWhere((f) => !folders.contains(f));
+    }
+    widget.settings.setCollapsedFolders(ws.root, _collapsed);
+  }
 
   /// Rows to show: pages, and folders that hold a page somewhere below them
   /// (a folder of pictures only is hidden with its pictures); nothing under
@@ -169,7 +243,7 @@ class SidebarState extends State<Sidebar> {
               selected: selected,
               onTap: () {
                 if (e.isFolder) {
-                  setState(() => collapsed ? _collapsed.remove(e.path) : _collapsed.add(e.path));
+                  _toggleFolder(e.path, collapsed: collapsed);
                 } else {
                   widget.editor.open(e.path);
                 }

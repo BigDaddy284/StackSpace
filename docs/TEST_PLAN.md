@@ -132,6 +132,8 @@ Focus on large document handling and responsiveness:
 
 | Bug-fix phase, Bug 2 | `links_test.dart`: link finding and caret lookup, pasted-URL detection, safe schemes, launcher called only with safe URIs, renderer styles; in the editor: URL pasted over words → `[words](url)`, URL alone stays bare, multi-line and plain pastes untouched, file exact; Ctrl+click opens the exact destination (Markdown and bare), plain click only edits, nothing opens on plain text, read-only page opens on a click; Ctrl+K link / link a selected URL / unlink, save and reopen. Live: Ctrl+click launched the registered system handler with the exact URLs; in-app copy and paste over a word produced the link. |
 
+| Bug-fix phase, Bug 3 | `home_page_test.dart`: fold two folders, hide and show the panel, nested fold / unfold, rename and move folded folders, delete one, restart the app on the same settings; the saved list is checked at each step. Live: fold, hide / show, restart. |
+
 Manual run for Task 7 (release build under Xvfb): Ctrl+B on a selected word wrote `**bold**`; Up from
 the first code line moved to the paragraph above and Down from the last line to the paragraph below;
 text typed after each landed in the right block and the saved file was correct.
