@@ -3,9 +3,11 @@
 #include <dwmapi.h>
 #include <flutter/standard_method_codec.h>
 
+#include <cstdio>
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "native_log.h"
 
 // Windows 11 title bar colours. Older SDKs don't define these.
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
@@ -45,6 +47,12 @@ constexpr UINT_PTR kCreateViewTimer = 1;
 constexpr UINT kSettleMs = 150;
 constexpr ULONGLONG kMaxSettleMs = 1000;
 
+// Write the window and the Flutter view's state to native.log 1 s and 4 s
+// after start, and log window moves for the first 10 s.
+constexpr UINT_PTR kSnapshotTimer = 2;
+constexpr UINT_PTR kLateSnapshotTimer = 3;
+constexpr ULONGLONG kLogMovesMs = 10000;
+
 }  // namespace
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -64,18 +72,26 @@ bool FlutterWindow::OnCreate() {
   // never drew anything for the rest of that run, even after later resizes.
   Show();
   shown_at_ = GetTickCount64();
+  NativeLogWindow("shown", GetHandle());
   SetTimer(GetHandle(), kCreateViewTimer, kSettleMs, nullptr);
+  SetTimer(GetHandle(), kSnapshotTimer, 1000, nullptr);
+  SetTimer(GetHandle(), kLateSnapshotTimer, 4000, nullptr);
   return true;
 }
 
 bool FlutterWindow::CreateFlutterView() {
   RECT frame = GetClientArea();
+  NativeLog("starting Flutter at %ldx%ld", frame.right - frame.left,
+            frame.bottom - frame.top);
   // The size here must match the window dimensions to avoid unnecessary surface
   // creation / destruction in the startup path.
   flutter_controller_ = std::make_unique<flutter::FlutterViewController>(
       frame.right - frame.left, frame.bottom - frame.top, project_);
   // Ensure that basic setup of the controller was successful.
   if (!flutter_controller_->engine() || !flutter_controller_->view()) {
+    NativeLog("Flutter failed to start: engine %d, view %d",
+              flutter_controller_->engine() ? 1 : 0,
+              flutter_controller_->view() ? 1 : 0);
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
@@ -105,7 +121,11 @@ bool FlutterWindow::CreateFlutterView() {
         result->Success();
       });
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
+  NativeLogWindow("Flutter view", flutter_controller_->view()->GetNativeWindow());
 
+  flutter_controller_->engine()->SetNextFrameCallback([]() {
+    NativeLog("first frame presented");
+  });
   flutter_controller_->ForceRedraw();
 
   return true;
@@ -142,6 +162,11 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       break;
 
     case WM_WINDOWPOSCHANGED:
+      if (GetTickCount64() - shown_at_ < kLogMovesMs) {
+        const auto* pos = reinterpret_cast<const WINDOWPOS*>(lparam);
+        NativeLog("window pos changed: %d,%d %dx%d, flags 0x%x", pos->x,
+                  pos->y, pos->cx, pos->cy, pos->flags);
+      }
       // Still waiting to start Flutter: wait for the window to be still again
       // (up to kMaxSettleMs after it was shown).
       if (!flutter_controller_ &&
@@ -155,6 +180,27 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
         KillTimer(hwnd, wparam);
         if (!flutter_controller_ && !CreateFlutterView()) {
           DestroyWindow(hwnd);
+        }
+        return 0;
+      }
+      if (wparam == kSnapshotTimer || wparam == kLateSnapshotTimer) {
+        KillTimer(hwnd, wparam);
+        const char* when = wparam == kSnapshotTimer ? "1s" : "4s";
+        char label[32];
+        snprintf(label, sizeof(label), "at %s window", when);
+        NativeLogWindow(label, hwnd);
+        if (flutter_controller_) {
+          HWND view = flutter_controller_->view()->GetNativeWindow();
+          RECT rect;
+          GetWindowRect(view, &rect);
+          MapWindowPoints(HWND_DESKTOP, hwnd, reinterpret_cast<POINT*>(&rect), 2);
+          NativeLog("at %s view: in parent %ld,%ld %ldx%ld, parent ok %d, "
+                    "visible %d",
+                    when, rect.left, rect.top, rect.right - rect.left,
+                    rect.bottom - rect.top, GetParent(view) == hwnd ? 1 : 0,
+                    IsWindowVisible(view) ? 1 : 0);
+        } else {
+          NativeLog("at %s Flutter not started yet", when);
         }
         return 0;
       }

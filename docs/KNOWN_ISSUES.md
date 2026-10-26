@@ -58,8 +58,14 @@ run. So a resize that reaches the Flutter view while it is still starting breaks
 the whole run. Test build 5 (v0.3.2-test.1): the window is shown in the app's background colour
 first, and Flutter starts only once the window has been still for 150 ms (at most 1 s after it
 appears), so FancyZones' move lands before there is any Flutter view to break. The last-bounds
-restore (`HKCU\Software\StackSpace\Window`) stays. Not tested on Windows here; awaiting the
-user's check.
+restore (`HKCU\Software\StackSpace\Window`) stays. Build 5 did not fix it either: its log shows
+no resize at all at start-up (the window already had its zone's size) and the window still came
+up blank on some launches, so the FancyZones move is not the cause. Test build 6
+(v0.3.3-test.1) adds `native.log` next to `startup.log`: the Flutter engine's own error output
+plus the runner's view of the window (bounds, visibility, DWM cloaking, DPI, other StackSpace
+windows or processes still running, when Flutter starts, when its first frame is presented, and
+the window and view state 1 s and 4 s in). The user was also asked to try excluding
+`stack_space.exe` in FancyZones to confirm whether FancyZones is involved at all.
 
 ## Current issues in the StackSpace app (2026-10-25)
 

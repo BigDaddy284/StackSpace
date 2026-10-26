@@ -282,11 +282,13 @@ first and starts Flutter only after the window has stopped moving
 (`windows/runner/flutter_window.cpp/.h`); the last-bounds restore stays
 (`windows/runner/win32_window.cpp/.h`). `lib/main.dart` logs the view size at the first frame and
 on resizes in the first ten seconds. Built and tested on GitHub Actions only; see
-`docs/KNOWN_ISSUES.md`, Bug 5.
+`docs/KNOWN_ISSUES.md`, Bug 5. Build 5 still opened blank with no start-up resize at all, so test
+build 6 (v0.3.3-test.1, version 0.3.3+6) adds a native log (`windows/runner/native_log.cpp/.h`,
+`native.log` next to `startup.log`) with the engine's error output and the window's state.
 
 ## Next single task
-Check test build 5 on Windows with the window snapped in FancyZones: close and reopen several
-times. If a blank window appears, send `%APPDATA%\com.stackspace\stack_space\startup.log`.
+Run test build 6 on Windows with the window snapped in FancyZones until a launch is blank, then
+send `native.log` and `startup.log` from `%APPDATA%\com.stackspace\stack_space\`.
 
 ## Exact commands to resume
 ```bash

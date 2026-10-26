@@ -3,6 +3,7 @@
 #include <dwmapi.h>
 #include <flutter_windows.h>
 
+#include "native_log.h"
 #include "resource.h"
 
 namespace {
@@ -156,6 +157,11 @@ bool Win32Window::Create(const std::wstring& title,
     y = saved.top;
     width = saved.right - saved.left;
     height = saved.bottom - saved.top;
+    NativeLog("saved bounds %d,%d %dx%d, maximized %d", x, y, width, height,
+              show_maximized_ ? 1 : 0);
+  } else {
+    NativeLog("no usable saved bounds, default %d,%d %dx%d", x, y, width,
+              height);
   }
 
   HWND window = CreateWindow(
@@ -164,8 +170,11 @@ bool Win32Window::Create(const std::wstring& title,
       nullptr, nullptr, GetModuleHandle(nullptr), this);
 
   if (!window) {
+    NativeLog("CreateWindow failed, error %lu", GetLastError());
     return false;
   }
+  NativeLogWindow("window created", window);
+  NativeLogOtherInstances(window);
 
   UpdateTheme(window);
 
@@ -204,6 +213,7 @@ Win32Window::MessageHandler(HWND hwnd,
                             LPARAM const lparam) noexcept {
   switch (message) {
     case WM_DESTROY:
+      NativeLogWindow("closing", hwnd);
       SavePlacement();
       window_handle_ = nullptr;
       Destroy();
