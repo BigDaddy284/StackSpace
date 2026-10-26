@@ -263,7 +263,7 @@ an unedited table writes back exactly as read. Copying pictures in keeps a works
 and portable, which is what the AppFlowy export did too.
 **Status**: Done; `test/table_image_test.dart`.
 
-### Table column widths and multi-cell copy and paste (test build 10)
+### Table column widths and multi-cell copy and paste (v0.3.6-test.1)
 **Decision**: Column borders drag to set a width in logical pixels; the widths are written on one
 `<!-- table-widths: 120,200 -->` line right under the table's rows, and only once a border has been
 dragged (double-clicking a border removes the line and the columns are even again). A table wider

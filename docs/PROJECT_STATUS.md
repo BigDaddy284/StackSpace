@@ -290,13 +290,13 @@ Build 6 did not start (the log redirect ended the process); test build 7 (v0.3.4
 FancyZones moves and hides the Flutter view window itself (it sees it as a new StackSpace window
 for a moment while Flutter creates it). Test build 8 (v0.3.5-test.1, version 0.3.5+8) guards the
 view and puts it back. Build 8's blank launches look like an older copy of the app being started
-(no guard lines at all); test build 9 (v0.3.6-test.1, version 0.3.6+9) logs the version and exe
+(no guard lines at all); test build 9 (v0.3.5-test.2, version 0.3.5+9) logs the version and exe
 path per launch. See `docs/KNOWN_ISSUES.md`, Bug 5.
 
 ## Table column widths and multi-cell copy and paste (2026-10-26)
-Test build 10 (v0.3.7-test.1, version 0.3.7+10) makes table columns resizable by dragging their borders (widths
+Table build (v0.3.6-test.1, version 0.3.6+10) makes table columns resizable by dragging their borders (widths
 are kept on a `<!-- table-widths: ... -->` line under the table) and adds spreadsheet-style cell
-selection with copy, cut, delete and paste of tab-separated text. Built on top of test build 9.
+selection with copy, cut, delete and paste of tab-separated text. Built on top of test build 9 (v0.3.5-test.2).
 See `docs/DECISIONS.md`, "Table column widths and multi-cell copy and paste".
 
 ## Next single task

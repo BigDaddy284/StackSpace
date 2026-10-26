@@ -37,7 +37,7 @@ Confirmed by the user on Windows with test build 3.
 
 ### Bug 5 — Intermittent black-and-white startup (2nd-4th launch)
 **Status**: Root cause found 2026-10-26 from build 7's `native.log`; fixed in test build 8
-(v0.3.5-test.1); test build 9 (v0.3.6-test.1) adds the version and exe path to `native.log`,
+(v0.3.5-test.1); test build 9 (v0.3.5-test.2) adds the version and exe path to `native.log`,
 awaiting the user's check. Build 7 had seemed to fix it but still went blank
 intermittently. Earlier status: hardened 2026-10-26; root cause not established (no Windows machine here; 14 Linux
 launches all fine). The screenshot shows a window Flutter never painted (white parent strip, black
@@ -95,7 +95,7 @@ good launches the guard fired as intended. The blank launches (21:41-21:42) show
 out of place at the 1 s and 4 s checks with no "kept … in place" and no "out of place … putting it
 back" line. Build 8 always writes the second line after a check that finds the view hidden, so
 those launches can't have been build 8: most likely an older copy of the app was started (an old
-shortcut, taskbar pin or folder). Test build 9 (v0.3.6-test.1, version 0.3.6+9) writes the version
+shortcut, taskbar pin or folder). Test build 9 (v0.3.5-test.2, version 0.3.5+9) writes the version
 and the exe path at the top of each launch in `native.log` so this can be confirmed.
 
 ## Current issues in the StackSpace app (2026-10-25)
