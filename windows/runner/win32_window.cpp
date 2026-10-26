@@ -197,6 +197,17 @@ Win32Window::MessageHandler(HWND hwnd,
 
       return 0;
     }
+    case WM_ERASEBKGND: {
+      // Paint the frame in the app's window colour (dark or light to match
+      // the system setting) so any part of the client area that Flutter has
+      // not drawn yet is never white or black (Bug 5).
+      RECT rect = GetClientArea();
+      HBRUSH brush = CreateSolidBrush(dark_mode_ ? RGB(10, 13, 26) : RGB(244, 246, 251));
+      FillRect(reinterpret_cast<HDC>(wparam), &rect, brush);
+      DeleteObject(brush);
+      return 1;
+    }
+
     case WM_SIZE: {
       RECT rect = GetClientArea();
       if (child_content_ != nullptr) {
@@ -282,6 +293,7 @@ void Win32Window::UpdateTheme(HWND const window) {
 
   if (result == ERROR_SUCCESS) {
     BOOL enable_dark_mode = light_mode == 0;
+    dark_mode_ = enable_dark_mode;
     DwmSetWindowAttribute(window, DWMWA_USE_IMMERSIVE_DARK_MODE,
                           &enable_dark_mode, sizeof(enable_dark_mode));
   }

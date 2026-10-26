@@ -209,3 +209,5 @@ Pages over 250,000 lines or 16 MB open in the read-only line viewer; the assista
 4. Begin implementation planning with smallest sensible task
 
 Folded folders in the pages panel are saved per workspace in the settings (`AppSettings.collapsedFolders`), keyed by the workspace root and holding folder paths (Bug 3).
+
+Start-up (Bug 5): `main.dart` draws a themed `StartupScreen` before loading anything, then loads the settings (falling back to defaults if the file is unreadable) and runs the app; `lib/app/startup_log.dart` writes `startup.log` to the app support folder with one timed section per launch and every uncaught error.

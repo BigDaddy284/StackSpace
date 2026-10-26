@@ -32,8 +32,15 @@ names are reported; "New folder here" in a folder's menu; File > New folder work
 hidden. Test in `test/home_page_test.dart`.
 
 ### Bug 5 — Intermittent black-and-white startup (2nd-4th launch)
-**Status**: Open. Screenshot from the reporter: window titled `stack_space`, white sidebar area,
-black editor area, no text.
+**Status**: Hardened 2026-10-26; root cause not established (no Windows machine here; 14 Linux
+launches all fine). The screenshot shows a window Flutter never painted (white parent strip, black
+child view, dark title bar from the runner). Most likely a start that failed before the first
+frame: the old `main()` awaited the settings file before `runApp`, so a damaged settings file
+(crash mid-write, or two instances started in quick succession) threw before anything was drawn.
+Now: a themed frame is drawn before any loading, a bad settings file falls back to defaults, a
+workspace that cannot be opened shows a message with Try again, the Windows window paints its
+background in the theme colour, and `startup.log` (app support folder) records every step and
+error of each launch. If it happens again, that file says where the launch stopped.
 
 ## Current issues in the StackSpace app (2026-10-25)
 

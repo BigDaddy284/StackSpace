@@ -30,6 +30,8 @@ dependencies:
   re_editor: ^0.10.0
   re_highlight: ^0.0.3
   url_launcher: ^6.3.3
+  path_provider: ^2.1.6
+  shared_preferences_platform_interface: ^2.4.2
 
 dev_dependencies:
   flutter_test:

@@ -92,6 +92,9 @@ class Win32Window {
 
   bool quit_on_close_ = false;
 
+  // Whether the system asks for dark mode; picks the background colour.
+  bool dark_mode_ = true;
+
   // window handle for top level window.
   HWND window_handle_ = nullptr;
 

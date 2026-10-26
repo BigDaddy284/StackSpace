@@ -289,3 +289,13 @@ are opened, through `url_launcher` as an external application.
 **Rationale**: The page stays plain Markdown and saves byte for byte; Ctrl+click is what VS Code,
 Word and most editors do in edit mode. Unsafe schemes are refused before reaching the OS.
 **Status**: Done; `lib/editor/links.dart`, `test/links_test.dart`.
+
+### The first frame is drawn before anything is loaded (Bug 5)
+**Decision**: `runApp` runs a themed start-up screen before the settings or the workspace are read;
+every loading step can fail into a visible message (defaults for unreadable settings, a
+"Workspace not available" page with Try again), and each launch writes a timed `startup.log`.
+**Rationale**: The Windows runner shows the window on the first frame; anything awaited before
+`runApp` that fails or stalls leaves an unpainted window and no trace. The log makes the next
+occurrence diagnosable without a debugger.
+**Status**: Done; `test/startup_test.dart`. Packages added: `path_provider`,
+`shared_preferences_platform_interface` (BSD-3).

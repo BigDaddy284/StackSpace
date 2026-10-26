@@ -4,6 +4,7 @@ import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
 /// How hard a thinking model should think. Ollama takes `think: true/false`
 /// for most thinking models, and "low" / "medium" / "high" for models such as gpt-oss.
@@ -21,7 +22,18 @@ enum ThinkLevel {
 class AppSettings extends ChangeNotifier {
   AppSettings._(this._prefs);
 
-  static Future<AppSettings> load() async => AppSettings._(await SharedPreferences.getInstance());
+  /// Loads the saved settings. If the settings file cannot be read (a
+  /// damaged file, a locked folder), the app starts with defaults in memory
+  /// instead of never starting (Bug 5); [onProblem] gets the reason.
+  static Future<AppSettings> load({void Function(String problem)? onProblem}) async {
+    try {
+      return AppSettings._(await SharedPreferences.getInstance());
+    } catch (e) {
+      onProblem?.call('Settings could not be read, using defaults for this run: $e');
+      SharedPreferencesStorePlatform.instance = InMemorySharedPreferencesStore.empty();
+      return AppSettings._(await SharedPreferences.getInstance());
+    }
+  }
 
   final SharedPreferences _prefs;
 

@@ -136,6 +136,8 @@ Focus on large document handling and responsiveness:
 
 | Bug-fix phase, Bug 4 | `home_page_test.dart`: New folder shows at once and exists on disk; Cancel and a blank name create nothing; nested via "New folder here" and via a typed path; duplicate name reported; fold / rename / restart / delete. Live: button → name → folder listed, on disk, listed after restart. |
 
+| Bug-fix phase, Bug 5 | `startup_test.dart`: settings fallback when the store throws; the start-up screen's colour and message; a workspace path that is a file → "Workspace not available" with Try again, then opens after the folder is fixed; log trimming. Launch runs: 10 consecutive Linux release launches (3 after cache drops) + 3 dark-theme + 1 damaged-settings launch, pixels sampled and the editor area's colour count checked each time; `startup.log` inspected. Not run on Windows. |
+
 Manual run for Task 7 (release build under Xvfb): Ctrl+B on a selected word wrote `**bold**`; Up from
 the first code line moved to the paragraph above and Down from the last line to the paragraph below;
 text typed after each landed in the right block and the saved file was correct.

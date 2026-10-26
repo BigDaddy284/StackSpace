@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../ai/chat_controller.dart';
 import '../ai/workspace_tools.dart';
 import '../app/settings.dart';
+import '../app/startup_log.dart';
 import '../app/theme.dart';
 import '../editor/page_editor_controller.dart';
 import '../import/appflowy_import.dart';
@@ -47,9 +48,21 @@ class _HomePageState extends State<HomePage> {
     _openWorkspace(settings.workspacePath);
   }
 
+  /// Why the workspace could not be opened; the page shows it with Retry.
+  String? _startupError;
+
   Future<void> _openWorkspace(String path) async {
+    StartupLog.log('opening workspace $path');
     final workspace = Workspace(path);
-    await workspace.init();
+    try {
+      await workspace.init();
+    } catch (e) {
+      StartupLog.log('workspace failed: $e');
+      if (!mounted) return;
+      setState(() => _startupError = 'The workspace folder "$path" could not be opened.\n$e');
+      return;
+    }
+    StartupLog.log('workspace ready: ${workspace.entries.length} entries');
     final tools = WorkspaceTools(workspace, confirm: _confirm, confirmDeletes: settings.confirmDeletes);
     final editor = PageEditorController(workspace);
     final chat = widget.chatFactory?.call(settings, tools) ?? ChatController(settings: settings, tools: tools);
@@ -67,10 +80,13 @@ class _HomePageState extends State<HomePage> {
       _editor = editor;
       _chat = chat;
       _ready = true;
+      _startupError = null;
     });
     final first = workspace.pages.firstOrNull;
     if (first != null) await editor.open(first.path);
+    StartupLog.log('first page ${first?.path ?? '(none)'} open');
     await chat.connect();
+    StartupLog.log('assistant ${chat.status.name}');
   }
 
   Future<bool> _confirm(String title, String message) async {
@@ -205,8 +221,35 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_ready) return const Scaffold(body: Center(child: CircularProgressIndicator()));
     final p = StackColors.of(context);
+    final startupError = _startupError;
+    if (startupError != null && !_ready) {
+      // The workspace could not be opened: say so, with a way out (Bug 5).
+      return Scaffold(
+        backgroundColor: p.window,
+        body: EmptyState(
+          icon: Icons.folder_off_outlined,
+          title: 'Workspace not available',
+          detail: startupError,
+          actions: [
+            SsButton(label: 'Try again', primary: true, onPressed: () => _openWorkspace(settings.workspacePath)),
+            SsButton(label: 'Settings…', onPressed: _openSettings),
+          ],
+        ),
+      );
+    }
+    if (!_ready) {
+      return Scaffold(
+        backgroundColor: p.window,
+        body: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: p.accentA)),
+            const SizedBox(height: 14),
+            Text('Opening ${settings.workspacePath}…', style: TextStyle(color: p.subText, fontSize: StackType.menu)),
+          ]),
+        ),
+      );
+    }
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyJ, control: true): _toggleDock,
