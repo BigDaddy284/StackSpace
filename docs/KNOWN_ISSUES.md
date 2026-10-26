@@ -50,15 +50,16 @@ The user reports no freezes with test build 3 on Windows so far.
 **Lead found 2026-10-26**: the user reproduced it reliably with PowerToys FancyZones. With the
 window snapped into a zone (one zone, or two zones spanning top to bottom), closing and reopening
 the app showed an empty window in the app's background colour; the launch after that was fine.
-FancyZones moves a window into its last zone the moment it appears, while Flutter is still drawing
-its first frames, and the Flutter view did not redraw at the new size. Fix in test build 4
-(v0.3.1-test.1), Windows runner only: the window reopens at the bounds it had when it closed
-(saved under `HKCU\Software\StackSpace\Window`, ignored if they no longer fit on a connected
-monitor, and maximised if it was), so FancyZones has nothing to resize; and in the first five
-seconds after the window appears, any resize is followed 250 ms later by sizing the Flutter view
-again and forcing a frame, plus the same at 0.5 s and 2 s regardless. `startup.log` now records
-the view size at the first frame and every resize in the first ten seconds. Not tested on Windows
-here (no Windows machine); awaiting the user's check.
+Test build 4 (v0.3.1-test.1) reopened the window at its last bounds and re-sized the Flutter view
+after start-up moves; it did not help. Its `startup.log` showed why: on the blank launches
+FancyZones resized the window 29 ms after the first frame, Dart then received every later size
+(including the user dragging the window edge) and still nothing was drawn for the rest of that
+run. So a resize that reaches the Flutter view while it is still starting breaks the view for
+the whole run. Test build 5 (v0.3.2-test.1): the window is shown in the app's background colour
+first, and Flutter starts only once the window has been still for 150 ms (at most 1 s after it
+appears), so FancyZones' move lands before there is any Flutter view to break. The last-bounds
+restore (`HKCU\Software\StackSpace\Window`) stays. Not tested on Windows here; awaiting the
+user's check.
 
 ## Current issues in the StackSpace app (2026-10-25)
 

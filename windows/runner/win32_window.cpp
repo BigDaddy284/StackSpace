@@ -285,20 +285,6 @@ void Win32Window::SetChildContent(HWND content) {
   SetFocus(child_content_);
 }
 
-void Win32Window::ResyncChildContent() {
-  if (child_content_ == nullptr) {
-    return;
-  }
-  RECT frame = GetClientArea();
-  LONG width = frame.right - frame.left;
-  LONG height = frame.bottom - frame.top;
-  if (width <= 1 || height <= 1) {
-    return;
-  }
-  MoveWindow(child_content_, frame.left, frame.top, width, height - 1, FALSE);
-  MoveWindow(child_content_, frame.left, frame.top, width, height, TRUE);
-}
-
 RECT Win32Window::GetClientArea() {
   RECT frame;
   GetClientRect(window_handle_, &frame);

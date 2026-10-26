@@ -36,14 +36,14 @@ int64_t GetInt(const flutter::EncodableMap& map, const char* key) {
   return 0;
 }
 
-// Timers that size the Flutter view again after start-up (see MessageHandler).
-constexpr UINT_PTR kResyncAfterShowTimer = 1;
-constexpr UINT_PTR kResyncLateTimer = 2;
-constexpr UINT_PTR kResyncAfterMoveTimer = 3;
+// Fires when the window has stopped moving after it was shown, to start
+// Flutter (see OnCreate).
+constexpr UINT_PTR kCreateViewTimer = 1;
 
-// How long after the window is shown a resize by another program still gets
-// the view sized again.
-constexpr ULONGLONG kStartupSettleMs = 5000;
+// How long the window must stay still before Flutter starts, and the longest
+// start-up is held back for moves.
+constexpr UINT kSettleMs = 150;
+constexpr ULONGLONG kMaxSettleMs = 1000;
 
 }  // namespace
 
@@ -57,8 +57,19 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
 
-  RECT frame = GetClientArea();
+  // Show the window, in the app's background colour, before Flutter starts,
+  // and start Flutter only once the window has stopped moving. PowerToys
+  // FancyZones moves a window into its last zone as soon as it appears; when
+  // that resize reached a Flutter view that was still starting up, the view
+  // never drew anything for the rest of that run, even after later resizes.
+  Show();
+  shown_at_ = GetTickCount64();
+  SetTimer(GetHandle(), kCreateViewTimer, kSettleMs, nullptr);
+  return true;
+}
 
+bool FlutterWindow::CreateFlutterView() {
+  RECT frame = GetClientArea();
   // The size here must match the window dimensions to avoid unnecessary surface
   // creation / destruction in the startup path.
   flutter_controller_ = std::make_unique<flutter::FlutterViewController>(
@@ -95,16 +106,6 @@ bool FlutterWindow::OnCreate() {
       });
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
-  flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
-    shown_at_ = GetTickCount64();
-    SetTimer(GetHandle(), kResyncAfterShowTimer, 500, nullptr);
-    SetTimer(GetHandle(), kResyncLateTimer, 2000, nullptr);
-  });
-
-  // Flutter can complete the first frame before the "show window" callback is
-  // registered. The following call ensures a frame is pending to ensure the
-  // window is shown. It is a no-op if the first frame hasn't completed yet.
   flutter_controller_->ForceRedraw();
 
   return true;
@@ -135,30 +136,25 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
 
   switch (message) {
     case WM_FONTCHANGE:
-      flutter_controller_->engine()->ReloadSystemFonts();
+      if (flutter_controller_) {
+        flutter_controller_->engine()->ReloadSystemFonts();
+      }
       break;
 
-    // PowerToys FancyZones moves a window into its last zone as soon as the
-    // window appears, while Flutter is still drawing its first frames. A
-    // window snapped across two zones could then stay blank (the window's
-    // own background colour, no app) until the next launch. Once the window
-    // has settled, size the view again and ask for a fresh frame so it is
-    // always drawn at the window's real size.
-    case WM_SIZE:
-      if (shown_at_ != 0 && wparam != SIZE_MINIMIZED &&
-          GetTickCount64() - shown_at_ < kStartupSettleMs) {
-        // Restarted on every resize, so it fires once the moves have stopped.
-        SetTimer(hwnd, kResyncAfterMoveTimer, 250, nullptr);
+    case WM_WINDOWPOSCHANGED:
+      // Still waiting to start Flutter: wait for the window to be still again
+      // (up to kMaxSettleMs after it was shown).
+      if (!flutter_controller_ &&
+          GetTickCount64() - shown_at_ < kMaxSettleMs) {
+        SetTimer(hwnd, kCreateViewTimer, kSettleMs, nullptr);
       }
       break;
 
     case WM_TIMER:
-      if (wparam == kResyncAfterShowTimer || wparam == kResyncLateTimer ||
-          wparam == kResyncAfterMoveTimer) {
+      if (wparam == kCreateViewTimer) {
         KillTimer(hwnd, wparam);
-        if (flutter_controller_ && !IsIconic(hwnd)) {
-          ResyncChildContent();
-          flutter_controller_->ForceRedraw();
+        if (!flutter_controller_ && !CreateFlutterView()) {
+          DestroyWindow(hwnd);
         }
         return 0;
       }

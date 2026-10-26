@@ -72,12 +72,6 @@ class Win32Window {
   // Called when Destroy is called.
   virtual void OnDestroy();
 
-  // Sizes the hosted content to the client area again, going through a size
-  // one pixel short first so the content always sees a real size change and
-  // rebuilds its surface. Used when the window was moved or resized by another
-  // program (such as PowerToys FancyZones) while Flutter was still starting.
-  void ResyncChildContent();
-
  private:
   friend class WindowClassRegistrar;
 
