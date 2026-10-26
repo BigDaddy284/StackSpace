@@ -1,6 +1,6 @@
 # PROJECT STATUS
 
-_Last updated: 2026-10-26 (Bug-fix phase: Bugs 1-4 fixed; Bug 5 root cause found, fix in test build 8, build 9 logs which copy is running)_
+_Last updated: 2026-10-26 (Bug-fix phase: Bugs 1-5 fixed; Bug 5 confirmed with test build 9)_
 
 ## Current phase
 Bug-fix phase (2026-10-26): five bugs reported from test build 2 on Windows, fixed one at a time in
@@ -294,7 +294,7 @@ view and puts it back. Build 8's blank launches look like an older copy of the a
 path per launch. See `docs/KNOWN_ISSUES.md`, Bug 5.
 
 ## Next single task
-Check test build 9 on Windows (delete older copies and re-pin the new exe) with the window snapped in FancyZones. If a blank launch returns, send `native.log` and
+Bug 5 is confirmed fixed with test build 9 (v0.3.5-test.2). If a blank launch ever returns, send `native.log` and
 `startup.log` from `%APPDATA%\com.stackspace\stack_space\`. No code task is queued; the next
 phase starts from the user's next request.
 

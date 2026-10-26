@@ -36,9 +36,10 @@ hidden. Test in `test/home_page_test.dart`.
 Confirmed by the user on Windows with test build 3.
 
 ### Bug 5 — Intermittent black-and-white startup (2nd-4th launch)
-**Status**: Root cause found 2026-10-26 from build 7's `native.log`; fixed in test build 8
-(v0.3.5-test.1); test build 9 (v0.3.5-test.2) adds the version and exe path to `native.log`,
-awaiting the user's check. Build 7 had seemed to fix it but still went blank
+**Status**: Fixed. Root cause found 2026-10-26 from build 7's `native.log`; fixed in test build 8
+(v0.3.5-test.1); test build 9 (v0.3.5-test.2) adds the version and exe path to `native.log`;
+confirmed fixed by the user on 2026-10-26 (many launches across window sizes and
+FancyZones layouts, all fine). Build 7 had seemed to fix it but still went blank
 intermittently. Earlier status: hardened 2026-10-26; root cause not established (no Windows machine here; 14 Linux
 launches all fine). The screenshot shows a window Flutter never painted (white parent strip, black
 child view, dark title bar from the runner). Most likely a start that failed before the first
