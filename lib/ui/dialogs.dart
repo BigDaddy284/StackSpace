@@ -35,29 +35,64 @@ Future<String?> promptDialog(
   String initial = '',
   String confirmLabel = 'Create',
 }) {
-  final controller = TextEditingController(text: initial);
-  final dot = initial.lastIndexOf('.');
-  final slash = initial.lastIndexOf('/');
-  controller.selection = TextSelection(baseOffset: slash + 1, extentOffset: dot > slash ? dot : initial.length);
   return showDialog<String>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: Text(title),
+    builder: (context) => _PromptDialog(title: title, label: label, initial: initial, confirmLabel: confirmLabel),
+  );
+}
+
+/// Owns the field's controller for as long as the dialog is on screen,
+/// including its closing animation (disposing it on pop broke that frame).
+class _PromptDialog extends StatefulWidget {
+  const _PromptDialog({required this.title, required this.label, required this.initial, required this.confirmLabel});
+
+  final String title;
+  final String label;
+  final String initial;
+  final String confirmLabel;
+
+  @override
+  State<_PromptDialog> createState() => _PromptDialogState();
+}
+
+class _PromptDialogState extends State<_PromptDialog> {
+  late final TextEditingController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initial;
+    controller = TextEditingController(text: initial);
+    final dot = initial.lastIndexOf('.');
+    final slash = initial.lastIndexOf('/');
+    controller.selection = TextSelection(baseOffset: slash + 1, extentOffset: dot > slash ? dot : initial.length);
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
       content: SizedBox(
         width: 380,
         child: TextField(
           controller: controller,
           autofocus: true,
-          decoration: InputDecoration(labelText: label),
+          decoration: InputDecoration(labelText: widget.label),
           onSubmitted: (value) => Navigator.pop(context, value),
         ),
       ),
       actions: [
         SsButton(label: 'Cancel', onPressed: () => Navigator.pop(context)),
-        SsButton(label: confirmLabel, primary: true, onPressed: () => Navigator.pop(context, controller.text)),
+        SsButton(label: widget.confirmLabel, primary: true, onPressed: () => Navigator.pop(context, controller.text)),
       ],
-    ),
-  ).whenComplete(controller.dispose);
+    );
+  }
 }
 
 void showError(BuildContext context, String message) {

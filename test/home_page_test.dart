@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:re_editor/re_editor.dart';
@@ -146,6 +147,91 @@ void main() {
     await tester.tap(find.text('inner'));
     await tester.pump();
     expect(find.text('deep.md'), findsOneWidget, reason: 'folders still open after restoring');
+  });
+
+  testWidgets('New folder creates a folder that shows at once, nested, persists, and reports problems', (tester) async {
+    // Bug 4: the folder was created on disk but the panel hid every folder
+    // without a page in it, so the button looked broken.
+    await pumpApp(tester);
+    await tester.tap(find.text('New folder'));
+    await tester.pumpAndSettle();
+    expect(find.text('Create'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, 'Notes');
+    await tester.tap(find.text('Create'));
+    await tester.pumpAndSettle(); // the dialog's closing animation
+    await settle(tester);
+    expect(find.text('Notes'), findsOneWidget, reason: 'the empty folder shows in the panel');
+    expect(await tester.runAsync(() => Directory('${dir.path}/Notes').exists()), true);
+
+    // Cancel creates nothing; an empty name creates nothing.
+    await tester.tap(find.text('New folder'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'Dropped');
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    await settle(tester);
+    expect(find.text('Dropped'), findsNothing);
+    expect(await tester.runAsync(() => Directory('${dir.path}/Dropped').exists()), false);
+    await tester.tap(find.text('New folder'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, '   ');
+    await tester.tap(find.text('Create'));
+    await tester.pumpAndSettle(); // the dialog's closing animation
+    await settle(tester);
+    expect(await tester.runAsync(() => Directory(dir.path).list().length), 2, reason: 'hello.py and Notes only');
+
+    // A nested folder from the folder's menu, and a path typed with a slash.
+    await tester.tap(find.text('Notes'), buttons: kSecondaryButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('New folder here'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'Notes/2026');
+    await tester.tap(find.text('Create'));
+    await tester.pumpAndSettle(); // the dialog's closing animation
+    await settle(tester);
+    expect(find.text('2026'), findsOneWidget);
+    await tester.tap(find.text('New folder'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'Notes/2026/Q4');
+    await tester.tap(find.text('Create'));
+    await tester.pumpAndSettle(); // the dialog's closing animation
+    await settle(tester);
+    expect(find.text('Q4'), findsOneWidget);
+    expect(await tester.runAsync(() => Directory('${dir.path}/Notes/2026/Q4').exists()), true);
+
+    // A duplicate name is reported, not swallowed.
+    await tester.tap(find.text('New folder'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'Notes');
+    await tester.tap(find.text('Create'));
+    await tester.pumpAndSettle();
+    await settle(tester); // the existence check reads the disk
+    expect(find.textContaining('already exists'), findsOneWidget, reason: 'shown in a snackbar');
+    await tester.pump(const Duration(seconds: 5));
+
+    // The new folder folds, unfolds, renames and deletes like any other, and is there after a restart.
+    await tester.tap(find.text('Notes'));
+    await tester.pump();
+    expect(find.text('2026'), findsNothing);
+    await tester.tap(find.text('Notes'));
+    await tester.pump();
+    expect(find.text('2026'), findsOneWidget);
+    final sidebar = tester.state<SidebarState>(find.byType(Sidebar));
+    await tester.runAsync(() => sidebar.ws.rename('Notes', 'Ideas'));
+    await settle(tester);
+    expect(find.text('Ideas'), findsOneWidget);
+    expect(find.text('Notes'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    await settle(tester);
+    await pumpApp(tester);
+    expect(find.text('Ideas'), findsOneWidget);
+    expect(find.text('Q4'), findsOneWidget);
+    final restarted = tester.state<SidebarState>(find.byType(Sidebar));
+    await tester.runAsync(() => restarted.ws.delete('Ideas/2026'));
+    await settle(tester);
+    expect(find.text('Q4'), findsNothing);
+    expect(find.text('Ideas'), findsOneWidget);
+    expect(find.text('hello.py'), findsWidgets, reason: 'existing pages untouched');
   });
 
   testWidgets('chat opens, minimises, maximises and closes', (tester) async {

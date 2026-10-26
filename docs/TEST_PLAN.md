@@ -134,6 +134,8 @@ Focus on large document handling and responsiveness:
 
 | Bug-fix phase, Bug 3 | `home_page_test.dart`: fold two folders, hide and show the panel, nested fold / unfold, rename and move folded folders, delete one, restart the app on the same settings; the saved list is checked at each step. Live: fold, hide / show, restart. |
 
+| Bug-fix phase, Bug 4 | `home_page_test.dart`: New folder shows at once and exists on disk; Cancel and a blank name create nothing; nested via "New folder here" and via a typed path; duplicate name reported; fold / rename / restart / delete. Live: button → name → folder listed, on disk, listed after restart. |
+
 Manual run for Task 7 (release build under Xvfb): Ctrl+B on a selected word wrote `**bold**`; Up from
 the first code line moved to the paragraph above and Down from the last line to the paragraph below;
 text typed after each landed in the right block and the saved file was correct.

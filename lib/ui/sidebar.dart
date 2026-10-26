@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -99,22 +100,25 @@ class SidebarState extends State<Sidebar> {
     widget.settings.setCollapsedFolders(ws.root, _collapsed);
   }
 
-  /// Rows to show: pages, and folders that hold a page somewhere below them
-  /// (a folder of pictures only is hidden with its pictures); nothing under
-  /// a collapsed folder.
+  /// Rows to show: pages, empty folders, and folders that hold a page
+  /// somewhere below them (a folder holding nothing but pictures is hidden
+  /// with its pictures); nothing under a collapsed folder.
   List<WorkspaceEntry> _visible(List<WorkspaceEntry> entries) {
     final hasPage = <String>{};
+    final hasFile = <String>{};
     for (final e in entries) {
-      if (e.isFolder || e.isBinary) continue;
+      if (e.isFolder) continue;
       final parts = e.path.split('/');
       for (var i = 1; i < parts.length; i++) {
-        hasPage.add(parts.sublist(0, i).join('/'));
+        final folder = parts.sublist(0, i).join('/');
+        hasFile.add(folder);
+        if (!e.isBinary) hasPage.add(folder);
       }
     }
     return [
       for (final e in entries)
         if (!e.isBinary &&
-            (!e.isFolder || hasPage.contains(e.path)) &&
+            (!e.isFolder || hasPage.contains(e.path) || !hasFile.contains(e.path)) &&
             !_collapsed.any((folder) => e.path.startsWith('$folder/')))
           e,
     ];
@@ -151,13 +155,19 @@ class SidebarState extends State<Sidebar> {
     if (ok) await ws.delete(path);
   }
 
-  Future<void> newFolder() async {
-    final name = await promptDialog(context, title: 'New folder', label: 'Name', initial: 'New folder');
+  /// Asks for a name and creates the folder (inside [parent] when given).
+  /// A slash in the name makes nested folders. Problems are shown, never
+  /// swallowed (Bug 4).
+  Future<void> newFolder([String parent = '']) async {
+    final initial = parent.isEmpty ? 'New folder' : '$parent/New folder';
+    final name = await promptDialog(context, title: 'New folder', label: 'Name', initial: initial);
     if (name == null || name.trim().isEmpty) return;
     try {
       await ws.createFolder(name.trim());
     } on WorkspaceException catch (err) {
       if (mounted) showError(context, err.message);
+    } on FileSystemException catch (err) {
+      if (mounted) showError(context, 'Could not create "${name.trim()}": ${err.osError?.message ?? err.message}');
     }
   }
 
@@ -286,6 +296,7 @@ class SidebarState extends State<Sidebar> {
       position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
       items: [
         if (e.isFolder) const PopupMenuItem(value: 'new', child: Text('New page here')),
+        if (e.isFolder) const PopupMenuItem(value: 'newFolder', child: Text('New folder here')),
         const PopupMenuItem(value: 'rename', child: Text('Rename / move')),
         const PopupMenuItem(value: 'delete', child: Text('Delete')),
       ],
@@ -293,6 +304,8 @@ class SidebarState extends State<Sidebar> {
     switch (choice) {
       case 'new':
         await widget.onNewPage(e.path);
+      case 'newFolder':
+        await newFolder(e.path);
       case 'rename':
         await rename(e.path);
       case 'delete':

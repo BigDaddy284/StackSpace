@@ -173,6 +173,17 @@ class _HomePageState extends State<HomePage> {
         ThemeMode.dark => 'Theme: dark. Click to follow Windows',
       };
 
+  /// File > New folder works with the panel hidden too: it shows the panel
+  /// (which owns the dialog) and asks on the next frame.
+  void _newFolder() {
+    if (_showSidebar) {
+      _sidebarKey.currentState?.newFolder();
+      return;
+    }
+    setState(() => _showSidebar = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _sidebarKey.currentState?.newFolder());
+  }
+
   void _showShortcuts() => showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
@@ -285,7 +296,7 @@ class _HomePageState extends State<HomePage> {
       children: [
         SubmenuButton(menuChildren: [
           item('New page', _newPage, icon: Icons.note_add_outlined, shortcut: 'Ctrl+N'),
-          item('New folder', () => _sidebarKey.currentState?.newFolder(), icon: Icons.create_new_folder_outlined),
+          item('New folder', _newFolder, icon: Icons.create_new_folder_outlined),
           item('Save', path == null ? null : _editor.flush, icon: Icons.save_outlined, shortcut: 'Ctrl+S'),
           const Divider(height: 8),
           item('Import AppFlowy export (.zip)...', () => _importAppFlowy(folder: false), icon: Icons.archive_outlined),

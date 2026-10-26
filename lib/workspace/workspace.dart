@@ -213,6 +213,8 @@ class Workspace extends ChangeNotifier {
 
   Future<void> createFolder(String relativePath, {ChangeSource source = ChangeSource.user}) async {
     final rel = normalize(relativePath);
+    if (rel.isEmpty || rel == '.') throw WorkspaceException('Give the folder a name.');
+    if (await exists(rel)) throw WorkspaceException('"$rel" already exists.');
     await Directory(resolve(rel)).create(recursive: true);
     _emit(WorkspaceChange(WorkspaceChangeKind.created, rel, source));
     await refresh();

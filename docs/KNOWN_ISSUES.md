@@ -26,7 +26,10 @@ hiding the panel and restarts, follow renames and moves, and are dropped on dele
 are the identity (a folder on disk has nothing else). Test in `test/home_page_test.dart`.
 
 ### Bug 4 — The New folder button does not create a folder
-**Status**: Open.
+**Status**: Fixed 2026-10-26. The folder was created but the panel hid folders without a page in
+them (a Task 12 rule meant for picture folders). Empty folders now show; duplicate and invalid
+names are reported; "New folder here" in a folder's menu; File > New folder works with the panel
+hidden. Test in `test/home_page_test.dart`.
 
 ### Bug 5 — Intermittent black-and-white startup (2nd-4th launch)
 **Status**: Open. Screenshot from the reporter: window titled `stack_space`, white sidebar area,
@@ -67,8 +70,9 @@ machine with Ollama; that is the first thing to check with test build 2.
   assistant edit, or restarting the app unfolds everything. Folding is not written to the file.
 - Dragging a block to a point far down a long page scrolls the list while the pointer sits near its
   bottom edge; there is no drop onto a folded section's hidden blocks (they unfold on the drop).
-- Pictures and other binary files are hidden from the sidebar (Task 12); there is no way to open
-  them from the app yet. A text file with an unusual extension still shows and opens as text.
+- Pictures and other binary files are hidden from the sidebar (Task 12), as is a folder holding
+  nothing but them; an empty folder shows (Bug 4). There is no way to open a picture from the app
+  yet. A text file with an unusual extension still shows and opens as text.
 - Links open with Ctrl+click (Bug 2); a hover does not yet show the destination. Images show when
   the file exists next to the page, otherwise the path is shown.
 - Selection cannot span blocks; Ctrl+A selects the current block.
