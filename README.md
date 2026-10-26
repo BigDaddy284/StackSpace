@@ -1,9 +1,10 @@
 # StackSpace
 
-Your notes and scripts, fast and offline. StackSpace is a Windows 11 replacement for AppFlowy that
-won't choke on 5,000-line scripts. It has a built-in assistant powered by your own
-[Ollama](https://ollama.com) models, which can read, write and fix your pages. One-click AppFlowy
-import, light and dark themes.
+StackSpace is a Windows 11 notes app I built with Claude after other note tools kept freezing on
+code over 5,000 lines. Notion and AppFlowy were the inspiration: pages and folders on your own
+disk, a block editor, and one-click import of an AppFlowy workspace. A built-in assistant runs on
+your own [Ollama](https://ollama.com) models and can read, write and fix your pages. Works offline,
+light and dark themes.
 
 ![StackSpace in dark mode](docs/screenshots/dark-assistant.png)
 

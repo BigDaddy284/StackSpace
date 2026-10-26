@@ -1,7 +1,7 @@
 # TEST PLAN
 
 ## Overview
-This document outlines the testing approach for developing a Windows 11 replacement for AppFlowy that addresses performance issues with large documents and scripts.
+This document outlines the testing approach for StackSpace, a Windows 11 notes app inspired by Notion and AppFlowy, built after other tools froze on scripts over 5,000 lines.
 
 ## Test Categories
 

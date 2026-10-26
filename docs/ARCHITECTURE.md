@@ -1,7 +1,7 @@
 # ARCHITECTURE
 
 ## Overview
-This document outlines the architectural approach for developing a Windows 11 replacement for AppFlowy that addresses performance issues with large documents and scripts while preserving core functionality.
+This document outlines the architectural approach for StackSpace, a Windows 11 notes app inspired by Notion and AppFlowy, built after other tools froze on scripts over 5,000 lines, while keeping the core features of those apps.
 
 ## Current State: Audit Phase
 We are currently in the audit phase where we're analyzing the original AppFlowy architecture to understand:

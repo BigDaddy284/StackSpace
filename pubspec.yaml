@@ -1,5 +1,5 @@
 name: stack_space
-description: Windows 11 replacement for AppFlowy with optimized performance for large documents
+description: Local-first notes app for Windows 11, inspired by Notion and AppFlowy, built to stay fast on very long scripts.
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
