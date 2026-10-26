@@ -1,6 +1,6 @@
 # PROJECT STATUS
 
-_Last updated: 2026-10-26 (Bug-fix phase: Bugs 1-4 fixed; Bug 5 root cause found, fix in test build 8)_
+_Last updated: 2026-10-26 (Bug-fix phase: Bugs 1-4 fixed; Bug 5 root cause found, fix in test build 8, build 9 logs which copy is running)_
 
 ## Current phase
 Bug-fix phase (2026-10-26): five bugs reported from test build 2 on Windows, fixed one at a time in
@@ -289,10 +289,12 @@ Build 6 did not start (the log redirect ended the process); test build 7 (v0.3.4
 0.3.4+7) fixes that. Build 7 still went blank intermittently, and its `native.log` showed why:
 FancyZones moves and hides the Flutter view window itself (it sees it as a new StackSpace window
 for a moment while Flutter creates it). Test build 8 (v0.3.5-test.1, version 0.3.5+8) guards the
-view and puts it back. See `docs/KNOWN_ISSUES.md`, Bug 5.
+view and puts it back. Build 8's blank launches look like an older copy of the app being started
+(no guard lines at all); test build 9 (v0.3.6-test.1, version 0.3.6+9) logs the version and exe
+path per launch. See `docs/KNOWN_ISSUES.md`, Bug 5.
 
 ## Next single task
-Check test build 8 on Windows with the window snapped in FancyZones. If a blank launch returns, send `native.log` and
+Check test build 9 on Windows (delete older copies and re-pin the new exe) with the window snapped in FancyZones. If a blank launch returns, send `native.log` and
 `startup.log` from `%APPDATA%\com.stackspace\stack_space\`. No code task is queued; the next
 phase starts from the user's next request.
 
