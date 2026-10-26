@@ -1,6 +1,6 @@
 # PROJECT STATUS
 
-_Last updated: 2026-10-26 (Bug-fix phase: Bugs 1-5 fixed; Bug 5 confirmed on Windows with test build 7)_
+_Last updated: 2026-10-26 (Bug-fix phase: Bugs 1-5 fixed; Bug 5 confirmed with test build 9)_
 
 ## Current phase
 Bug-fix phase (2026-10-26): five bugs reported from test build 2 on Windows, fixed one at a time in
@@ -286,13 +286,15 @@ on resizes in the first ten seconds. Built and tested on GitHub Actions only; se
 build 6 (v0.3.3-test.1, version 0.3.3+6) adds a native log (`windows/runner/native_log.cpp/.h`,
 `native.log` next to `startup.log`) with the engine's error output and the window's state.
 Build 6 did not start (the log redirect ended the process); test build 7 (v0.3.4-test.1, version
-0.3.4+7) fixes that. **The user confirmed build 7 opens correctly every time when snapped.** Its
-only change over build 5 is that stderr (runner and engine) now goes to `native.log` instead of
-nowhere, so either a working stderr or the changed timing made the difference; the mechanism is
-not proven. See `docs/KNOWN_ISSUES.md`, Bug 5.
+0.3.4+7) fixes that. Build 7 still went blank intermittently, and its `native.log` showed why:
+FancyZones moves and hides the Flutter view window itself (it sees it as a new StackSpace window
+for a moment while Flutter creates it). Test build 8 (v0.3.5-test.1, version 0.3.5+8) guards the
+view and puts it back. Build 8's blank launches look like an older copy of the app being started
+(no guard lines at all); test build 9 (v0.3.5-test.2, version 0.3.5+9) logs the version and exe
+path per launch. See `docs/KNOWN_ISSUES.md`, Bug 5.
 
 ## Next single task
-Keep using test build 7 on Windows. If a blank launch ever returns, send `native.log` and
+Bug 5 is confirmed fixed with test build 9 (v0.3.5-test.2). If a blank launch ever returns, send `native.log` and
 `startup.log` from `%APPDATA%\com.stackspace\stack_space\`. No code task is queued; the next
 phase starts from the user's next request.
 

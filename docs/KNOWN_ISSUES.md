@@ -36,9 +36,11 @@ hidden. Test in `test/home_page_test.dart`.
 Confirmed by the user on Windows with test build 3.
 
 ### Bug 5 — Intermittent black-and-white startup (2nd-4th launch)
-**Status**: Confirmed fixed on the user's Windows machine with test build 7 (v0.3.4-test.1,
-2026-10-26): launches snapped in FancyZones now open correctly every time. The exact mechanism is
-not proven; see the end of this section. Earlier status: hardened 2026-10-26; root cause not established (no Windows machine here; 14 Linux
+**Status**: Fixed. Root cause found 2026-10-26 from build 7's `native.log`; fixed in test build 8
+(v0.3.5-test.1); test build 9 (v0.3.5-test.2) adds the version and exe path to `native.log`;
+confirmed fixed by the user on 2026-10-26 (many launches across window sizes and
+FancyZones layouts, all fine). Build 7 had seemed to fix it but still went blank
+intermittently. Earlier status: hardened 2026-10-26; root cause not established (no Windows machine here; 14 Linux
 launches all fine). The screenshot shows a window Flutter never painted (white parent strip, black
 child view, dark title bar from the runner). Most likely a start that failed before the first
 frame: the old `main()` awaited the settings file before `runApp`, so a damaged settings file
@@ -62,7 +64,7 @@ first, and Flutter starts only once the window has been still for 150 ms (at mos
 appears), so FancyZones' move lands before there is any Flutter view to break. The last-bounds
 restore (`HKCU\Software\StackSpace\Window`) stays. Build 5 did not fix it either: its log shows
 no resize at all at start-up (the window already had its zone's size) and the window still came
-up blank on some launches, so the FancyZones move is not the cause. Test build 6
+up blank on some launches, so FancyZones moving the main window is not the cause. Test build 6
 (v0.3.3-test.1) adds `native.log` next to `startup.log`: the Flutter engine's own error output
 plus the runner's view of the window (bounds, visibility, DWM cloaking, DPI, other StackSpace
 windows or processes still running, when Flutter starts, when its first frame is presented, and
@@ -72,16 +74,30 @@ Build 6 itself did not start on Windows: the log redirect called
 `FlutterDesktopResyncOutputStreams`, which reopens stderr on a console and ends a process that has
 none, leaving an empty `native.log`. Test build 7 (v0.3.4-test.1) drops that call.
 
-**Result**: the user reports that build 7 opens correctly every time when snapped. Why each build
-was needed: build 4 (last bounds + re-size) and build 5 (start Flutter after the window settles)
-did not fix it; build 6 added logging but crashed at start; build 7 is build 6 with that crash
-fixed. Build 7's only change over build 5 is the logging: stderr, which a release build otherwise
-leaves unset, now points at `native.log` for the runner and the engine. So either the engine
-needed a working stderr on this machine (it writes there when rendering hits a problem), or the
-extra logging changed start-up timing enough to hide a race. Both builds 5 and 7 keep showing the
-window before Flutter starts and reopening at the last bounds. `native.log` stays in the app so
-that a recurrence is diagnosable; if a blank launch returns, its `native.log` says whether Flutter
-started, presented its first frame, and where the window and view were.
+**Result**: build 7 seemed fixed at first, then went blank again intermittently. Its `native.log`
+showed the cause. On every blank launch, the Flutter view (the child window Flutter draws into)
+was visible and filled the window when it was created, and 30 ms later it was hidden and moved to
+(1107, -2) inside the window, which is the FancyZones zone's screen position (1100, -2) plus the
+frame. The main window never moved. Flutter creates its view as a separate window before the runner
+makes it a child; FancyZones takes it for a new StackSpace window, and its "move newly created
+windows to their last known zone" applies the zone to it (asynchronously, so it lands after the
+view is a child). The app kept drawing into a hidden, misplaced view. This is a race, so it was
+intermittent from the start, and it explains the original white strip too.
+
+Fix in test build 8 (`windows/runner/win32_window.cpp`): the view is subclassed, and any move,
+resize or hide that would not leave it filling the client area is turned into one that does
+(`native.log` says "kept the Flutter view in place" when that happens); for the first 10 s after
+Flutter starts, and at the 1 s and 4 s checks, a view that is still out of place is put back and
+redrawn ("Flutter view out of place … putting it back"). Builds 4 and 5's changes (reopen at last
+bounds, start Flutter after the window settles) stay but were not the fix.
+
+Build 8 check (2026-10-26): the user saw several good launches, then several blank ones. In the
+good launches the guard fired as intended. The blank launches (21:41-21:42) show the view hidden and
+out of place at the 1 s and 4 s checks with no "kept … in place" and no "out of place … putting it
+back" line. Build 8 always writes the second line after a check that finds the view hidden, so
+those launches can't have been build 8: most likely an older copy of the app was started (an old
+shortcut, taskbar pin or folder). Test build 9 (v0.3.5-test.2, version 0.3.5+9) writes the version
+and the exe path at the top of each launch in `native.log` so this can be confirmed.
 
 ## Current issues in the StackSpace app (2026-10-25)
 

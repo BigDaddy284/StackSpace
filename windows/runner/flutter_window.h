@@ -36,6 +36,9 @@ class FlutterWindow : public Win32Window {
   // When the window was shown (GetTickCount64).
   ULONGLONG shown_at_ = 0;
 
+  // When the Flutter view was created (GetTickCount64).
+  ULONGLONG view_started_at_ = 0;
+
   // Lets Dart colour the Windows title bar to match the app theme.
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> window_channel_;
 };

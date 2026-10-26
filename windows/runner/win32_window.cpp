@@ -1,5 +1,6 @@
 #include "win32_window.h"
 
+#include <commctrl.h>
 #include <dwmapi.h>
 #include <flutter_windows.h>
 
@@ -33,6 +34,57 @@ constexpr const wchar_t kPlacementRegKey[] = L"Software\\StackSpace\\Window";
 // Saved bounds smaller than this are ignored.
 constexpr LONG kMinSavedWidth = 320;
 constexpr LONG kMinSavedHeight = 240;
+
+// Subclass id for the guard on the hosted content (see ChildContentGuard).
+constexpr UINT_PTR kChildContentGuardId = 1;
+
+// Keeps the hosted Flutter view filling its parent's client area. PowerToys
+// FancyZones sees the view window for a moment while Flutter creates it,
+// before it becomes a child, takes it for a new app window and later moves it
+// into the app's zone and hides it, so the app drew into a hidden, misplaced
+// view and the window stayed empty. Any move, resize or hide of the view that
+// does not match the client area is turned back into one that does.
+LRESULT CALLBACK ChildContentGuard(HWND child, UINT message, WPARAM wparam,
+                                   LPARAM lparam, UINT_PTR id,
+                                   DWORD_PTR /* ref_data */) {
+  switch (message) {
+    case WM_WINDOWPOSCHANGING: {
+      auto* pos = reinterpret_cast<WINDOWPOS*>(lparam);
+      HWND parent = GetParent(child);
+      RECT client;
+      if (parent == nullptr || !GetClientRect(parent, &client)) {
+        break;
+      }
+      const WINDOWPOS asked = *pos;
+      bool kept = false;
+      if (!(pos->flags & SWP_NOMOVE) && (pos->x != 0 || pos->y != 0)) {
+        pos->x = 0;
+        pos->y = 0;
+        kept = true;
+      }
+      if (!(pos->flags & SWP_NOSIZE) &&
+          (pos->cx != client.right || pos->cy != client.bottom)) {
+        pos->cx = client.right;
+        pos->cy = client.bottom;
+        kept = true;
+      }
+      if (pos->flags & SWP_HIDEWINDOW) {
+        pos->flags &= ~SWP_HIDEWINDOW;
+        kept = true;
+      }
+      if (kept) {
+        NativeLog("kept the Flutter view in place: asked for %d,%d %dx%d, "
+                  "flags 0x%x",
+                  asked.x, asked.y, asked.cx, asked.cy, asked.flags);
+      }
+      break;
+    }
+    case WM_NCDESTROY:
+      RemoveWindowSubclass(child, ChildContentGuard, id);
+      break;
+  }
+  return DefSubclassProc(child, message, wparam, lparam);
+}
 
 // The number of Win32Window objects that currently exist.
 static int g_active_window_count = 0;
@@ -291,8 +343,39 @@ void Win32Window::SetChildContent(HWND content) {
 
   MoveWindow(content, frame.left, frame.top, frame.right - frame.left,
              frame.bottom - frame.top, true);
+  SetWindowSubclass(content, ChildContentGuard, kChildContentGuardId, 0);
 
   SetFocus(child_content_);
+}
+
+bool Win32Window::RestoreChildContent() {
+  if (child_content_ == nullptr || IsIconic(window_handle_)) {
+    return false;
+  }
+  RECT frame = GetClientArea();
+  RECT rect;
+  GetWindowRect(child_content_, &rect);
+  MapWindowPoints(HWND_DESKTOP, window_handle_,
+                  reinterpret_cast<POINT*>(&rect), 2);
+  if (IsWindowVisible(child_content_) && !IsIconic(child_content_) &&
+      GetParent(child_content_) == window_handle_ && EqualRect(&rect, &frame)) {
+    return false;
+  }
+  NativeLog("Flutter view out of place (%ld,%ld %ldx%ld, visible %d, "
+            "minimized %d): putting it back",
+            rect.left, rect.top, rect.right - rect.left,
+            rect.bottom - rect.top, IsWindowVisible(child_content_) ? 1 : 0,
+            IsIconic(child_content_) ? 1 : 0);
+  if (GetParent(child_content_) != window_handle_) {
+    SetParent(child_content_, window_handle_);
+  }
+  if (IsIconic(child_content_)) {
+    ShowWindow(child_content_, SW_RESTORE);
+  }
+  SetWindowPos(child_content_, nullptr, frame.left, frame.top,
+               frame.right - frame.left, frame.bottom - frame.top,
+               SWP_NOZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+  return true;
 }
 
 RECT Win32Window::GetClientArea() {

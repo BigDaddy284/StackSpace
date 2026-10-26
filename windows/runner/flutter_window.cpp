@@ -53,6 +53,11 @@ constexpr UINT_PTR kSnapshotTimer = 2;
 constexpr UINT_PTR kLateSnapshotTimer = 3;
 constexpr ULONGLONG kLogMovesMs = 10000;
 
+// For the first 10 s after Flutter starts, check every 250 ms that nothing
+// has moved or hidden the Flutter view (see RestoreChildContent).
+constexpr UINT_PTR kWatchViewTimer = 4;
+constexpr ULONGLONG kWatchViewMs = 10000;
+
 }  // namespace
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -127,6 +132,8 @@ bool FlutterWindow::CreateFlutterView() {
     NativeLog("first frame presented");
   });
   flutter_controller_->ForceRedraw();
+  view_started_at_ = GetTickCount64();
+  SetTimer(GetHandle(), kWatchViewTimer, 250, nullptr);
 
   return true;
 }
@@ -183,6 +190,15 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
         }
         return 0;
       }
+      if (wparam == kWatchViewTimer) {
+        if (GetTickCount64() - view_started_at_ > kWatchViewMs) {
+          KillTimer(hwnd, wparam);
+        }
+        if (flutter_controller_ && RestoreChildContent()) {
+          flutter_controller_->ForceRedraw();
+        }
+        return 0;
+      }
       if (wparam == kSnapshotTimer || wparam == kLateSnapshotTimer) {
         KillTimer(hwnd, wparam);
         const char* when = wparam == kSnapshotTimer ? "1s" : "4s";
@@ -191,7 +207,7 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
         NativeLogWindow(label, hwnd);
         if (flutter_controller_) {
           HWND view = flutter_controller_->view()->GetNativeWindow();
-          RECT rect;
+          RECT rect = {};
           GetWindowRect(view, &rect);
           MapWindowPoints(HWND_DESKTOP, hwnd, reinterpret_cast<POINT*>(&rect), 2);
           NativeLog("at %s view: in parent %ld,%ld %ldx%ld, parent ok %d, "
@@ -199,6 +215,9 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                     when, rect.left, rect.top, rect.right - rect.left,
                     rect.bottom - rect.top, GetParent(view) == hwnd ? 1 : 0,
                     IsWindowVisible(view) ? 1 : 0);
+          if (RestoreChildContent()) {
+            flutter_controller_->ForceRedraw();
+          }
         } else {
           NativeLog("at %s Flutter not started yet", when);
         }
