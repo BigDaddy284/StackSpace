@@ -291,6 +291,12 @@ FancyZones moves and hides the Flutter view window itself (it sees it as a new S
 for a moment while Flutter creates it). Test build 8 (v0.3.5-test.1, version 0.3.5+8) guards the
 view and puts it back. See `docs/KNOWN_ISSUES.md`, Bug 5.
 
+## Table column widths and multi-cell copy and paste (2026-10-26)
+Test build 9 (version 0.3.6+9) makes table columns resizable by dragging their borders (widths
+are kept on a `<!-- table-widths: ... -->` line under the table) and adds spreadsheet-style cell
+selection with copy, cut, delete and paste of tab-separated text. Built on top of test build 8.
+See `docs/DECISIONS.md`, "Table column widths and multi-cell copy and paste".
+
 ## Next single task
 Check test build 8 on Windows with the window snapped in FancyZones. If a blank launch returns, send `native.log` and
 `startup.log` from `%APPDATA%\com.stackspace\stack_space\`. No code task is queued; the next

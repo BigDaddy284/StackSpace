@@ -208,6 +208,8 @@ class _HomePageState extends State<HomePage> {
               'F2  Rename the selected page\nDelete  Delete the selected page\n'
               'Ctrl+B / I / E  Bold / italic / inline code\nCtrl+K  Link the selection (again: unlink)\n'
               'Ctrl+click  Open a link\n'
+              'Drag or Shift+click across table cells  Select cells (Ctrl+C / X / V, Delete)\n'
+              'Drag a table column border  Set its width (double-click: even columns)\n'
               'Enter  Send a message\nShift+Enter  New line in a message'),
           actions: [SsButton(label: 'Close', primary: true, onPressed: () => Navigator.pop(context))],
         ),
