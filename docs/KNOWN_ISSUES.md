@@ -47,6 +47,19 @@ background in the theme colour, and `startup.log` (app support folder) records e
 error of each launch. If it happens again, that file says where the launch stopped.
 The user reports no freezes with test build 3 on Windows so far.
 
+**Lead found 2026-10-26**: the user reproduced it reliably with PowerToys FancyZones. With the
+window snapped into a zone (one zone, or two zones spanning top to bottom), closing and reopening
+the app showed an empty window in the app's background colour; the launch after that was fine.
+FancyZones moves a window into its last zone the moment it appears, while Flutter is still drawing
+its first frames, and the Flutter view did not redraw at the new size. Fix in test build 4
+(v0.3.1-test.1), Windows runner only: the window reopens at the bounds it had when it closed
+(saved under `HKCU\Software\StackSpace\Window`, ignored if they no longer fit on a connected
+monitor, and maximised if it was), so FancyZones has nothing to resize; and in the first five
+seconds after the window appears, any resize is followed 250 ms later by sizing the Flutter view
+again and forcing a frame, plus the same at 0.5 s and 2 s regardless. `startup.log` now records
+the view size at the first frame and every resize in the first ten seconds. Not tested on Windows
+here (no Windows machine); awaiting the user's check.
+
 ## Current issues in the StackSpace app (2026-10-25)
 
 ### Not tested with a real Ollama model

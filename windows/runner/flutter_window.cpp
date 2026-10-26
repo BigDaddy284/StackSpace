@@ -36,6 +36,15 @@ int64_t GetInt(const flutter::EncodableMap& map, const char* key) {
   return 0;
 }
 
+// Timers that size the Flutter view again after start-up (see MessageHandler).
+constexpr UINT_PTR kResyncAfterShowTimer = 1;
+constexpr UINT_PTR kResyncLateTimer = 2;
+constexpr UINT_PTR kResyncAfterMoveTimer = 3;
+
+// How long after the window is shown a resize by another program still gets
+// the view sized again.
+constexpr ULONGLONG kStartupSettleMs = 5000;
+
 }  // namespace
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -88,6 +97,9 @@ bool FlutterWindow::OnCreate() {
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();
+    shown_at_ = GetTickCount64();
+    SetTimer(GetHandle(), kResyncAfterShowTimer, 500, nullptr);
+    SetTimer(GetHandle(), kResyncLateTimer, 2000, nullptr);
   });
 
   // Flutter can complete the first frame before the "show window" callback is
@@ -124,6 +136,32 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   switch (message) {
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
+      break;
+
+    // PowerToys FancyZones moves a window into its last zone as soon as the
+    // window appears, while Flutter is still drawing its first frames. A
+    // window snapped across two zones could then stay blank (the window's
+    // own background colour, no app) until the next launch. Once the window
+    // has settled, size the view again and ask for a fresh frame so it is
+    // always drawn at the window's real size.
+    case WM_SIZE:
+      if (shown_at_ != 0 && wparam != SIZE_MINIMIZED &&
+          GetTickCount64() - shown_at_ < kStartupSettleMs) {
+        // Restarted on every resize, so it fires once the moves have stopped.
+        SetTimer(hwnd, kResyncAfterMoveTimer, 250, nullptr);
+      }
+      break;
+
+    case WM_TIMER:
+      if (wparam == kResyncAfterShowTimer || wparam == kResyncLateTimer ||
+          wparam == kResyncAfterMoveTimer) {
+        KillTimer(hwnd, wparam);
+        if (flutter_controller_ && !IsIconic(hwnd)) {
+          ResyncChildContent();
+          flutter_controller_->ForceRedraw();
+        }
+        return 0;
+      }
       break;
   }
 

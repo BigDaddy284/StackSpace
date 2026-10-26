@@ -37,6 +37,7 @@ class Win32Window {
   bool Create(const std::wstring& title, const Point& origin, const Size& size);
 
   // Show the current window. Returns true if the window was successfully shown.
+  // A window that was maximised when it last closed opens maximised again.
   bool Show();
 
   // Release OS resources associated with window.
@@ -71,6 +72,12 @@ class Win32Window {
   // Called when Destroy is called.
   virtual void OnDestroy();
 
+  // Sizes the hosted content to the client area again, going through a size
+  // one pixel short first so the content always sees a real size change and
+  // rebuilds its surface. Used when the window was moved or resized by another
+  // program (such as PowerToys FancyZones) while Flutter was still starting.
+  void ResyncChildContent();
+
  private:
   friend class WindowClassRegistrar;
 
@@ -89,6 +96,17 @@ class Win32Window {
 
   // Update the window frame's theme to match the system theme.
   void UpdateTheme(HWND const window);
+
+  // Reads the bounds the window had when it last closed (physical pixels,
+  // screen coordinates). Returns false when there are none, or when they no
+  // longer fit on a connected monitor.
+  static bool LoadPlacement(RECT* bounds, bool* maximized);
+
+  // Saves the window's current bounds for the next launch.
+  void SavePlacement();
+
+  // Whether Show should open the window maximised.
+  bool show_maximized_ = false;
 
   bool quit_on_close_ = false;
 

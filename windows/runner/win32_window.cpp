@@ -26,6 +26,13 @@ constexpr const wchar_t kGetPreferredBrightnessRegKey[] =
   L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize";
 constexpr const wchar_t kGetPreferredBrightnessRegValue[] = L"AppsUseLightTheme";
 
+// Where the window's bounds are kept between launches.
+constexpr const wchar_t kPlacementRegKey[] = L"Software\\StackSpace\\Window";
+
+// Saved bounds smaller than this are ignored.
+constexpr LONG kMinSavedWidth = 320;
+constexpr LONG kMinSavedHeight = 240;
+
 // The number of Win32Window objects that currently exist.
 static int g_active_window_count = 0;
 
@@ -134,10 +141,26 @@ bool Win32Window::Create(const std::wstring& title,
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   double scale_factor = dpi / 96.0;
 
+  int x = Scale(origin.x, scale_factor);
+  int y = Scale(origin.y, scale_factor);
+  int width = Scale(size.width, scale_factor);
+  int height = Scale(size.height, scale_factor);
+
+  // Open where the window was when it last closed. A window snapped into
+  // FancyZones then already has its zone's size when Flutter starts, instead
+  // of being resized by FancyZones while the first frames are drawn, which
+  // could leave the window blank until the next launch.
+  RECT saved;
+  if (LoadPlacement(&saved, &show_maximized_)) {
+    x = saved.left;
+    y = saved.top;
+    width = saved.right - saved.left;
+    height = saved.bottom - saved.top;
+  }
+
   HWND window = CreateWindow(
       window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
-      Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
-      Scale(size.width, scale_factor), Scale(size.height, scale_factor),
+      x, y, width, height,
       nullptr, nullptr, GetModuleHandle(nullptr), this);
 
   if (!window) {
@@ -150,7 +173,8 @@ bool Win32Window::Create(const std::wstring& title,
 }
 
 bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWNORMAL);
+  return ShowWindow(window_handle_,
+                    show_maximized_ ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL);
 }
 
 // static
@@ -180,6 +204,7 @@ Win32Window::MessageHandler(HWND hwnd,
                             LPARAM const lparam) noexcept {
   switch (message) {
     case WM_DESTROY:
+      SavePlacement();
       window_handle_ = nullptr;
       Destroy();
       if (quit_on_close_) {
@@ -260,6 +285,20 @@ void Win32Window::SetChildContent(HWND content) {
   SetFocus(child_content_);
 }
 
+void Win32Window::ResyncChildContent() {
+  if (child_content_ == nullptr) {
+    return;
+  }
+  RECT frame = GetClientArea();
+  LONG width = frame.right - frame.left;
+  LONG height = frame.bottom - frame.top;
+  if (width <= 1 || height <= 1) {
+    return;
+  }
+  MoveWindow(child_content_, frame.left, frame.top, width, height - 1, FALSE);
+  MoveWindow(child_content_, frame.left, frame.top, width, height, TRUE);
+}
+
 RECT Win32Window::GetClientArea() {
   RECT frame;
   GetClientRect(window_handle_, &frame);
@@ -296,5 +335,90 @@ void Win32Window::UpdateTheme(HWND const window) {
     dark_mode_ = enable_dark_mode;
     DwmSetWindowAttribute(window, DWMWA_USE_IMMERSIVE_DARK_MODE,
                           &enable_dark_mode, sizeof(enable_dark_mode));
+  }
+}
+
+// static
+bool Win32Window::LoadPlacement(RECT* bounds, bool* maximized) {
+  DWORD values[5];
+  const wchar_t* names[5] = {L"Left", L"Top", L"Right", L"Bottom",
+                             L"Maximized"};
+  for (int i = 0; i < 5; i++) {
+    DWORD size = sizeof(DWORD);
+    if (RegGetValue(HKEY_CURRENT_USER, kPlacementRegKey, names[i],
+                    RRF_RT_REG_DWORD, nullptr, &values[i],
+                    &size) != ERROR_SUCCESS) {
+      return false;
+    }
+  }
+  RECT rect = {static_cast<LONG>(values[0]), static_cast<LONG>(values[1]),
+               static_cast<LONG>(values[2]), static_cast<LONG>(values[3])};
+  if (rect.right - rect.left < kMinSavedWidth ||
+      rect.bottom - rect.top < kMinSavedHeight) {
+    return false;
+  }
+
+  // The monitor may have been unplugged or rearranged since: only keep bounds
+  // whose title bar is on a monitor's work area, and no larger than it (plus
+  // the invisible resize borders Windows 10 and 11 add around a window).
+  HMONITOR monitor = MonitorFromRect(&rect, MONITOR_DEFAULTTONULL);
+  if (monitor == nullptr) {
+    return false;
+  }
+  MONITORINFO info = {sizeof(MONITORINFO)};
+  if (!GetMonitorInfo(monitor, &info)) {
+    return false;
+  }
+  const RECT& work = info.rcWork;
+  const LONG slack = 32;
+  if (rect.right - rect.left > work.right - work.left + slack ||
+      rect.bottom - rect.top > work.bottom - work.top + slack) {
+    return false;
+  }
+  RECT title_bar = {rect.left, rect.top, rect.right, rect.top + 32};
+  RECT visible;
+  if (!IntersectRect(&visible, &title_bar, &work) ||
+      visible.right - visible.left < 100) {
+    return false;
+  }
+
+  *bounds = rect;
+  *maximized = values[4] != 0;
+  return true;
+}
+
+void Win32Window::SavePlacement() {
+  if (window_handle_ == nullptr || IsIconic(window_handle_)) {
+    return;
+  }
+  RECT rect;
+  WINDOWPLACEMENT placement = {sizeof(WINDOWPLACEMENT)};
+  bool maximized = IsZoomed(window_handle_) != 0;
+  if (maximized) {
+    // Keep the size it returns to when un-maximised. That rectangle is in
+    // work-area coordinates; move it to screen coordinates.
+    if (!GetWindowPlacement(window_handle_, &placement)) {
+      return;
+    }
+    rect = placement.rcNormalPosition;
+    MONITORINFO info = {sizeof(MONITORINFO)};
+    if (GetMonitorInfo(MonitorFromWindow(window_handle_,
+                                         MONITOR_DEFAULTTONEAREST),
+                       &info)) {
+      OffsetRect(&rect, info.rcWork.left - info.rcMonitor.left,
+                 info.rcWork.top - info.rcMonitor.top);
+    }
+  } else if (!GetWindowRect(window_handle_, &rect)) {
+    return;
+  }
+  DWORD values[5] = {static_cast<DWORD>(rect.left),
+                     static_cast<DWORD>(rect.top),
+                     static_cast<DWORD>(rect.right),
+                     static_cast<DWORD>(rect.bottom), maximized ? 1u : 0u};
+  const wchar_t* names[5] = {L"Left", L"Top", L"Right", L"Bottom",
+                             L"Maximized"};
+  for (int i = 0; i < 5; i++) {
+    RegSetKeyValue(HKEY_CURRENT_USER, kPlacementRegKey, names[i], REG_DWORD,
+                   &values[i], sizeof(DWORD));
   }
 }

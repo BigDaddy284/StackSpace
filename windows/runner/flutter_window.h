@@ -30,6 +30,9 @@ class FlutterWindow : public Win32Window {
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
 
+  // When the window was shown (GetTickCount64), or 0 before that.
+  ULONGLONG shown_at_ = 0;
+
   // Lets Dart colour the Windows title bar to match the app theme.
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> window_channel_;
 };

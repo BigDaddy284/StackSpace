@@ -272,10 +272,19 @@ works in code blocks. Bugs 1 and 4 are therefore confirmed on the target machine
 recurred so far. Links (Bug 2) and fold state (Bug 3) were not mentioned either way; they are
 verified by tests and Linux runs only.
 
+## Blank window after a FancyZones snap (2026-10-26)
+The user found the trigger for Bug 5: a window snapped into a PowerToys FancyZones zone opens
+blank on the next launch, and the launch after that is fine. Fixed in the Windows runner
+(`windows/runner/win32_window.cpp/.h`, `flutter_window.cpp/.h`): the window reopens at its last
+bounds (validated against the connected monitors), and the Flutter view is sized again with a
+forced frame after any resize in the first five seconds and at 0.5 s and 2 s after showing.
+`lib/main.dart` logs the view size at the first frame and on resizes in the first ten seconds.
+Version 0.3.1+4, test build 4 (v0.3.1-test.1). Built and tested on GitHub Actions only; see
+`docs/KNOWN_ISSUES.md`, Bug 5.
+
 ## Next single task
-Keep using test build 3 on Windows. Report anything about links, folder fold state, or a blank
-launch (send `%APPDATA%\com.stackspace\stack_space\startup.log` for the latter). No code task is
-queued; the next phase starts from the user's next request.
+Check test build 4 on Windows with the window snapped in FancyZones: close and reopen several
+times. If a blank window appears, send `%APPDATA%\com.stackspace\stack_space\startup.log`.
 
 ## Exact commands to resume
 ```bash
