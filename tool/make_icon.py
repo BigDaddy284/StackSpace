@@ -1,4 +1,4 @@
-"""Draws the StackSpace logo: the accent-gradient layers mark on a dark rounded tile.
+"""Draws the StackSpace logo: the original app mark in the accent gradient on a dark rounded tile.
 
 Run from the repository root with Pillow installed:
     python tool/make_icon.py out
@@ -40,20 +40,29 @@ def tile_mask(inset=0):
     ImageDraw.Draw(m).rounded_rectangle((inset, inset, S - 1 - inset, S - 1 - inset), radius=r - inset, fill=255)
     return m
 
-def glyph_mask():
+# The original app mark (four pieces), in its own 0..166 x 0..202 units.
+LIGHT = [
+    [(37.7, 128.9), (9.8, 101.0), (100.4, 10.4), (156.2, 10.4)],
+    [(156.2, 94.0), (100.4, 94.0), (79.5, 114.9), (107.4, 142.8)],
+]
+DARK = [
+    [(79.5, 170.7), (100.5, 191.6), (156.2, 191.6), (107.4, 142.8)],
+    [(51.6, 142.8), (79.5, 114.9), (107.4, 142.8), (79.5, 170.7)],
+]
+
+def _mask(polys):
     m = Image.new('L', (S, S), 0)
     d = ImageDraw.Draw(m)
-    cx, hw, hh, step, w = 512, 270, 154, 126, 62
-    top = 512 - (hh * 2 + step * 2 + w // 2) // 2 + 4
-    cy = top + hh
-    d.polygon([(cx, cy - hh), (cx + hw, cy), (cx, cy + hh), (cx - hw, cy)], fill=255)
-    for k in (1, 2):
-        o = step * k
-        pts = [(cx - hw, cy + o), (cx, cy + hh + o), (cx + hw, cy + o)]
-        d.line(pts, fill=255, width=w, joint='curve')
-        for p in (pts[0], pts[2]):
-            d.ellipse((p[0] - w / 2, p[1] - w / 2, p[0] + w / 2, p[1] + w / 2), fill=255)
+    x0, x1, y0, y1 = 9.8, 156.2, 10.4, 191.6
+    k = 590 / (y1 - y0)
+    ox = 512 - (x0 + x1) / 2 * k
+    oy = 512 - (y0 + y1) / 2 * k
+    for poly in polys:
+        d.polygon([(ox + x * k, oy + y * k) for x, y in poly], fill=255)
     return m
+
+def glyph_masks():
+    return _mask(LIGHT), _mask(DARK)
 
 def build():
     out = Image.new('RGBA', (S, S), (0, 0, 0, 0))
@@ -68,7 +77,8 @@ def build():
     rim_layer.paste(acc, (0, 0), rim.point(lambda v: v * 150 // 255))
     out = Image.alpha_composite(out, rim_layer)
     # Glow behind the glyph, clipped to the tile.
-    g = glyph_mask()
+    light, dark = glyph_masks()
+    g = ImageChops.lighter(light, dark)
     glow_a = g.filter(ImageFilter.GaussianBlur(48)).point(lambda v: min(255, v * 2))
     glow_a = ImageChops.multiply(glow_a, tile)
     glow = Image.new('RGBA', (S, S), (0, 0, 0, 0))
@@ -78,7 +88,8 @@ def build():
     y0, y1 = g.getbbox()[1], g.getbbox()[3]
     bright = vertical((70, 140, 255), (190, 100, 255), y0, y1)
     glyph = Image.new('RGBA', (S, S), (0, 0, 0, 0))
-    glyph.paste(bright, (0, 0), g)
+    glyph.paste(bright, (0, 0), light)
+    glyph.paste(vertical((40, 90, 220), (130, 60, 220), y0, y1), (0, 0), dark)
     out = Image.alpha_composite(out, glyph)
     return out
 
