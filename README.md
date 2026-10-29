@@ -99,8 +99,9 @@ Building the Windows .exe needs a Windows machine with Visual Studio's
   for it.
 - No databases, board or calendar views, and no sync or sharing: pages are plain files in
   your folder.
-- If a launch ever opens as an empty window, please send `startup.log` and `native.log` from
-  `%APPDATA%\com.stackspace\stack_space\`. They record each launch step by step.
+- The app keeps two log files, `startup.log` and `native.log`, in
+  `%APPDATA%\com.stackspace\stack_space\`. They record each launch step by step, which can help
+  if you're looking into a problem yourself, such as a launch that opens as an empty window.
 
 ## Licence and AppFlowy
 
