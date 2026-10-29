@@ -278,7 +278,7 @@ cells move both ways. An HTML comment is hidden by other Markdown readers, so th
 as a plain table; a table that was never resized writes back exactly as before.
 **Status**: Done; `test/table_image_test.dart`.
 
-### A selection across blocks belongs to the editor (v0.3.7-test.1)
+### A selection across blocks belongs to the editor (v0.3.9-test.1)
 **Decision**: Each block keeps its own text field, and a selection that leaves the block it started
 in becomes the editor's: it is held as a start and end (block and offset), painted by the editor
 behind the text of every field it covers (the fields' own selection is hidden while it is up), and

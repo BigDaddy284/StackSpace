@@ -1,6 +1,6 @@
 # PROJECT STATUS
 
-_Last updated: 2026-10-29 (selection across blocks in v0.3.7-test.1, waiting for the user's Windows check)_
+_Last updated: 2026-10-29 (selection across blocks in v0.3.9-test.1, waiting for the user's Windows check)_
 
 ## Current phase
 Bug-fix phase (2026-10-26): five bugs reported from test build 2 on Windows, fixed one at a time in
@@ -301,7 +301,7 @@ See `docs/DECISIONS.md`, "Table column widths and multi-cell copy and paste". Co
 on Windows by the user (2026-10-26).
 
 ## Selection across lines (2026-10-29)
-Build v0.3.7-test.1 (version 0.3.7+11) lets a selection span blocks: drag across lines, Shift+click,
+Build v0.3.9-test.1 (version 0.3.9+13, which also carries the sidebar work of 0.3.8) lets a selection span blocks: drag across lines, Shift+click,
 Shift+arrows past a block's edge, or Ctrl+A twice; copy, cut, paste back as blocks, delete, type over,
 bold / italic / strikethrough / code, "Turn into" and Tab on every selected line. See
 `docs/DECISIONS.md`, "A selection across blocks belongs to the editor". Checked in a Linux release

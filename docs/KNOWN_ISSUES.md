@@ -139,7 +139,7 @@ machine with Ollama; that is the first thing to check with test build 2.
   yet. A text file with an unusual extension still shows and opens as text.
 - Links open with Ctrl+click (Bug 2); a hover does not yet show the destination. Images show when
   the file exists next to the page, otherwise the path is shown.
-- A selection can span blocks (v0.3.7-test.1): mouse drag, Shift+click, Shift+arrows past a
+- A selection can span blocks (v0.3.9-test.1): mouse drag, Shift+click, Shift+arrows past a
   block's edge, or Ctrl+A twice. It copies, cuts, deletes, is typed over, takes bold / italic /
   strikethrough / code and "Turn into", and Tab indents its list items. Ctrl+K (link) does nothing
   on it. A drag cannot start inside a code space or a table, which keep their own selection; they

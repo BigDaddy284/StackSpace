@@ -283,6 +283,73 @@ class Workspace extends ChangeNotifier {
     await refresh();
   }
 
+  /// Copies a page, or a folder with everything in it (sub-pages, pictures),
+  /// into [intoFolder] ('' is the top of the workspace) and returns the
+  /// copy's path. A name that is taken gets " copy", then " copy 2" and so
+  /// on, so pasting next to the original makes a duplicate.
+  Future<String> copy(String fromPath, String intoFolder, {ChangeSource source = ChangeSource.user}) async {
+    final fromRel = normalize(fromPath);
+    final from = resolve(fromRel);
+    final intoRel = intoFolder.trim().isEmpty ? '' : normalize(intoFolder);
+    final into = intoRel.isEmpty ? root : resolve(intoRel);
+    final isDir = await Directory(from).exists();
+    if (!isDir && !await File(from).exists()) {
+      throw WorkspaceException('"$fromRel" does not exist.');
+    }
+    if (intoRel.isNotEmpty && await File(into).exists()) {
+      throw WorkspaceException('"$intoRel" is a page, not a folder.');
+    }
+
+    final name = p.posix.basename(fromRel);
+    final ext = isDir ? '' : p.posix.extension(name);
+    final stem = name.substring(0, name.length - ext.length);
+    var to = p.join(into, name);
+    for (var n = 1; await File(to).exists() || await Directory(to).exists(); n++) {
+      to = p.join(into, '$stem copy${n == 1 ? '' : ' $n'}$ext');
+    }
+
+    if (isDir) {
+      // List first, so a folder pasted into itself copies what it held, once.
+      final contents = await Directory(from).list(recursive: true, followLinks: false).toList();
+      await Directory(to).create(recursive: true);
+      for (final entity in contents) {
+        final target = p.join(to, p.relative(entity.path, from: from));
+        if (entity is Directory) {
+          await Directory(target).create(recursive: true);
+        } else if (entity is File) {
+          await Directory(p.dirname(target)).create(recursive: true);
+          await entity.copy(target);
+        }
+      }
+    } else {
+      await Directory(into).create(recursive: true);
+      await File(from).copy(to);
+    }
+    final toRel = toRelative(to);
+    _emit(WorkspaceChange(WorkspaceChangeKind.created, toRel, source));
+    await refresh();
+    return toRel;
+  }
+
+  /// Moves a page or folder into [intoFolder] ('' is the top of the
+  /// workspace), keeping its name, and returns its new path. Moving it to
+  /// where it already is does nothing; a folder cannot go inside itself.
+  Future<String> move(String fromPath, String intoFolder, {ChangeSource source = ChangeSource.user}) async {
+    final fromRel = normalize(fromPath);
+    final intoRel = intoFolder.trim().isEmpty ? '' : normalize(intoFolder);
+    if (intoRel == fromRel || intoRel.startsWith('$fromRel/')) {
+      throw WorkspaceException('"$fromRel" cannot be moved inside itself.');
+    }
+    if (intoRel.isNotEmpty && await File(resolve(intoRel)).exists()) {
+      throw WorkspaceException('"$intoRel" is a page, not a folder.');
+    }
+    final name = p.posix.basename(fromRel);
+    final toRel = intoRel.isEmpty ? name : '$intoRel/$name';
+    if (toRel == fromRel) return fromRel;
+    await rename(fromRel, toRel, source: source);
+    return toRel;
+  }
+
   void _emit(WorkspaceChange change) {
     if (!_changes.isClosed) _changes.add(change);
   }
