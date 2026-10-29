@@ -379,4 +379,28 @@ void main() {
     expect(File('${dir.path}/inner/deep.md').existsSync(), isTrue);
     expect(Directory('${dir.path}/outer/inner').existsSync(), isFalse);
   });
+
+  testWidgets('a slow right-click on a folder opens one menu', (tester) async {
+    // A press held past the tap timeout opened the row's menu and the list's
+    // top-level menu on top of each other.
+    await tester.runAsync(() => File('${dir.path}/box/in.md').create(recursive: true));
+    await pumpApp(tester);
+    final gesture = await tester.startGesture(tester.getCenter(find.text('box')),
+        kind: PointerDeviceKind.mouse, buttons: kSecondaryButton);
+    await tester.pump(const Duration(milliseconds: 300));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    debugPrint('MENUS: ${find.textContaining('Paste').evaluate().length} ${find.textContaining('New page here').evaluate().length}');
+    expect(find.text('Copy folder'), findsOneWidget);
+    expect(find.text('New page here'), findsOneWidget, reason: 'only the folder menu is open');
+
+    // Right-clicking below the rows still opens the top-level menu.
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+    final below = tester.getBottomLeft(find.text('hello.py').first) + const Offset(0, 60);
+    await tester.tapAt(below, buttons: kSecondaryButton);
+    await tester.pumpAndSettle();
+    expect(find.text('New page here'), findsOneWidget);
+    expect(find.text('Copy folder'), findsNothing);
+  });
 }
