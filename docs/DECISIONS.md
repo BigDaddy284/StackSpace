@@ -278,6 +278,24 @@ cells move both ways. An HTML comment is hidden by other Markdown readers, so th
 as a plain table; a table that was never resized writes back exactly as before.
 **Status**: Done; `test/table_image_test.dart`.
 
+### A selection across blocks belongs to the editor (v0.3.7-test.1)
+**Decision**: Each block keeps its own text field, and a selection that leaves the block it started
+in becomes the editor's: it is held as a start and end (block and offset), painted by the editor
+behind the text of every field it covers (the fields' own selection is hidden while it is up), and
+its keys are handled before the field sees them. It starts with a mouse drag into another block
+(the page scrolls near its top and bottom edges), Shift+click in another block, Shift+arrow past
+the first or last line, or Ctrl+A when the block is already all selected. Ctrl+C copies it as the
+Markdown it would be saved as; pasting that text back (while it is the last thing copied from a
+selection) brings the blocks back rather than putting the lines into one block. Delete, Backspace,
+Ctrl+X, typing and Enter replace it in one undo step, the text before it and after it joining into
+one block. Ctrl+B / I / E / Shift+X and the toolbar mark every selected line (or unmark them when
+all of them already are), and "Turn into" changes every selected block; into a code block the lines
+join into one.
+**Rationale**: One field per block is what keeps very long pages fast (Task 8), so the page is not
+turned into one big field. Copying Markdown keeps lists, headings and formatting when pasted into
+another Markdown editor, and reads fine as plain text.
+**Status**: Done; `lib/editor/block_range.dart`, `test/block_range_test.dart`.
+
 ### Folding is view state, not a file format (Task 11)
 **Decision**: A heading folds the blocks up to the next heading of the same or a higher level. The
 folded state lives in the editor for the open page and is never written to the file; there is no

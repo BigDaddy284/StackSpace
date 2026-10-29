@@ -155,6 +155,17 @@ class PageDocument extends ChangeNotifier {
     _commit(next, after: after);
   }
 
+  /// Replaces the blocks from [start] up to [end] (exclusive) with [blocks] in
+  /// one undo step: an edit of a selection that spans blocks. The block after
+  /// them goes back to the default spacing unless [resetGaps] is false (only
+  /// the blocks' text changed).
+  void replaceRange(int start, int end, List<Block> blocks, {Caret? before, Caret? after, bool resetGaps = true}) {
+    final next = _copy()..replaceRange(start, end, blocks);
+    if (resetGaps) _resetGaps(next, [start + blocks.length]);
+    if (next.isEmpty) next.add(Block(kind: BlockKind.paragraph));
+    _commit(next, before: before, after: after);
+  }
+
   void insert(int index, Block block) {
     final next = _copy()..insert(index, block);
     _resetGaps(next, [index, index + 1]);
