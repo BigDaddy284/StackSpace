@@ -468,7 +468,9 @@ class SidebarState extends State<Sidebar> {
                       child: GestureDetector(
                         behavior: HitTestBehavior.translucent,
                         excludeFromSemantics: true,
-                        onSecondaryTapDown: (details) => _showMenu(null, details.globalPosition),
+                        // On release, so only the row's menu opens when a row is right-clicked:
+                        // a press held past the tap timeout reaches both detectors.
+                        onSecondaryTapUp: (details) => _showMenu(null, details.globalPosition),
                         child: DragTarget<List<String>>(
                           onWillAcceptWithDetails: (d) {
                             _dragOver(canDrop(d.data, '') ? '' : null);
@@ -610,6 +612,14 @@ class SidebarState extends State<Sidebar> {
     );
   }
 
+  bool _menuOpen = false;
+
+  Future<String?> _menu(Offset position, List<PopupMenuEntry<String>> items) => showMenu<String>(
+        context: context,
+        position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
+        items: items,
+      );
+
   PopupMenuEntry<String> _item(String value, String label, {String? shortcut, bool enabled = true}) {
     final p = StackColors.of(context);
     return PopupMenuItem(
@@ -637,10 +647,13 @@ class SidebarState extends State<Sidebar> {
         : e != null && e.isFolder
             ? 'Paste $held into this folder'
             : 'Paste $held here';
-    final choice = await showMenu<String>(
-      context: context,
-      position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
-      items: [
+    // One menu at a time: a second request while one is open (the row's and
+    // the list's handlers both answering one right-click) is dropped.
+    if (_menuOpen) return;
+    _menuOpen = true;
+    final String? choice;
+    try {
+      choice = await _menu(position, [
         if (e == null || (e.isFolder && !many)) ...[
           _item('new', 'New page here'),
           _item('newFolder', 'New folder here'),
@@ -657,8 +670,10 @@ class SidebarState extends State<Sidebar> {
           _item('rename', 'Rename / move', shortcut: 'F2', enabled: !many),
           _item('delete', many ? 'Delete $what' : 'Delete', shortcut: 'Delete'),
         ],
-      ],
-    );
+      ]);
+    } finally {
+      _menuOpen = false;
+    }
     final folder = e == null ? '' : _folderOf(e);
     switch (choice) {
       case 'new':
