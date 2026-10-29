@@ -129,10 +129,16 @@ class _SlashRow extends StatefulWidget {
 }
 
 class _SlashRowState extends State<_SlashRow> {
+  /// Whether the mouse is over this row. A row picked by hovering is already
+  /// on screen, and scrolling it to the middle would slide another row under
+  /// the mouse, which would pick that one and scroll again: the list chased
+  /// the pointer. Only arrow keys scroll the list.
+  bool _hovered = false;
+
   @override
   void didUpdateWidget(_SlashRow old) {
     super.didUpdateWidget(old);
-    if (widget.selected && !old.selected) {
+    if (widget.selected && !old.selected && !_hovered) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) Scrollable.ensureVisible(context, alignment: 0.5, duration: const Duration(milliseconds: 80));
       });
@@ -143,7 +149,11 @@ class _SlashRowState extends State<_SlashRow> {
   Widget build(BuildContext context) {
     final palette = StackColors.of(context);
     return MouseRegion(
-      onEnter: (_) => widget.onHover(),
+      onEnter: (_) {
+        _hovered = true;
+        widget.onHover();
+      },
+      onExit: (_) => _hovered = false,
       cursor: SystemMouseCursors.click,
       child: Semantics(
         button: true,

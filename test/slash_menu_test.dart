@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -114,6 +115,36 @@ void main() {
       await settle(tester);
       await waitSaved(tester, editor);
       expect(File('${dir.path}/page.md').readAsStringSync(), '## \n');
+    });
+
+    testWidgets('hovering a command highlights it without scrolling the list; arrows still scroll',
+        (tester) async {
+      // The list scrolled each hovered row to its middle, which slid another
+      // row under the mouse, so the menu chased the pointer.
+      await pumpEditor(tester, '\n');
+      final field = find.byType(TextField).first;
+      await type(tester, field, '/');
+      final scroll = tester.state<ScrollableState>(
+          find.descendant(of: menu, matching: find.byType(Scrollable)).first).position;
+      expect(scroll.pixels, 0);
+
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: tester.getCenter(find.text('Bulleted list')));
+      await tester.pump();
+      await tester.pumpAndSettle();
+      expect(scroll.pixels, 0, reason: 'a hovered row is already on screen');
+      final panel = tester.widget<SlashMenuPanel>(menu);
+      expect(panel.items[panel.selected].label, 'Bulleted list', reason: 'hover still highlights');
+      await mouse.moveTo(tester.getCenter(find.text('Callout')));
+      await tester.pumpAndSettle();
+      expect(scroll.pixels, 0);
+      await mouse.removePointer();
+
+      for (var i = 0; i < 6; i++) {
+        await key(tester, LogicalKeyboardKey.arrowDown);
+      }
+      await tester.pumpAndSettle();
+      expect(scroll.pixels, greaterThan(0), reason: 'moving with the keys keeps the pick in view');
     });
 
     testWidgets('Escape closes and keeps the typed text; Up wraps to the end', (tester) async {
