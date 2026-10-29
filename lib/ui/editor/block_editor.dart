@@ -3,12 +3,14 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:re_editor/re_editor.dart';
 
 import '../../app/theme.dart';
+import '../../editor/block_range.dart';
 import '../../editor/blocks.dart';
 import '../../editor/links.dart';
 import '../../editor/code_languages.dart';
@@ -80,6 +82,7 @@ class _BlockEditorState extends State<BlockEditor> {
   @override
   void dispose() {
     _autoScroll?.cancel();
+    _selectScroll?.cancel();
     _scroll.removeListener(_onScroll);
     for (final h in _hovers.values) {
       h.dispose();
@@ -144,6 +147,7 @@ class _BlockEditorState extends State<BlockEditor> {
   void _prune() {
     final live = {for (final b in doc.blocks) b.id};
     _fieldKeys.removeWhere((id, _) => !live.contains(id));
+    _bodyKeys.removeWhere((id, _) => !live.contains(id));
     _heights.removeWhere((id, _) => !live.contains(id));
     _captions.removeWhere((id) => !live.contains(id));
     for (final id in _hovers.keys.where((id) => !live.contains(id)).toList()) {
@@ -229,7 +233,11 @@ class _BlockEditorState extends State<BlockEditor> {
 
   KeyEventResult _onKey(Block block, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
-    if (widget.readOnly) return KeyEventResult.ignored;
+    final range = _range;
+    if (range != null) {
+      final result = _onRangeKey(range, event);
+      if (result != null) return result;
+    }
     // Callbacks may run before the list has rebuilt, so find the block now.
     final index = doc.indexOf(block.id);
     if (index < 0) return KeyEventResult.ignored;
@@ -238,6 +246,17 @@ class _BlockEditorState extends State<BlockEditor> {
     final keys = HardwareKeyboard.instance;
     final ctrl = keys.isControlPressed || keys.isMetaPressed;
     final shift = keys.isShiftPressed;
+
+    // Ctrl+A selects the block's text; once it is all selected, the page.
+    if (ctrl && !shift && key == LogicalKeyboardKey.keyA && hasInlineText(block) && doc.length > 1) {
+      final sel = _textFor(block).selection;
+      if (block.text.isEmpty || (sel.isValid && sel.start == 0 && sel.end == block.text.length)) {
+        _setRange(BlockRange((block: 0, offset: 0), (block: doc.length - 1, offset: doc[doc.length - 1].text.length)));
+        _positionRangeToolbar();
+        return KeyEventResult.handled;
+      }
+    }
+    if (widget.readOnly) return KeyEventResult.ignored;
 
     final slash = _slash;
     if (slash != null && slash.blockId == block.id) {
@@ -309,6 +328,10 @@ class _BlockEditorState extends State<BlockEditor> {
     // Enter is not handled here: the newline arrives with the typed text (see
     // [_onChanged]), which keeps it in order with characters still in flight
     // from the platform's text input.
+
+    // Shift+arrow past the first or last line carries the selection on into
+    // the next block.
+    if (shift && !ctrl && sel.isValid && _startRangeByKey(index, block, key, sel)) return KeyEventResult.handled;
 
     if (key == LogicalKeyboardKey.backspace && sel.isValid && sel.isCollapsed && sel.start == 0) {
       if (block.isList && block.level > 0) {
@@ -866,35 +889,10 @@ class _BlockEditorState extends State<BlockEditor> {
     final text = _textFor(block);
     final value = text.text;
     final sel = text.selection.isValid ? text.selection : TextSelection.collapsed(offset: value.length);
-    // Markers hug the words: a selection that drags in a space on either side
-    // ("** word**" is not bold in Markdown) is trimmed first.
-    var start = sel.start, end = sel.end;
-    while (start < end && value[start].trim().isEmpty) {
-      start++;
-    }
-    while (end > start && value[end - 1].trim().isEmpty) {
-      end--;
-    }
-    final n = marker.length;
-    final inner = value.substring(start, end);
-    final String next;
-    final TextSelection after;
-    if (inner.length >= 2 * n && inner.startsWith(marker) && inner.endsWith(marker)) {
-      next = value.replaceRange(start, end, inner.substring(n, inner.length - n));
-      after = TextSelection(baseOffset: start, extentOffset: end - 2 * n);
-    } else if (start >= n &&
-        end + n <= value.length &&
-        value.substring(start - n, start) == marker &&
-        value.substring(end, end + n) == marker) {
-      next = value.replaceRange(start - n, end + n, inner);
-      after = TextSelection(baseOffset: start - n, extentOffset: end - n);
-    } else {
-      next = value.replaceRange(start, end, '$marker$inner$marker');
-      after = TextSelection(baseOffset: start + n, extentOffset: end + n);
-    }
-    text.expectChange(value, next);
-    text.value = TextEditingValue(text: next, selection: after);
-    doc.updateText(index, next, caret: (block: index, offset: after.extentOffset));
+    final result = toggleMarker(value, sel, marker);
+    text.expectChange(value, result.text);
+    text.value = TextEditingValue(text: result.text, selection: result.selection);
+    doc.updateText(index, result.text, caret: (block: index, offset: result.selection.extentOffset));
   }
 
   /// Turns the selection into a Markdown link with the URL part selected;
@@ -964,6 +962,7 @@ class _BlockEditorState extends State<BlockEditor> {
       if (_pending?.block == index) _pending = null;
     }
     final sel = text.selection;
+    if (block.isText && !doc.plain && _pasteRangeClip(index, block, value, sel)) return;
     if (block.isText && !doc.plain) _trackSlash(index, block, value, sel);
     if (block.isText && _splitOnNewline(index, block, value, sel)) return;
     // A URL pasted over selected words links them (Bug 2). A URL pasted on
@@ -1055,7 +1054,9 @@ class _BlockEditorState extends State<BlockEditor> {
     final text = _textFor(block);
     final focused = _focusFor(block).hasFocus;
     if (focused) widget.controller.setSelection(index, text.selection);
-    if (block.isText && !doc.plain && focused && !text.selection.isCollapsed && !widget.readOnly) {
+    if (_range != null) {
+      // The range has its own toolbar; the field's own selection is hidden.
+    } else if (block.isText && !doc.plain && focused && !text.selection.isCollapsed && !widget.readOnly) {
       _positionToolbar(block);
     } else if (_toolbar?.blockId == block.id) {
       _closeToolbar();
@@ -1069,6 +1070,476 @@ class _BlockEditorState extends State<BlockEditor> {
         _closeSlash();
       }
     }
+  }
+
+  // ---- selection across blocks ------------------------------------------------
+
+  /// A selection that spans blocks, while there is one. Each block's field
+  /// selects only inside itself (and paints its selection only while it has
+  /// focus), so the editor keeps this one, paints it and handles its keys.
+  BlockRange? _range;
+
+  /// The document version [_range] was made for; any other edit ends it.
+  int _rangeVersion = -1;
+
+  /// Where the mouse button went down in a text field, while it is held.
+  Caret? _press;
+  Offset? _lastPointer;
+  Timer? _selectScroll;
+  double _selectSpeed = 0;
+
+  /// The last Markdown copied from a range, so pasting it brings back blocks.
+  String? _rangeClip;
+  Color _selectionColor = const Color(0x664488FF);
+
+  final _bodyKeys = <int, GlobalKey>{};
+  GlobalKey _bodyKeyFor(Block block) => _bodyKeys.putIfAbsent(block.id, GlobalKey.new);
+
+  /// The selection across blocks, for tests.
+  BlockRange? get range => _range;
+
+  void _setRange(BlockRange? range) {
+    _rangeVersion = doc.version;
+    if (range == _range) return;
+    setState(() => _range = range);
+    final toolbar = _toolbar;
+    if (toolbar != null && (range == null) == toolbar.range) _closeToolbar();
+  }
+
+  RenderEditable? _editableFor(Block block) => _findEditable(_fieldKeys[block.id]?.currentContext?.findRenderObject());
+
+  /// The text block whose field is under [global], and the offset there.
+  Caret? _fieldAt(Offset global) {
+    for (final entry in _fieldKeys.entries) {
+      final index = doc.indexOf(entry.key);
+      if (index < 0 || !hasInlineText(doc[index]) || _isHidden(index)) continue;
+      final editable = _editableFor(doc[index]);
+      if (editable == null || !editable.attached || !editable.hasSize) continue;
+      final local = editable.globalToLocal(global);
+      if (!(Offset.zero & editable.size).contains(local)) continue;
+      return (block: index, offset: editable.getPositionForPoint(global).offset);
+    }
+    return null;
+  }
+
+  /// The block nearest to [global] among the rows on screen, and the offset
+  /// in its text closest to it.
+  Caret? _hitAt(Offset global) {
+    var best = -1;
+    var bestDistance = double.infinity;
+    for (final entry in _bodyKeys.entries) {
+      final box = entry.value.currentContext?.findRenderObject();
+      if (box is! RenderBox || !box.attached || !box.hasSize) continue;
+      final index = doc.indexOf(entry.key);
+      if (index < 0 || _isHidden(index)) continue;
+      final top = box.localToGlobal(Offset.zero).dy;
+      final bottom = top + box.size.height;
+      final distance = global.dy < top ? top - global.dy : (global.dy > bottom ? global.dy - bottom : 0.0);
+      if (distance < bestDistance || (distance == bestDistance && index > best)) {
+        best = index;
+        bestDistance = distance;
+      }
+    }
+    if (best < 0) return null;
+    final block = doc[best];
+    final editable = hasInlineText(block) ? _editableFor(block) : null;
+    if (editable != null && editable.attached && editable.hasSize) {
+      return (block: best, offset: editable.getPositionForPoint(global).offset);
+    }
+    final box = _bodyKeys[block.id]!.currentContext!.findRenderObject() as RenderBox;
+    final middle = box.localToGlobal(Offset.zero).dy + box.size.height / 2;
+    return (block: best, offset: global.dy < middle ? 0 : block.text.length);
+  }
+
+  /// The caret (the selection's fixed end) of the focused text block.
+  Caret? _caretNow() {
+    final i = widget.controller.focusedBlock;
+    if (i < 0 || i >= doc.length || !hasInlineText(doc[i]) || !_focusFor(doc[i]).hasFocus) return null;
+    final sel = _textFor(doc[i]).selection;
+    return sel.isValid ? (block: i, offset: sel.baseOffset) : null;
+  }
+
+  void _onPointerDown(PointerDownEvent event) {
+    if (event.kind != PointerDeviceKind.mouse || event.buttons != kPrimaryMouseButton) return;
+    final at = _fieldAt(event.position);
+    if (at != null && HardwareKeyboard.instance.isShiftPressed) {
+      // Shift+click in another block selects from the caret to there.
+      final from = _range?.anchor ?? _caretNow();
+      if (from != null && from.block != at.block) {
+        _press = from;
+        _setRange(BlockRange(from, at));
+        _positionRangeToolbar();
+        return;
+      }
+    }
+    _press = at;
+    if (_range != null) _setRange(null);
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    if (_press == null || event.buttons != kPrimaryMouseButton) return;
+    _lastPointer = event.position;
+    _extendTo(event.position);
+    _autoScrollSelection(event.position);
+  }
+
+  void _onPointerEnd(PointerEvent event) {
+    _press = null;
+    _lastPointer = null;
+    _selectScroll?.cancel();
+    _selectScroll = null;
+    if (_range != null) _positionRangeToolbar();
+  }
+
+  /// Moves the loose end of the drag to the block under [global]. Back inside
+  /// the block where it started, the field's own selection takes over again.
+  void _extendTo(Offset global) {
+    final press = _press;
+    if (press == null || !mounted) return;
+    final at = _hitAt(global);
+    if (at == null) return;
+    _setRange(at.block == press.block ? null : BlockRange(press, at));
+  }
+
+  /// Scrolls the page while a selection is dragged near its top or bottom.
+  void _autoScrollSelection(Offset pointer) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !_scroll.hasClients) return;
+    final local = box.globalToLocal(pointer);
+    const zone = 40.0;
+    double speed = 0;
+    if (local.dy < zone) speed = -(zone - local.dy) / 2;
+    if (local.dy > box.size.height - zone) speed = (local.dy - (box.size.height - zone)) / 2;
+    _selectSpeed = speed;
+    if (speed == 0) {
+      _selectScroll?.cancel();
+      _selectScroll = null;
+      return;
+    }
+    _selectScroll ??= Timer.periodic(const Duration(milliseconds: 16), (_) {
+      if (!mounted || !_scroll.hasClients || _press == null) return;
+      final position = _scroll.position;
+      position.jumpTo((position.pixels + _selectSpeed).clamp(0.0, position.maxScrollExtent));
+      // The rows are where they scrolled to after the next layout.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final p = _lastPointer;
+        if (p != null) _extendTo(p);
+      });
+    });
+  }
+
+  /// One line up or down from [from]: within the block while it has more
+  /// lines, else onto the nearest line of the block before or after, at the
+  /// same distance from the left. Null at the top or bottom of the page.
+  Caret? _lineStep(Caret from, {required bool down}) {
+    final block = doc[from.block];
+    final editable = hasInlineText(block) ? _editableFor(block) : null;
+    double? x;
+    if (editable != null && editable.attached && editable.hasSize) {
+      final caret = editable.getLocalRectForCaret(TextPosition(offset: from.offset.clamp(0, block.text.length)));
+      final y = down ? caret.bottom + caret.height / 2 : caret.top - caret.height / 2;
+      if (y >= 0 && y <= editable.size.height) {
+        return (
+          block: from.block,
+          offset: editable.getPositionForPoint(editable.localToGlobal(Offset(caret.left, y))).offset
+        );
+      }
+      x = editable.localToGlobal(caret.topLeft).dx;
+    }
+    var to = from.block + (down ? 1 : -1);
+    while (to >= 0 && to < doc.length && _isHidden(to)) {
+      to += down ? 1 : -1;
+    }
+    if (to < 0 || to >= doc.length) {
+      if (!hasInlineText(block)) return null;
+      final edge = down ? block.text.length : 0;
+      return edge == from.offset ? null : (block: from.block, offset: edge);
+    }
+    final target = doc[to];
+    final next = hasInlineText(target) ? _editableFor(target) : null;
+    if (x != null && next != null && next.attached && next.hasSize) {
+      final topLeft = next.localToGlobal(Offset.zero);
+      final y = down ? topLeft.dy + 2 : topLeft.dy + next.size.height - 2;
+      return (block: to, offset: next.getPositionForPoint(Offset(x, y)).offset);
+    }
+    return (block: to, offset: down ? 0 : target.text.length);
+  }
+
+  /// One character left or right of [from], across into the next block.
+  Caret? _charStep(Caret from, {required bool forward}) {
+    final block = doc[from.block];
+    if (hasInlineText(block)) {
+      if (forward && from.offset < block.text.length) return (block: from.block, offset: from.offset + 1);
+      if (!forward && from.offset > 0) return (block: from.block, offset: from.offset - 1);
+    }
+    var to = from.block + (forward ? 1 : -1);
+    while (to >= 0 && to < doc.length && _isHidden(to)) {
+      to += forward ? 1 : -1;
+    }
+    if (to < 0 || to >= doc.length) return null;
+    return (block: to, offset: forward ? 0 : doc[to].text.length);
+  }
+
+  /// Shift+Up / Down on the first or last line of a block, or Shift+Left /
+  /// Right at its start or end, starts a range into the next block.
+  bool _startRangeByKey(int index, Block block, LogicalKeyboardKey key, TextSelection sel) {
+    final from = (block: index, offset: sel.extentOffset);
+    Caret? next;
+    if (key == LogicalKeyboardKey.arrowDown || key == LogicalKeyboardKey.arrowUp) {
+      next = _lineStep(from, down: key == LogicalKeyboardKey.arrowDown);
+    } else if (key == LogicalKeyboardKey.arrowRight && sel.extentOffset >= block.text.length ||
+        key == LogicalKeyboardKey.arrowLeft && sel.extentOffset == 0) {
+      next = _charStep(from, forward: key == LogicalKeyboardKey.arrowRight);
+    }
+    if (next == null || next.block == index) return false;
+    _setRange(BlockRange((block: index, offset: sel.baseOffset), next));
+    _positionRangeToolbar();
+    return true;
+  }
+
+  /// Ends the range and puts the caret at [caret].
+  void _placeCaret(Caret caret) {
+    _setRange(null);
+    _moveCaret(caret);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // A field that kept focus keeps its caret in [_applyPending]; set it here.
+      if (!mounted || caret.block >= doc.length) return;
+      final block = doc[caret.block];
+      if (!hasInlineText(block) || !_focusFor(block).hasFocus) return;
+      final text = _textFor(block);
+      if (text.text == block.text) {
+        text.selection = TextSelection.collapsed(offset: caret.offset.clamp(0, block.text.length));
+      }
+    });
+  }
+
+  /// Keys while a range is selected. Null lets the block handle the key.
+  KeyEventResult? _onRangeKey(BlockRange range, KeyEvent event) {
+    final key = event.logicalKey;
+    final keys = HardwareKeyboard.instance;
+    final ctrl = keys.isControlPressed || keys.isMetaPressed;
+    final shift = keys.isShiftPressed;
+    final modifiers = <LogicalKeyboardKey>{
+      LogicalKeyboardKey.shiftLeft,
+      LogicalKeyboardKey.shiftRight,
+      LogicalKeyboardKey.controlLeft,
+      LogicalKeyboardKey.controlRight,
+      LogicalKeyboardKey.altLeft,
+      LogicalKeyboardKey.altRight,
+      LogicalKeyboardKey.metaLeft,
+      LogicalKeyboardKey.metaRight,
+      LogicalKeyboardKey.capsLock,
+    };
+    if (modifiers.contains(key)) return null;
+    if (range.end.block >= doc.length) {
+      _setRange(null);
+      return null;
+    }
+    if (ctrl && key == LogicalKeyboardKey.keyC) {
+      _copyRange(range);
+      return KeyEventResult.handled;
+    }
+    if (ctrl && key == LogicalKeyboardKey.keyA) {
+      _setRange(BlockRange((block: 0, offset: 0), (block: doc.length - 1, offset: doc[doc.length - 1].text.length)));
+      _positionRangeToolbar();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.escape) {
+      _placeCaret(range.focus);
+      return KeyEventResult.handled;
+    }
+    final arrows = <LogicalKeyboardKey>{
+      LogicalKeyboardKey.arrowUp,
+      LogicalKeyboardKey.arrowDown,
+      LogicalKeyboardKey.arrowLeft,
+      LogicalKeyboardKey.arrowRight,
+    };
+    if (arrows.contains(key) && !ctrl) {
+      if (!shift) {
+        final back = key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.arrowLeft;
+        _placeCaret(back ? range.start : range.end);
+        return KeyEventResult.handled;
+      }
+      final next = key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.arrowDown
+          ? _lineStep(range.focus, down: key == LogicalKeyboardKey.arrowDown)
+          : _charStep(range.focus, forward: key == LogicalKeyboardKey.arrowRight);
+      if (next != null) {
+        final moved = BlockRange(range.anchor, next);
+        if (moved.isCollapsed) {
+          _placeCaret(next);
+        } else {
+          _setRange(moved);
+          _positionRangeToolbar();
+        }
+      }
+      return KeyEventResult.handled;
+    }
+    if (widget.readOnly) return null;
+    if (ctrl && key == LogicalKeyboardKey.keyX) {
+      _copyRange(range);
+      _placeCaret(deleteRange(doc, range));
+      return KeyEventResult.handled;
+    }
+    if (ctrl && key == LogicalKeyboardKey.keyV) {
+      _pasteOverRange(range);
+      return KeyEventResult.handled;
+    }
+    if (ctrl && !doc.plain) {
+      final marker = switch (key) {
+        LogicalKeyboardKey.keyB => '**',
+        LogicalKeyboardKey.keyI => '_',
+        LogicalKeyboardKey.keyE => '`',
+        LogicalKeyboardKey.keyX when shift => '~~',
+        _ => null,
+      };
+      if (marker != null) {
+        _formatRange(marker);
+        return KeyEventResult.handled;
+      }
+    }
+    if (ctrl) {
+      // Undo, redo and the app's own shortcuts work as usual; the range ends.
+      if (key == LogicalKeyboardKey.keyZ || key == LogicalKeyboardKey.keyY) _setRange(null);
+      return key == LogicalKeyboardKey.keyK ? KeyEventResult.handled : null;
+    }
+    if (key == LogicalKeyboardKey.backspace || key == LogicalKeyboardKey.delete) {
+      _placeCaret(deleteRange(doc, range));
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.tab) {
+      indentRange(doc, range, shift ? -1 : 1);
+      _setRange(range.clampTo(doc.blocks));
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.numpadEnter) {
+      final caret = deleteRange(doc, range);
+      _placeCaret(hasInlineText(doc[caret.block]) ? doc.split(caret.block, caret.offset) : caret);
+      return KeyEventResult.handled;
+    }
+    final character = event.character;
+    if (character != null &&
+        character.isNotEmpty &&
+        character.codeUnitAt(0) >= 0x20 &&
+        character.codeUnitAt(0) != 0x7f) {
+      // Typing replaces the selection, as in any text field.
+      _placeCaret(deleteRange(doc, range, insert: character));
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.handled;
+  }
+
+  void _copyRange(BlockRange range) {
+    final markdown = rangeMarkdown(doc.blocks, range);
+    _rangeClip = markdown;
+    Clipboard.setData(ClipboardData(text: markdown));
+  }
+
+  Future<void> _pasteOverRange(BlockRange range) async {
+    final caret = deleteRange(doc, range);
+    _placeCaret(caret);
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final clip = data?.text;
+    if (!mounted || clip == null || clip.isEmpty || caret.block >= doc.length) return;
+    final block = doc[caret.block];
+    if (!hasInlineText(block)) return;
+    final at = caret.offset.clamp(0, block.text.length);
+    final head = block.text.substring(0, at), tail = block.text.substring(at);
+    final blocks =
+        clip == _rangeClip && block.isText && !doc.plain ? pasteBlocks(doc, caret.block, head, tail, clip) : null;
+    if (blocks != null) {
+      _placeCaret(blocks);
+      return;
+    }
+    doc.updateText(caret.block, head + clip + tail, caret: (block: caret.block, offset: at + clip.length));
+    _placeCaret((block: caret.block, offset: at + clip.length));
+  }
+
+  /// Text copied from a range and pasted into a field comes back as the
+  /// blocks it was copied from rather than as lines of one block.
+  bool _pasteRangeClip(int index, Block block, String value, TextSelection sel) {
+    final clip = _rangeClip;
+    if (clip == null || !clip.contains('\n') || !sel.isValid || !sel.isCollapsed) return false;
+    final start = sel.extentOffset - clip.length;
+    if (start < 0 || value.substring(start, sel.extentOffset) != clip) return false;
+    final head = value.substring(0, start), tail = value.substring(sel.extentOffset);
+    final old = block.text;
+    if (head.length + tail.length > old.length || !old.startsWith(head) || !old.endsWith(tail)) return false;
+    final text = _textFor(block);
+    final caret = pasteBlocks(doc, index, head, tail, clip);
+    if (caret == null) return false;
+    text.expectChange(value, doc[index].text);
+    _placeCaret(caret);
+    return true;
+  }
+
+  void _formatRange(String marker) {
+    final range = _range;
+    if (range == null) return;
+    final next = formatRange(doc, range, marker);
+    _rangeVersion = doc.version;
+    setState(() => _range = next.clampTo(doc.blocks));
+    _positionRangeToolbar();
+  }
+
+  void _formatRangeAction(FormatAction action) {
+    final marker = switch (action) {
+      FormatAction.bold => '**',
+      FormatAction.italic => '_',
+      FormatAction.strike => '~~',
+      FormatAction.code => '`',
+      FormatAction.link => null,
+    };
+    if (marker != null) _formatRange(marker);
+  }
+
+  void _turnRangeInto(BlockKind kind, int level) {
+    final range = _range;
+    if (range == null) return;
+    final caret = convertRange(doc, range, kind, level);
+    if (caret != null) {
+      _placeCaret(caret);
+      return;
+    }
+    _rangeVersion = doc.version;
+    setState(() => _range = range.clampTo(doc.blocks));
+    _positionRangeToolbar();
+  }
+
+  /// Shows the toolbar above the first selected line on screen.
+  void _positionRangeToolbar() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final range = _range;
+      if (!mounted || range == null || widget.readOnly || doc.plain || _press != null) return;
+      for (var i = range.start.block; i <= range.end.block && i < doc.length; i++) {
+        final block = doc[i];
+        RenderBox? from;
+        Rect? local;
+        final editable = hasInlineText(block) ? _editableFor(block) : null;
+        if (editable != null && editable.attached && editable.hasSize) {
+          final sel = range.selectionIn(i, block)!;
+          final boxes = sel.isCollapsed ? const <TextBox>[] : editable.getBoxesForSelection(sel);
+          from = editable;
+          local = boxes.isEmpty ? editable.getLocalRectForCaret(TextPosition(offset: sel.start)) : boxes.first.toRect();
+        } else {
+          final box = _bodyKeys[block.id]?.currentContext?.findRenderObject();
+          if (box is RenderBox && box.attached && box.hasSize) {
+            from = box;
+            local = Offset.zero & Size(box.size.width.clamp(0, 300), 20);
+          }
+        }
+        if (from == null || local == null) continue;
+        final topLeft = from.localToGlobal(local.topLeft);
+        final anchor = Rect.fromLTWH(topLeft.dx, topLeft.dy, local.width, local.height);
+        final id = doc[range.start.block].id;
+        final current = _toolbar;
+        if (current != null && current.range && current.blockId == id && current.anchor == anchor) return;
+        setState(() => _toolbar = _ToolbarSession(id, anchor, range: true));
+        if (!_toolbarPortal.isShowing) _toolbarPortal.show();
+        return;
+      }
+    });
+    // Nothing else may be about to draw (a mouse release changes no field).
+    WidgetsBinding.instance.scheduleFrame();
   }
 
   // ---- floating toolbar and block menu ----------------------------------------
@@ -1300,6 +1771,15 @@ class _BlockEditorState extends State<BlockEditor> {
         // Controllers outlive their blocks only after a removal; pruning is a
         // pass over every block, so it waits for that.
         if (_focus.length + _codeFocus.length > doc.length) _prune();
+        // An edit from anywhere else (typing, undo, the assistant) ends a range.
+        if (_range != null && _rangeVersion != doc.version) {
+          _range = null;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _toolbar?.range == true) _closeToolbar();
+          });
+        }
+        _selectionColor =
+            DefaultSelectionStyle.of(context).selectionColor ?? Theme.of(context).colorScheme.primary.withAlpha(102);
         return OverlayPortal(
           controller: _toolbarPortal,
           overlayChildBuilder: (context) {
@@ -1308,6 +1788,15 @@ class _BlockEditorState extends State<BlockEditor> {
             final i = doc.indexOf(toolbar.blockId);
             if (i < 0) return const SizedBox.shrink();
             final block = doc[i];
+            if (toolbar.range) {
+              return FormatToolbar(
+                anchor: toolbar.anchor,
+                block: block,
+                link: false,
+                onAction: _formatRangeAction,
+                onTurnInto: _turnRangeInto,
+              );
+            }
             return FormatToolbar(
               anchor: toolbar.anchor,
               block: block,
@@ -1332,28 +1821,34 @@ class _BlockEditorState extends State<BlockEditor> {
                 },
               );
             },
-            child: Scrollbar(
-              controller: _scroll,
-              child: ListView.builder(
+            child: Listener(
+              onPointerDown: _onPointerDown,
+              onPointerMove: _onPointerMove,
+              onPointerUp: _onPointerEnd,
+              onPointerCancel: _onPointerEnd,
+              child: Scrollbar(
                 controller: _scroll,
-                padding: const EdgeInsets.fromLTRB(0, 6, BlockMetrics.listPadding, 0),
-                itemCount: doc.length + 1,
-                // Every row's height is known up front, so a jump to any point
-                // of a long page lays out only the rows that show there.
-                itemExtentBuilder: (i, dimensions) => i == doc.length
-                    ? BlockMetrics.tailHeight
-                    : _extentsFor(metrics, dimensions.crossAxisExtent - BlockMetrics.gutter)[i],
-                // Rows are keyed by block id, so a block that moves (after a split
-                // or an insert above it) keeps its widgets, focus and text input.
-                findChildIndexCallback: (key) {
-                  if (key is! ValueKey<String> || !key.value.startsWith('row-')) return null;
-                  final index = doc.indexOf(int.parse(key.value.substring(4)));
-                  return index < 0 ? null : index;
-                },
-                itemBuilder: (context, i) {
-                  if (i == doc.length) return _tail(palette);
-                  return _row(context, palette, i, doc[i]);
-                },
+                child: ListView.builder(
+                  controller: _scroll,
+                  padding: const EdgeInsets.fromLTRB(0, 6, BlockMetrics.listPadding, 0),
+                  itemCount: doc.length + 1,
+                  // Every row's height is known up front, so a jump to any point
+                  // of a long page lays out only the rows that show there.
+                  itemExtentBuilder: (i, dimensions) => i == doc.length
+                      ? BlockMetrics.tailHeight
+                      : _extentsFor(metrics, dimensions.crossAxisExtent - BlockMetrics.gutter)[i],
+                  // Rows are keyed by block id, so a block that moves (after a split
+                  // or an insert above it) keeps its widgets, focus and text input.
+                  findChildIndexCallback: (key) {
+                    if (key is! ValueKey<String> || !key.value.startsWith('row-')) return null;
+                    final index = doc.indexOf(int.parse(key.value.substring(4)));
+                    return index < 0 ? null : index;
+                  },
+                  itemBuilder: (context, i) {
+                    if (i == doc.length) return _tail(palette);
+                    return _row(context, palette, i, doc[i]);
+                  },
+                ),
               ),
             ),
           ),
@@ -1470,6 +1965,9 @@ class _BlockEditorState extends State<BlockEditor> {
           onOpenLink: (offset) => _openLinkAt(doc[doc.indexOf(block.id)], offset),
           plain: doc.plain,
           fieldKey: _fieldKeyFor(block),
+          range: _range?.selectionIn(index, block),
+          rangeRunsOn: _range != null && _range!.covers(index) && index < _range!.end.block,
+          rangeColor: _selectionColor,
         );
     }
     final gap = BlockMetrics.gapAbove(block, index > 0 ? doc[index - 1] : null);
@@ -1561,11 +2059,22 @@ class _BlockEditorState extends State<BlockEditor> {
               Expanded(
                 child: KeyedSubtree(
                   key: ValueKey('body-${block.id}'),
-                  child: Focus(
-                    skipTraversal: true,
-                    canRequestFocus: false,
-                    onKeyEvent: (_, event) => _onKey(block, event),
-                    child: body,
+                  child: KeyedSubtree(
+                    key: _bodyKeyFor(block),
+                    child: Focus(
+                      skipTraversal: true,
+                      canRequestFocus: false,
+                      onKeyEvent: (_, event) => _onKey(block, event),
+                      // A block without inline text inside a range is selected whole.
+                      child: DecoratedBox(
+                        position: DecorationPosition.foreground,
+                        decoration: BoxDecoration(
+                          color: !hasInlineText(block) && (_range?.covers(index) ?? false) ? _selectionColor : null,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: body,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1707,9 +2216,20 @@ class _TextBlock extends StatefulWidget {
     required this.onOpenLink,
     required this.plain,
     required this.fieldKey,
+    this.range,
+    this.rangeRunsOn = false,
+    this.rangeColor = Colors.transparent,
   });
 
   final GlobalKey fieldKey;
+
+  /// The part of this block inside a selection across blocks, painted by the
+  /// editor in place of the field's own selection.
+  final TextSelection? range;
+
+  /// Whether that selection goes on past the end of this block.
+  final bool rangeRunsOn;
+  final Color rangeColor;
   final Block block;
   final int index;
   final InlineMarkdownController text;
@@ -1880,7 +2400,15 @@ class _TextBlockState extends State<_TextBlock> {
                           decoration: block.kind == BlockKind.todo && block.checked
                               ? TextDecoration.lineThrough
                               : TextDecoration.none),
-                      child: field,
+                      child: _RangeHighlight(
+                        selection: widget.range,
+                        runsOn: widget.rangeRunsOn,
+                        color: widget.rangeColor,
+                        child: DefaultSelectionStyle.merge(
+                          selectionColor: widget.range != null ? Colors.transparent : null,
+                          child: field,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -1906,9 +2434,12 @@ class _TextBlockState extends State<_TextBlock> {
 
 /// The state of an open slash menu.
 class _ToolbarSession {
-  _ToolbarSession(this.blockId, this.anchor);
+  _ToolbarSession(this.blockId, this.anchor, {this.range = false});
   final int blockId;
   final Rect anchor;
+
+  /// Whether the toolbar acts on the selection across blocks.
+  final bool range;
 }
 
 class _SlashSession {
@@ -1932,4 +2463,71 @@ class _Measured {
   final bool wrap;
   final bool caption;
   final double body;
+}
+
+/// Paints a selection across blocks inside one text field, behind its text.
+class _RangeHighlight extends SingleChildRenderObjectWidget {
+  const _RangeHighlight({required this.selection, required this.runsOn, required this.color, super.child});
+
+  final TextSelection? selection;
+  final bool runsOn;
+  final Color color;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderRangeHighlight(selection, runsOn, color);
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderRangeHighlight renderObject) {
+    renderObject
+      ..selection = selection
+      ..runsOn = runsOn
+      ..color = color;
+  }
+}
+
+class _RenderRangeHighlight extends RenderProxyBox {
+  _RenderRangeHighlight(this._selection, this._runsOn, this._color);
+
+  TextSelection? _selection;
+  set selection(TextSelection? value) {
+    if (value == _selection) return;
+    _selection = value;
+    markNeedsPaint();
+  }
+
+  bool _runsOn;
+  set runsOn(bool value) {
+    if (value == _runsOn) return;
+    _runsOn = value;
+    markNeedsPaint();
+  }
+
+  Color _color;
+  set color(Color value) {
+    if (value == _color) return;
+    _color = value;
+    markNeedsPaint();
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final sel = _selection;
+    final editable = sel == null ? null : _BlockEditorState._findEditable(child);
+    if (sel != null && editable != null && editable.attached && editable.hasSize) {
+      final shift = offset + MatrixUtils.transformPoint(editable.getTransformTo(this), Offset.zero);
+      final paint = Paint()..color = _color;
+      if (!sel.isCollapsed) {
+        for (final box in editable.getBoxesForSelection(sel)) {
+          context.canvas.drawRect(box.toRect().shift(shift), paint);
+        }
+      }
+      // A selection that carries on into the next block also takes the line
+      // break, shown as a sliver after the last character (or on an empty line).
+      if (_runsOn) {
+        final caret = editable.getLocalRectForCaret(TextPosition(offset: sel.end));
+        context.canvas.drawRect(Rect.fromLTWH(caret.left, caret.top, 6, caret.height).shift(shift), paint);
+      }
+    }
+    super.paint(context, offset);
+  }
 }
