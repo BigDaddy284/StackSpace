@@ -206,6 +206,9 @@ class _HomePageState extends State<HomePage> {
           title: const Text('Keyboard shortcuts'),
           content: const Text('Ctrl+N  New page\nCtrl+S  Save now\nCtrl+J  Show or hide the assistant\n'
               'F2  Rename the selected page\nDelete  Delete the selected page\n'
+              'In the sidebar: Ctrl+C / X / V  Copy, cut and paste pages and folders; Ctrl+D  Duplicate\n'
+              'In the sidebar: Ctrl+click / Shift+click  Pick several; drag  Move into or out of a folder '
+              '(hold Ctrl to copy)\n'
               'Ctrl+B / I / E  Bold / italic / inline code\nCtrl+K  Link the selection (again: unlink)\n'
               'Ctrl+click  Open a link\n'
               'Drag or Shift+click across table cells  Select cells (Ctrl+C / X / V, Delete)\n'
