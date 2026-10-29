@@ -23,6 +23,15 @@ Future<void> settle(WidgetTester tester) async {
   }
 }
 
+/// Settles until [done] holds, for up to about five seconds of real time:
+/// a slow runner can take longer than one [settle] to finish a tool call
+/// and its file write.
+Future<void> settleUntil(WidgetTester tester, bool Function() done) async {
+  for (var i = 0; i < 12 && !done(); i++) {
+    await settle(tester);
+  }
+}
+
 void main() {
   late Directory dir;
   late FakeOllama fake;
@@ -282,8 +291,11 @@ void main() {
     await tester.enterText(find.byKey(const Key('composer')), 'say hello instead');
     await tester.pump();
     await tester.tap(find.byTooltip('Send (Enter)'));
-    await settle(tester);
-    expect(File('${dir.path}/hello.py').readAsStringSync(), contains('print("hello")'));
+    final page = File('${dir.path}/hello.py');
+    await settleUntil(tester, () =>
+        page.readAsStringSync().contains('print("hello")') &&
+        find.textContaining('Done: it now prints hello.').evaluate().isNotEmpty);
+    expect(page.readAsStringSync(), contains('print("hello")'));
     expect(find.textContaining('Edited hello.py'), findsOneWidget);
     expect(find.textContaining('Done: it now prints hello.'), findsOneWidget);
     // The editor reloaded the page the assistant changed.
@@ -291,8 +303,9 @@ void main() {
     expect(editor.controller!.text, contains('print("hello")'));
 
     await tester.tap(find.text('Undo'));
-    await settle(tester);
-    expect(File('${dir.path}/hello.py').readAsStringSync(), contains('print("hi")'));
+    await settleUntil(tester, () =>
+        page.readAsStringSync().contains('print("hi")') && find.text('Undone').evaluate().isNotEmpty);
+    expect(page.readAsStringSync(), contains('print("hi")'));
     expect(find.text('Undone'), findsOneWidget);
   });
 
