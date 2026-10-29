@@ -1,6 +1,6 @@
 # PROJECT STATUS
 
-_Last updated: 2026-10-29 (selection across blocks in v0.3.9-test.1, waiting for the user's Windows check)_
+_Last updated: 2026-10-29 (selection across blocks confirmed on Windows with v0.3.9-test.1)_
 
 ## Current phase
 Bug-fix phase (2026-10-26): five bugs reported from test build 2 on Windows, fixed one at a time in
@@ -306,7 +306,7 @@ Shift+arrows past a block's edge, or Ctrl+A twice; copy, cut, paste back as bloc
 bold / italic / strikethrough / code, "Turn into" and Tab on every selected line. See
 `docs/DECISIONS.md`, "A selection across blocks belongs to the editor". Checked in a Linux release
 build with a real mouse and keyboard (drag down and up, toolbar, Ctrl+I, typing over, undo, copy and
-paste back); `test/block_range_test.dart` (19). Waiting for the user to confirm on Windows.
+paste back); `test/block_range_test.dart` (19). Confirmed working on Windows by the user (2026-10-29).
 
 ## Next single task
 Bug 5 is confirmed fixed with test build 9 (v0.3.5-test.2). If a blank launch ever returns, send `native.log` and
