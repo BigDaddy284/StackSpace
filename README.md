@@ -15,6 +15,10 @@ light and dark themes.
   (right-click for the menu). Deleted pages go to the workspace's `.trash` folder.
 - **Folders**: New folder (also "New folder here" on a folder's right-click menu); folders fold
   and unfold, and stay that way after a restart.
+- **Moving and copying**: drag pages and folders into and out of folders (hold Ctrl while dropping
+  to copy; hold a drag over a folded folder to open it). Right-click for Cut, Copy, Paste and
+  Duplicate (Ctrl+X / C / V / D); a copied folder brings its sub-pages and pictures. Ctrl+click
+  and Shift+click pick several rows to move, copy or delete at once.
 - **Block editor** for Markdown pages, with autosave and undo / redo. Each file keeps its own
   Markdown and line endings (CRLF stays CRLF), so pages stay readable in any other editor.
   - Headings, bulleted, numbered and to-do lists, quotes, callouts, dividers, tables and images.

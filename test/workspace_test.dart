@@ -87,4 +87,42 @@ void main() {
     await File(p.join(dir.path, 'img.bin')).writeAsBytes([0xff, 0xfe, 0xfd, 0x00, 0xc3]);
     expect(() => ws.read('img.bin'), throwsA(isA<WorkspaceException>()));
   });
+
+  test('copy duplicates a page beside the original with a free name', () async {
+    await ws.write('notes.md', 'n');
+    expect(await ws.copy('notes.md', ''), 'notes copy.md');
+    expect(await ws.copy('notes.md', ''), 'notes copy 2.md');
+    expect(await ws.read('notes copy 2.md'), 'n');
+    expect(await ws.copy('notes.md', 'folder'), 'folder/notes.md', reason: 'a free name is kept');
+  });
+
+  test('copy takes a folder with its sub-pages and pictures', () async {
+    await ws.write('project/project.md', 'top');
+    await ws.write('project/child/child.md', 'kid');
+    await File(p.join(dir.path, 'project', 'shot.png')).writeAsBytes([1, 2, 3]);
+    await ws.write('archive/keep.md', 'k');
+    expect(await ws.copy('project', 'archive'), 'archive/project');
+    expect(await ws.read('archive/project/project.md'), 'top');
+    expect(await ws.read('archive/project/child/child.md'), 'kid');
+    expect(File(p.join(dir.path, 'archive', 'project', 'shot.png')).readAsBytesSync(), [1, 2, 3]);
+    expect(await ws.read('project/project.md'), 'top', reason: 'the original stays');
+
+    // Into itself: the copy holds what the folder held, once.
+    expect(await ws.copy('project', 'project'), 'project/project');
+    expect(await ws.read('project/project/child/child.md'), 'kid');
+    expect(await ws.exists('project/project/project'), isFalse);
+  });
+
+  test('move puts a page or folder in another folder and refuses itself', () async {
+    await ws.write('a/one.md', '1');
+    await ws.write('b/two.md', '2');
+    expect(await ws.move('a/one.md', 'b'), 'b/one.md');
+    expect(await ws.move('b', 'a'), 'a/b');
+    expect(await ws.read('a/b/one.md'), '1');
+    expect(await ws.move('a/b/two.md', ''), 'two.md', reason: 'out to the top');
+    expect(await ws.move('two.md', ''), 'two.md', reason: 'already there: nothing happens');
+    expect(() => ws.move('a', 'a/b'), throwsA(isA<WorkspaceException>()));
+    await ws.write('two copy.md', 'x');
+    expect(() => ws.move('two.md', 'two copy.md'), throwsA(isA<WorkspaceException>()), reason: 'not a folder');
+  });
 }
