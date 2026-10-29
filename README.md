@@ -8,6 +8,15 @@ light and dark themes.
 
 ![StackSpace in dark mode](docs/screenshots/dark-assistant.png)
 
+## A hobby project, offered as-is
+
+This is a hobby project, made for fun in spare time. It is offered as-is, with no warranty, no
+support and no promised updates. There may be bugs, and some may never be fixed. Issues are turned
+off on this repository and I'm not able to answer questions, take requests or fix problems. You're
+welcome to use it, learn from it and change it for your own use under the terms of the license, at
+your own risk. Back up anything you care about, such as your workspace folder (by default
+`Documents\StackSpace`) with your pages and pictures, and any AppFlowy export you import from.
+
 ## What works today
 
 - **Workspace**: a folder on disk (default `Documents\StackSpace`). Every text file in it
