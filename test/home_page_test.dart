@@ -23,6 +23,15 @@ Future<void> settle(WidgetTester tester) async {
   }
 }
 
+/// Settles until [done] holds, for up to about five seconds of real time:
+/// a slow runner can take longer than one [settle] to finish a tool call,
+/// a file write or a move.
+Future<void> settleUntil(WidgetTester tester, bool Function() done) async {
+  for (var i = 0; i < 12 && !done(); i++) {
+    await settle(tester);
+  }
+}
+
 void main() {
   late Directory dir;
   late FakeOllama fake;
@@ -282,8 +291,11 @@ void main() {
     await tester.enterText(find.byKey(const Key('composer')), 'say hello instead');
     await tester.pump();
     await tester.tap(find.byTooltip('Send (Enter)'));
-    await settle(tester);
-    expect(File('${dir.path}/hello.py').readAsStringSync(), contains('print("hello")'));
+    final page = File('${dir.path}/hello.py');
+    await settleUntil(tester, () =>
+        page.readAsStringSync().contains('print("hello")') &&
+        find.textContaining('Done: it now prints hello.').evaluate().isNotEmpty);
+    expect(page.readAsStringSync(), contains('print("hello")'));
     expect(find.textContaining('Edited hello.py'), findsOneWidget);
     expect(find.textContaining('Done: it now prints hello.'), findsOneWidget);
     // The editor reloaded the page the assistant changed.
@@ -291,8 +303,9 @@ void main() {
     expect(editor.controller!.text, contains('print("hello")'));
 
     await tester.tap(find.text('Undo'));
-    await settle(tester);
-    expect(File('${dir.path}/hello.py').readAsStringSync(), contains('print("hi")'));
+    await settleUntil(tester, () =>
+        page.readAsStringSync().contains('print("hi")') && find.text('Undone').evaluate().isNotEmpty);
+    expect(page.readAsStringSync(), contains('print("hi")'));
     expect(find.text('Undone'), findsOneWidget);
   });
 
@@ -316,16 +329,19 @@ void main() {
     // A page into a folder.
     await menu(tester, find.text('hello.py').first, 'Copy page');
     await menu(tester, find.text('beta'), 'into this folder');
+    await settleUntil(tester, () => File('${dir.path}/beta/hello.py').existsSync());
     expect(File('${dir.path}/beta/hello.py').existsSync(), isTrue);
     expect(File('${dir.path}/hello.py').existsSync(), isTrue, reason: 'the original stays');
 
     // A folder, with its sub-pages, beside a page in another folder.
     await menu(tester, find.text('alpha'), 'Copy folder');
     await menu(tester, find.text('two.md'), 'here');
+    await settleUntil(tester, () => File('${dir.path}/beta/alpha/sub/deep.md').existsSync());
     expect(File('${dir.path}/beta/alpha/sub/deep.md').readAsStringSync(), 'deep');
 
     // Pasting where the name is taken makes a duplicate.
     await menu(tester, find.text('alpha').first, 'Duplicate');
+    await settleUntil(tester, () => Directory('${dir.path}/alpha copy/sub').existsSync());
     expect(Directory('${dir.path}/alpha copy/sub').existsSync(), isTrue);
   });
 
@@ -346,6 +362,10 @@ void main() {
     await tester.pump();
     await menu(tester, find.text('b.md'), 'Cut 2 items');
     await menu(tester, find.text('box'), 'into this folder');
+    await settleUntil(tester, () =>
+        File('${dir.path}/box/a.md').existsSync() &&
+        File('${dir.path}/box/b.md').existsSync() &&
+        !File('${dir.path}/a.md').existsSync());
     expect(File('${dir.path}/box/a.md').existsSync(), isTrue);
     expect(File('${dir.path}/box/b.md').existsSync(), isTrue);
     expect(File('${dir.path}/a.md').existsSync(), isFalse);
@@ -372,10 +392,13 @@ void main() {
     }
 
     await drag(find.text('note.md').first, find.text('outer'));
+    await settleUntil(tester, () => File('${dir.path}/outer/note.md').existsSync());
     expect(File('${dir.path}/outer/note.md').existsSync(), isTrue);
 
     // Dropped on a top-level page, a folder goes to the top level.
     await drag(find.text('inner'), find.text('hello.py').first);
+    await settleUntil(tester, () =>
+        File('${dir.path}/inner/deep.md').existsSync() && !Directory('${dir.path}/outer/inner').existsSync());
     expect(File('${dir.path}/inner/deep.md').existsSync(), isTrue);
     expect(Directory('${dir.path}/outer/inner').existsSync(), isFalse);
   });

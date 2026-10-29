@@ -278,6 +278,16 @@ cells move both ways. An HTML comment is hidden by other Markdown readers, so th
 as a plain table; a table that was never resized writes back exactly as before.
 **Status**: Done; `test/table_image_test.dart`.
 
+### One logo: the original mark, recoloured on a dark tile
+**Decision**: The app keeps its original mark, redrawn in the theme's accent gradient (blue
+`#2668FF` to purple `#B048FF`), glowing on a dark rounded tile with a faint gradient rim, the same
+style as the owner's Steels & Reels app. It is the Windows exe, window and taskbar icon
+(`windows/runner/resources/app_icon.ico`, 16 to 256 px) and the in-app mark in the title bar and
+About dialog (`assets/branding/logo.png`).
+**Rationale**: The exe still carried the default Flutter icon while the app drew its own gradient
+layers icon. The owner wanted the original shape kept with the new colours; one dark-tile mark reads well on the dark taskbar and matches the app's dark theme.
+**Status**: Done; regenerate every size with `tool/make_icon.py`.
+
 ### A selection across blocks belongs to the editor (v0.3.9-test.1)
 **Decision**: Each block keeps its own text field, and a selection that leaves the block it started
 in becomes the editor's: it is held as a start and end (block and offset), painted by the editor
