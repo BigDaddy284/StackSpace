@@ -31,6 +31,12 @@ your own risk. Back up anything you care about, such as your workspace folder (b
 - **Block editor** for Markdown pages, with autosave and undo / redo. Each file keeps its own
   Markdown and line endings (CRLF stays CRLF), so pages stay readable in any other editor.
   - Headings, bulleted, numbered and to-do lists, quotes, callouts, dividers, tables and images.
+  - Tables: text wraps in its column (or not, per column) and a row grows to fit; Shift+Tab or
+    Shift+Enter starts a new line in a cell. Right-click a cell for insert row above / below,
+    insert column left / right, duplicate, sort A → Z / Z → A, filter, align, cell colour,
+    wrap, header row on or off, and delete. Drag the grip on a row's left edge or a column's top
+    edge to move it (or Alt+Shift+arrows), drag a column border to set its width, and drag across
+    cells to copy and paste them with Excel. Everything is kept in the page's Markdown.
   - Type `/` for the block menu. Select text for a formatting toolbar (bold, italic,
     strikethrough, inline code, link, "Turn into").
   - Code blocks with line numbers, syntax highlighting for 30 languages (picked or
@@ -67,7 +73,8 @@ your own risk. Back up anything you care about, such as your workspace folder (b
   screen-reader labels, 24x24 click targets, and layout at 150% text size.
 - Keyboard: Ctrl+N new page, Ctrl+S save now, Ctrl+J opens and closes the assistant,
   Ctrl+B / I / E bold, italic and inline code, Ctrl+K link, Enter sends a message,
-  Shift+Enter adds a line, and F2 / Delete rename or delete the focused page in the sidebar.
+  Shift+Enter adds a line, and F2 / Delete rename or delete the focused page in the sidebar. In a
+  table, Tab and Ctrl+Shift+Tab move between cells and Shift+F10 opens the table menu.
   Help › Keyboard shortcuts lists them all.
 
 ## Using it with Ollama

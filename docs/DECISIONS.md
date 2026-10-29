@@ -278,6 +278,32 @@ cells move both ways. An HTML comment is hidden by other Markdown readers, so th
 as a plain table; a table that was never resized writes back exactly as before.
 **Status**: Done; `test/table_image_test.dart`.
 
+### Table editing features (v0.3.12-test.1)
+**Decision**: Text wraps in table columns by default (each column can be set not to wrap) and a row
+is as tall as its tallest cell. Shift+Tab starts a new line in the cell, as the owner asked, and so
+does Shift+Enter; going back a cell moved to Ctrl+Shift+Tab (Left at the start of a cell still goes
+back too). Line breaks are written as `<br>` inside the cell, as GitHub does. A table menu (right-click
+a cell, the ⋯ header button, or Shift+F10) holds insert row above / below, insert column left /
+right, duplicate row / column, sort A → Z / Z → A by the column, filter by the column, align,
+cell colour (nine named colours that each theme shades to keep 4.5:1 text contrast), wrap, header
+row, cut / copy / paste / clear, and delete rows / columns / table. Rows and columns move by
+dragging a small grip on the hovered row's left edge or column's top edge (it sits in the cell
+padding, clear of the text), or with Alt+Shift+arrows. The header row cannot be dragged and nothing
+drops above it. Sorting reorders the rows in the file (numbers by value, with currency signs,
+thousands commas and % allowed, then words ignoring case, empty cells last; one undo step).
+Filters hide rows and are saved with the table, so a filtered table reopens filtered and the
+header strip says "Showing x of y rows" with a Clear filters button. Everything beyond the Markdown
+table itself (no header row, unwrapped columns, cell colours, filters) is kept as JSON on one
+`<!-- table-style: {...} -->` line under the rows, written only when something differs from the
+default.
+**Rationale**: The page stays a plain Markdown table that other apps read; one comment line,
+like the widths line, holds what Markdown can't say. Row heights are measured with the same text
+layout the cells use, so the editor still knows every block's height before building it (the
+fixed-extent list that keeps 50,000-line pages fast); `test/block_metrics_test.dart` checks
+wrapped, multi-line, unwrapped and filtered tables against the rendered rows.
+**Status**: Done; `test/table_features_test.dart`, `test/table_image_test.dart`,
+`test/block_metrics_test.dart`, `test/theme_contrast_test.dart`.
+
 ### One logo: the original mark, recoloured on a dark tile
 **Decision**: The app keeps its original mark, redrawn in the theme's accent gradient (blue
 `#2668FF` to purple `#B048FF`), glowing on a dark rounded tile with a faint gradient rim, the same

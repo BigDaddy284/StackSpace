@@ -1,19 +1,80 @@
+import 'dart:convert';
+
 /// A Markdown (GitHub style) table as cells: the header row, the column
 /// alignments and the body rows.
 ///
 /// `| a | b |` lines are read and written here; the block keeps the lines
 /// as its text, so a page that is never edited writes back exactly as read.
-/// Column widths set by dragging are kept on one HTML comment line right
-/// under the rows (`<!-- table-widths: 120,200 -->`), which other Markdown
-/// readers hide.
+/// A line break inside a cell is written as `<br>`, as GitHub does. Column
+/// widths set by dragging are kept on one HTML comment line right under the
+/// rows (`<!-- table-widths: 120,200 -->`), and the rest of the table's look
+/// (no header row, columns that don't wrap, cell colours, filters) on one
+/// more (`<!-- table-style: {...} -->`); other Markdown readers hide both.
 enum TableAlign { none, left, center, right }
 
-class TableData {
-  TableData(this.rows, this.aligns, [this.widths]) : assert(rows.isNotEmpty);
+/// How a column's filter tests a cell.
+enum TableFilterOp { contains, notContains, isEmpty, isNotEmpty }
 
-  /// Row 0 is the header; every row has [columns] cells.
+/// A filter on one column: rows whose cell fails it are hidden.
+class TableFilter {
+  const TableFilter(this.op, [this.value = '']);
+  final TableFilterOp op;
+  final String value;
+
+  bool test(String cell) {
+    final text = cell.trim().toLowerCase();
+    return switch (op) {
+      TableFilterOp.contains => text.contains(value.trim().toLowerCase()),
+      TableFilterOp.notContains => !text.contains(value.trim().toLowerCase()),
+      TableFilterOp.isEmpty => text.isEmpty,
+      TableFilterOp.isNotEmpty => text.isNotEmpty,
+    };
+  }
+
+  String describe(String column) => switch (op) {
+        TableFilterOp.contains => '$column contains "$value"',
+        TableFilterOp.notContains => '$column does not contain "$value"',
+        TableFilterOp.isEmpty => '$column is empty',
+        TableFilterOp.isNotEmpty => '$column is not empty',
+      };
+
+  @override
+  bool operator ==(Object other) => other is TableFilter && other.op == op && other.value == value;
+
+  @override
+  int get hashCode => Object.hash(op, value);
+}
+
+/// The background colours a cell can have, by name; the theme picks the
+/// shade (see `StackPalette.tableTint`).
+const tableColors = ['gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red'];
+
+class TableData {
+  TableData(this.rows, this.aligns, [this.widths])
+      : assert(rows.isNotEmpty),
+        colors = [for (final r in rows) List<String?>.filled(r.length, null, growable: true)],
+        wrap = List<bool>.filled(aligns.length, true, growable: true),
+        filters = List<TableFilter?>.filled(aligns.length, null, growable: true);
+
+  /// Row 0 is the header (when [header] is on); every row has [columns] cells.
   final List<List<String>> rows;
   final List<TableAlign> aligns;
+
+  /// Each cell's background colour (a name from [tableColors]) or null, in
+  /// the same shape as [rows].
+  final List<List<String?>> colors;
+
+  /// Per column: long text wraps onto more lines (the default) rather than
+  /// staying on one line that scrolls inside the cell.
+  final List<bool> wrap;
+
+  /// Per column: the filter that hides rows, or null.
+  final List<TableFilter?> filters;
+
+  /// Whether row 0 is a header row (bold, shaded, kept out of sorting and
+  /// filtering). Markdown always has one; turning it off is kept on the
+  /// style line.
+  bool header = true;
 
   /// Each column's width in logical pixels, or null for even columns that
   /// fill the page width.
@@ -28,6 +89,14 @@ class TableData {
   /// The line that keeps the column widths, under the table's rows.
   static final widthsLine = RegExp(r'^<!--\s*table-widths:\s*([\d.,\s]*?)\s*-->\s*$');
 
+  /// The line that keeps the rest of the table's look, as JSON.
+  static final styleLine = RegExp(r'^<!--\s*table-style:\s*(.*?)\s*-->\s*$');
+
+  /// True for either comment line that belongs to the table above it.
+  static bool isMetaLine(String line) => widthsLine.hasMatch(line.trim()) || styleLine.hasMatch(line.trim());
+
+  static final _lineBreak = RegExp(r'<br\s*/?>', caseSensitive: false);
+
   int get columns => aligns.length;
   int get rowCount => rows.length;
 
@@ -39,7 +108,18 @@ class TableData {
   static TableData? parse(String markdown) {
     final lines = markdown.split('\n').where((l) => l.trim().isNotEmpty).toList();
     List<double>? widths;
+    Map<String, dynamic>? style;
     lines.removeWhere((line) {
+      final styleMatch = styleLine.firstMatch(line.trim());
+      if (styleMatch != null) {
+        try {
+          final decoded = jsonDecode(styleMatch.group(1)!);
+          if (decoded is Map<String, dynamic>) style = decoded;
+        } on FormatException {
+          // A damaged style line is dropped; the table reads as plain.
+        }
+        return true;
+      }
       final match = widthsLine.firstMatch(line.trim());
       if (match == null) return false;
       widths = match
@@ -79,8 +159,88 @@ class TableData {
       }
       read.length = columns;
     }
-    return TableData(rows, filled, read == null || read.isEmpty ? null : read);
+    final data = TableData(rows, filled, read == null || read.isEmpty ? null : read);
+    if (style != null) data._readStyle(style!);
+    return data;
   }
+
+  void _readStyle(Map<String, dynamic> style) {
+    if (style['header'] == false) header = false;
+    final noWrap = style['nowrap'];
+    if (noWrap is List) {
+      for (final c in noWrap) {
+        if (c is int && c >= 0 && c < columns) wrap[c] = false;
+      }
+    }
+    final colours = style['colors'];
+    if (colours is Map) {
+      colours.forEach((key, value) {
+        final at = '$key'.split(',').map(int.tryParse).toList();
+        if (at.length != 2 || at[0] == null || at[1] == null || value is! String || !tableColors.contains(value)) {
+          return;
+        }
+        final (r, c) = (at[0]!, at[1]!);
+        if (r >= 0 && r < rowCount && c >= 0 && c < columns) colors[r][c] = value;
+      });
+    }
+    final filtersRead = style['filters'];
+    if (filtersRead is Map) {
+      filtersRead.forEach((key, value) {
+        final c = int.tryParse('$key');
+        if (c == null || c < 0 || c >= columns || value is! Map) return;
+        final op = TableFilterOp.values.where((o) => o.name == value['op']).firstOrNull;
+        if (op == null) return;
+        filters[c] = TableFilter(op, value['value'] is String ? value['value'] as String : '');
+      });
+    }
+  }
+
+  /// The style line's JSON, or null when everything is the default.
+  String? _styleJson() {
+    final style = <String, Object>{};
+    if (!header) style['header'] = false;
+    final noWrap = [
+      for (var c = 0; c < columns; c++)
+        if (!wrap[c]) c
+    ];
+    if (noWrap.isNotEmpty) style['nowrap'] = noWrap;
+    final colours = <String, String>{
+      for (var r = 0; r < rowCount; r++)
+        for (var c = 0; c < columns; c++)
+          if (colors[r][c] != null) '$r,$c': colors[r][c]!,
+    };
+    if (colours.isNotEmpty) style['colors'] = colours;
+    final set = <String, Object>{
+      for (var c = 0; c < columns; c++)
+        if (filters[c] != null)
+          '$c': {'op': filters[c]!.op.name, if (filters[c]!.value.isNotEmpty) 'value': filters[c]!.value},
+    };
+    if (set.isNotEmpty) style['filters'] = set;
+    if (style.isEmpty) return null;
+    // A '>' in a filter's text must not end the comment early.
+    return jsonEncode(style).replaceAll('>', r'\u003e');
+  }
+
+  /// The first row that sorting and filtering act on: 1 under a header row.
+  int get firstBodyRow => header ? 1 : 0;
+
+  bool get isFiltered => filters.any((f) => f != null);
+
+  /// Whether row [r] passes every filter (a header row always shows).
+  bool rowVisible(int r) {
+    if (header && r == 0) return true;
+    for (var c = 0; c < columns; c++) {
+      final f = filters[c];
+      if (f != null && !f.test(rows[r][c])) return false;
+    }
+    return true;
+  }
+
+  /// The rows that show, in order.
+  List<int> get visibleRows => [
+        for (var r = 0; r < rowCount; r++)
+          if (rowVisible(r)) r
+      ];
 
   static TableAlign _alignOf(String cell) {
     final left = cell.startsWith(':'), right = cell.endsWith(':');
@@ -103,19 +263,20 @@ class TableData {
         buffer.write('|');
         i++;
       } else if (ch == '|') {
-        cells.add(buffer.toString().trim());
+        cells.add(buffer.toString().trim().replaceAll(_lineBreak, '\n'));
         buffer.clear();
       } else {
         buffer.write(ch);
       }
     }
-    cells.add(buffer.toString().trim());
+    cells.add(buffer.toString().trim().replaceAll(_lineBreak, '\n'));
     return cells;
   }
 
   /// The table as Markdown lines with the columns padded to equal width.
   String toMarkdown() {
-    final escaped = rows.map((r) => r.map((c) => c.replaceAll('|', r'\|').replaceAll('\n', ' ')).toList()).toList();
+    final escaped =
+        rows.map((r) => r.map((c) => c.replaceAll('|', r'\|').replaceAll(RegExp(r'\r?\n'), '<br>')).toList()).toList();
     final widths = List<int>.generate(columns, (c) {
       var w = 3;
       for (final row in escaped) {
@@ -135,46 +296,174 @@ class TableData {
         }
     ].join(' | ')} |';
     final set = this.widths;
+    final style = _styleJson();
     return [
       line(escaped[0]),
       separator,
       for (var r = 1; r < escaped.length; r++) line(escaped[r]),
       if (set != null) '<!-- table-widths: ${set.map((w) => w.round()).join(',')} -->',
+      if (style != null) '<!-- table-style: $style -->',
     ].join('\n');
   }
 
-  TableData copy() =>
-      TableData([for (final r in rows) List.of(r)], List.of(aligns), widths == null ? null : List.of(widths!));
+  TableData copy() {
+    final data =
+        TableData([for (final r in rows) List.of(r)], List.of(aligns), widths == null ? null : List.of(widths!));
+    for (var r = 0; r < rowCount; r++) {
+      data.colors[r].setAll(0, colors[r]);
+    }
+    data.wrap.setAll(0, wrap);
+    data.filters.setAll(0, filters);
+    data.header = header;
+    return data;
+  }
 
   void setCell(int row, int column, String value) => rows[row][column] = value;
 
-  void insertRow(int at) => rows.insert(at.clamp(1, rows.length), List<String>.filled(columns, '', growable: true));
+  /// Adds an empty row at [at]; at 0 under a header row, the new row is the
+  /// header.
+  void insertRow(int at) {
+    final r = at.clamp(0, rows.length);
+    rows.insert(r, List<String>.filled(columns, '', growable: true));
+    colors.insert(r, List<String?>.filled(columns, null, growable: true));
+  }
 
-  /// Removes a body row; the header stays. False when there is no body row.
+  /// Adds a copy of row [at] under it.
+  void duplicateRow(int at) {
+    rows.insert(at + 1, List.of(rows[at]));
+    colors.insert(at + 1, List.of(colors[at]));
+  }
+
+  /// Removes a row; the last one stays. Removing the header row makes the
+  /// next row the header. False when it is the only row.
   bool removeRow(int at) {
-    if (at < 1 || at >= rows.length) return false;
+    if (rows.length <= 1 || at < 0 || at >= rows.length) return false;
     rows.removeAt(at);
+    colors.removeAt(at);
     return true;
+  }
+
+  /// Moves row [from] so it lands before the row now at [before] (which may
+  /// be [rowCount], for the end).
+  void moveRow(int from, int before) {
+    if (from < 0 || from >= rowCount) return;
+    var to = before.clamp(0, rowCount);
+    if (to == from || to == from + 1) return;
+    final row = rows.removeAt(from), colour = colors.removeAt(from);
+    if (to > from) to--;
+    rows.insert(to, row);
+    colors.insert(to, colour);
   }
 
   void insertColumn(int at, {String header = ''}) {
     final c = at.clamp(0, columns);
     for (var r = 0; r < rows.length; r++) {
-      rows[r].insert(c, r == 0 ? header : '');
+      rows[r].insert(c, r == 0 && this.header ? header : '');
+      colors[r].insert(c, null);
     }
     aligns.insert(c, TableAlign.none);
     widths?.insert(c, defaultWidth);
+    wrap.insert(c, true);
+    filters.insert(c, null);
+  }
+
+  /// Adds a copy of column [at] (cells, colours, alignment, width and
+  /// wrapping, not the filter) to its right.
+  void duplicateColumn(int at) {
+    for (var r = 0; r < rows.length; r++) {
+      rows[r].insert(at + 1, rows[r][at]);
+      colors[r].insert(at + 1, colors[r][at]);
+    }
+    aligns.insert(at + 1, aligns[at]);
+    widths?.insert(at + 1, widths![at]);
+    wrap.insert(at + 1, wrap[at]);
+    filters.insert(at + 1, null);
   }
 
   /// Removes a column; the last one stays. False when it is the only column.
   bool removeColumn(int at) {
     if (columns <= 1 || at < 0 || at >= columns) return false;
-    for (final row in rows) {
-      row.removeAt(at);
+    for (var r = 0; r < rows.length; r++) {
+      rows[r].removeAt(at);
+      colors[r].removeAt(at);
     }
     aligns.removeAt(at);
     widths?.removeAt(at);
+    wrap.removeAt(at);
+    filters.removeAt(at);
     return true;
+  }
+
+  /// Moves column [from] so it lands before the column now at [before]
+  /// (which may be [columns], for the end), with everything it carries.
+  void moveColumn(int from, int before) {
+    if (from < 0 || from >= columns) return;
+    var to = before.clamp(0, columns);
+    if (to == from || to == from + 1) return;
+    if (to > from) to--;
+    void move<T>(List<T> list) => list.insert(to, list.removeAt(from));
+    for (var r = 0; r < rows.length; r++) {
+      move(rows[r]);
+      move(colors[r]);
+    }
+    move(aligns);
+    if (widths != null) move(widths!);
+    move(wrap);
+    move(filters);
+  }
+
+  /// Sorts the rows under the header by [column]: numbers by value (a
+  /// leading currency sign, thousands commas and a trailing % are allowed),
+  /// other text alphabetically ignoring case, and empty cells always last.
+  void sortBy(int column, {bool descending = false}) {
+    final first = firstBodyRow;
+    if (rowCount - first < 2) return;
+    final order = [for (var r = first; r < rowCount; r++) r];
+    int compare(int a, int b) {
+      final x = rows[a][column].trim(), y = rows[b][column].trim();
+      if (x.isEmpty || y.isEmpty) {
+        if (x.isEmpty && y.isEmpty) return a - b;
+        return x.isEmpty ? 1 : -1;
+      }
+      final nx = _number(x), ny = _number(y);
+      int result;
+      if (nx != null && ny != null) {
+        result = nx.compareTo(ny);
+      } else if (nx != null || ny != null) {
+        result = nx != null ? -1 : 1; // numbers before words
+      } else {
+        result = x.toLowerCase().compareTo(y.toLowerCase());
+      }
+      if (descending) result = -result;
+      return result != 0 ? result : a - b; // stable
+    }
+
+    order.sort(compare);
+    final sortedRows = [for (final r in order) rows[r]];
+    final sortedColors = [for (final r in order) colors[r]];
+    rows.replaceRange(first, rowCount, sortedRows);
+    colors.replaceRange(first, colors.length, sortedColors);
+  }
+
+  static final _numberText = RegExp(r'^[-+]?[$€£¥]?\s*[-+]?[\d,]*\.?\d+(e[-+]?\d+)?\s*%?$', caseSensitive: false);
+
+  static double? _number(String text) {
+    if (!_numberText.hasMatch(text)) return null;
+    final negative = text.startsWith('-') || text.contains(RegExp(r'^[$€£¥]\s*-'));
+    final digits = text.replaceAll(RegExp(r'[^\d.eE+-]'), '').replaceAll(RegExp(r'^[-+]'), '');
+    final value = double.tryParse(digits);
+    if (value == null) return null;
+    return negative ? -value : value;
+  }
+
+  /// Sets the background colour of the cells from ([top], [left]) to
+  /// ([bottom], [right]); null clears it.
+  void setColor(int top, int left, int bottom, int right, String? color) {
+    for (var r = top; r <= bottom; r++) {
+      for (var c = left; c <= right; c++) {
+        colors[r][c] = color;
+      }
+    }
   }
 
   /// The cells from ([top], [left]) to ([bottom], [right]) as tab-separated
@@ -188,8 +477,7 @@ class TableData {
   }
 
   /// Reads tab-separated text (from a spreadsheet, or [toTsv]) as rows of
-  /// cells. Quoted cells may hold tabs, line breaks and `""` for a quote; a
-  /// line break inside a cell becomes a space, as cells hold one line.
+  /// cells. Quoted cells may hold tabs, line breaks and `""` for a quote.
   static List<List<String>> parseTsv(String text) {
     var s = text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
     if (s.endsWith('\n')) s = s.substring(0, s.length - 1);
@@ -213,7 +501,7 @@ class TableData {
             i++;
             break;
           }
-          cell.write(s[i] == '\n' ? ' ' : s[i]);
+          cell.write(s[i]);
           i++;
         }
         atCellStart = false;
@@ -273,7 +561,7 @@ class TableData {
       final source = grid[(r - top) % height];
       for (var c = left; c <= lastColumn; c++) {
         final i = (c - left) % width;
-        rows[r][c] = i < source.length ? source[i].replaceAll(RegExp('[\t\n\r]'), ' ') : '';
+        rows[r][c] = i < source.length ? source[i].replaceAll('\t', ' ') : '';
       }
     }
     return (top, left, lastRow, lastColumn);

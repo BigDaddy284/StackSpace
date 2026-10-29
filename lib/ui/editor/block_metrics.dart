@@ -82,7 +82,7 @@ class BlockMetrics {
       case BlockKind.image:
         return _imageHeight(block, width);
       case BlockKind.table:
-        return TableBlockView.heightFor(block);
+        return TableBlockView.heightFor(block, width, textScaler: textScaler, inputStyle: inputStyle);
       case BlockKind.code:
         return CodeBlockView.heightFor(block, width,
             wrap: wrap, caption: caption, textScaler: textScaler, inputStyle: inputStyle);

@@ -2,11 +2,13 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stack_space/app/theme.dart';
 import 'package:stack_space/editor/page_editor_controller.dart';
 import 'package:stack_space/ui/editor/block_editor.dart';
 import 'package:stack_space/ui/editor/block_metrics.dart';
+import 'package:stack_space/ui/editor/table_block.dart';
 import 'package:stack_space/workspace/workspace.dart';
 import 'support/temp.dart';
 
@@ -32,6 +34,12 @@ void main() {
       '![Missing picture](missing/pic.png)\n\n'
       '![](nowhere.png)\n\n'
       '| a | b |\n| --- | --- |\n| 1 | 2 |\n\n'
+      '| A header long enough to wrap in a narrow column | b |\n| --- | --- |\n'
+      '| ${List.filled(40, 'wrapping').join(' ')} | two<br>lines |\n| short | x |\n\n'
+      '| a | b |\n| --- | --- |\n| ${List.filled(40, 'kept').join(' ')} | one<br>two<br>three |\n'
+      '<!-- table-widths: 90,140 -->\n<!-- table-style: {"nowrap":[0,1]} -->\n\n'
+      '| a | b |\n| --- | --- |\n| hidden ${List.filled(30, 'x').join(' ')} | no |\n| shown | yes |\n'
+      '<!-- table-style: {"header":false,"filters":{"1":{"op":"contains","value":"yes"}}} -->\n\n'
       '<div>raw html</div>\n\n'
       '```python Download helper\ndef f():\n    return 1\n```\n\n'
       '```\n${'x' * 300}\n```\n\n'
@@ -81,6 +89,31 @@ void main() {
             problems
                 .add('${block.kind.name} "${block.text.length > 20 ? '${block.text.substring(0, 20)}…' : block.text}"'
                     ': rendered $rendered, computed $computed');
+          }
+        }
+        // A table's rows are sized by the same numbers, so check the cells' text really fits in them.
+        final cells = find.descendant(of: find.byType(TableBlockView), matching: find.byType(TextField));
+        expect(cells.evaluate().length, greaterThan(10));
+        for (final field in cells.evaluate()) {
+          final finder = find.byWidget(field.widget);
+          final box = find.ancestor(of: finder, matching: find.byType(Container)).first;
+          RenderEditable? editable;
+          void visit(RenderObject object) {
+            if (object is RenderEditable) {
+              editable ??= object;
+            } else {
+              object.visitChildren(visit);
+            }
+          }
+
+          visit(tester.renderObject(finder));
+          // The text's own height at the field's width, not the size the row squeezed it to.
+          final lines = editable!.getMinIntrinsicHeight(editable!.size.width);
+          // Text of more than one line keeps its padding above and below.
+          final text = lines > 14 * 1.3 * scale * 1.5 ? lines + 15.8 : lines;
+          final row = tester.getSize(box).height;
+          if (text > row + 0.5) {
+            problems.add('table cell "${(field.widget as TextField).controller!.text}": text $text, row $row');
           }
         }
         expect(problems, isEmpty);

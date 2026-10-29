@@ -1,6 +1,6 @@
 # PROJECT STATUS
 
-_Last updated: 2026-10-29 (selection across blocks confirmed on Windows with v0.3.9-test.1)_
+_Last updated: 2026-10-29 (table editing features, build v0.3.12-test.1, awaiting Windows check)_
 
 ## Current phase
 Bug-fix phase (2026-10-26): five bugs reported from test build 2 on Windows, fixed one at a time in
@@ -308,9 +308,27 @@ bold / italic / strikethrough / code, "Turn into" and Tab on every selected line
 build with a real mouse and keyboard (drag down and up, toolbar, Ctrl+I, typing over, undo, copy and
 paste back); `test/block_range_test.dart` (19). Confirmed working on Windows by the user (2026-10-29).
 
+## Table editing features (2026-10-29)
+Build v0.3.12-test.1 (version 0.3.12+16, on top of main with the logo of 0.3.11) adds: text that
+wraps in table columns (per column, on by default) with rows that grow; Shift+Tab and Shift+Enter
+for a new line in a cell (saved as `<br>`; previous cell moved to Ctrl+Shift+Tab); a table menu on
+right-click, the ⋯ button or Shift+F10 with insert row above / below, insert column left / right,
+duplicate, sort A → Z / Z → A, filter (saved with the table), align, cell colour, wrap, header row
+on / off, cut / copy / paste / clear and delete; row and column grips to drag them to a new place,
+and Alt+Shift+arrows. The README also gained the hobby-project disclaimer and no longer asks for
+log files. See `docs/DECISIONS.md`, "Table editing features". Files: `lib/editor/table_data.dart`,
+`lib/ui/editor/table_block.dart`, `lib/ui/editor/block_metrics.dart`, `lib/editor/blocks.dart`,
+`lib/app/theme.dart`, `lib/ui/home_page.dart`; tests `test/table_features_test.dart` (new, 14),
+`test/table_image_test.dart`, `test/block_metrics_test.dart`, `test/theme_contrast_test.dart`.
+Results: analyzer clean, full suite 223 passed, 2 skipped (Linux). Checked in a Linux debug build
+with a real mouse and keyboard (xdotool): long text wraps, the menu opens on right-click, Green cell
+colour, Shift+Tab / Shift+Enter / Up inside a cell, dragging a row grip below the last row; the
+file was correct after each. Not yet run on Windows.
+
 ## Next single task
-Bug 5 is confirmed fixed with test build 9 (v0.3.5-test.2). If a blank launch ever returns, send `native.log` and
-`startup.log` from `%APPDATA%\com.stackspace\stack_space\`. Table widths and cell copy/paste are
+The owner checks the table build v0.3.12-test.1 on Windows; merge its PR once confirmed. Bug 5 is
+confirmed fixed with test build 9 (v0.3.5-test.2); `native.log` and `startup.log` are in
+`%APPDATA%\com.stackspace\stack_space\`. Table widths and cell copy/paste are
 confirmed with v0.3.6-test.1. No code task is queued; the next phase starts from the user's next
 request.
 

@@ -99,6 +99,28 @@ class StackPalette {
         accentB.withAlpha(dark ? 70 : 40),
       ]);
 
+  /// The hues a table cell's background can take, by the names in
+  /// `tableColors`; [tableTint] mixes them into the canvas.
+  static const tableHues = {
+    'gray': Color.fromARGB(255, 128, 134, 150),
+    'brown': Color.fromARGB(255, 160, 106, 62),
+    'orange': Color.fromARGB(255, 245, 140, 40),
+    'yellow': Color.fromARGB(255, 235, 195, 40),
+    'green': Color.fromARGB(255, 56, 176, 96),
+    'blue': Color.fromARGB(255, 50, 125, 245),
+    'purple': Color.fromARGB(255, 150, 82, 235),
+    'pink': Color.fromARGB(255, 235, 85, 165),
+    'red': Color.fromARGB(255, 235, 64, 64),
+  };
+
+  /// A table cell's background for the colour [name], light enough (or dark
+  /// enough) that [text] keeps 4.5:1 on it; null for an unknown name.
+  Color? tableTint(String? name) {
+    final hue = tableHues[name];
+    if (hue == null) return null;
+    return Color.alphaBlend(hue.withAlpha(dark ? 64 : 56), canvas);
+  }
+
   /// Surfaces text sits on, for the contrast test.
   Map<String, Color> get surfaces => {
         'window': window,
