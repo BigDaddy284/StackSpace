@@ -221,6 +221,7 @@ class _HomePageState extends State<HomePage> {
   void _showAbout() => showAboutDialog(
         context: context,
         applicationName: 'StackSpace',
+        applicationIcon: Image.asset('assets/branding/logo.png', width: 56, height: 56),
         applicationLegalese: 'A local notes and code workspace with an Ollama assistant.\n\n'
             'Built with Flutter (flutter.dev). View licenses lists every open-source package it uses.',
       );
@@ -388,10 +389,7 @@ class _HomePageState extends State<HomePage> {
         alignment: Alignment.center,
         children: [
           Row(children: [
-            ShaderMask(
-              shaderCallback: (r) => p.accentGradient.createShader(r),
-              child: const Icon(Icons.layers_rounded, size: 22, color: Colors.white),
-            ),
+            Image.asset('assets/branding/logo.png', width: 26, height: 26, filterQuality: FilterQuality.medium),
             const SizedBox(width: 8),
             Text('StackSpace', style: StackType.display(15, p.text)),
             const SizedBox(width: 12),
