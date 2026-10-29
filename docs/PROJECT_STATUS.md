@@ -1,6 +1,6 @@
 # PROJECT STATUS
 
-_Last updated: 2026-10-26 (Bug-fix phase: Bugs 1-5 fixed; Bug 5 confirmed with test build 9; table widths and cell copy/paste confirmed with v0.3.6-test.1)_
+_Last updated: 2026-10-29 (selection across blocks confirmed on Windows with v0.3.9-test.1)_
 
 ## Current phase
 Bug-fix phase (2026-10-26): five bugs reported from test build 2 on Windows, fixed one at a time in
@@ -299,6 +299,14 @@ are kept on a `<!-- table-widths: ... -->` line under the table) and adds spread
 selection with copy, cut, delete and paste of tab-separated text. Built on top of test build 9 (v0.3.5-test.2).
 See `docs/DECISIONS.md`, "Table column widths and multi-cell copy and paste". Confirmed working
 on Windows by the user (2026-10-26).
+
+## Selection across lines (2026-10-29)
+Build v0.3.9-test.1 (version 0.3.9+13, which also carries the sidebar work of 0.3.8) lets a selection span blocks: drag across lines, Shift+click,
+Shift+arrows past a block's edge, or Ctrl+A twice; copy, cut, paste back as blocks, delete, type over,
+bold / italic / strikethrough / code, "Turn into" and Tab on every selected line. See
+`docs/DECISIONS.md`, "A selection across blocks belongs to the editor". Checked in a Linux release
+build with a real mouse and keyboard (drag down and up, toolbar, Ctrl+I, typing over, undo, copy and
+paste back); `test/block_range_test.dart` (19). Confirmed working on Windows by the user (2026-10-29).
 
 ## Next single task
 Bug 5 is confirmed fixed with test build 9 (v0.3.5-test.2). If a blank launch ever returns, send `native.log` and
