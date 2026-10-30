@@ -54,6 +54,7 @@ class _HomePageState extends State<HomePage> {
     final room = MediaQuery.sizeOf(context).width - 360;
     return width.clamp(_minSidebarWidth, room.clamp(_minSidebarWidth, _maxSidebarWidth));
   }
+
   bool _ready = false;
 
   AppSettings get settings => widget.settings;
@@ -231,6 +232,7 @@ class _HomePageState extends State<HomePage> {
               'Drag or Shift+click across table cells  Select cells (Ctrl+C / X / V, Delete)\n'
               'Drag a table column border  Set its width (double-click: even columns)\n'
               'In a table: Tab / Ctrl+Shift+Tab  Next / previous cell; Shift+Tab or Shift+Enter  New line in the cell\n'
+              'In a table: Ctrl+V  Paste into the cell, lines and all; Ctrl+Shift+V  Paste across separate cells\n'
               'In a table: right-click a cell or Shift+F10  Table menu (insert, sort, filter, colour, wrap…)\n'
               'In a table: drag a row or column grip, or Alt+Shift+arrows  Move the row or column\n'
               'Enter  Send a message\nShift+Enter  New line in a message'),

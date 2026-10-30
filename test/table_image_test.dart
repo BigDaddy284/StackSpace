@@ -379,10 +379,9 @@ void main() {
       await settle(tester);
     });
 
-    testWidgets('pasting rows copied from a spreadsheet into one cell fills the cells from there, adding rows',
-        (tester) async {
+    testWidgets('pasting several lines into a cell keeps them in that cell, as line breaks', (tester) async {
       await pumpEditor(tester, table);
-      mockClipboard(tester, '7\n8\n9\n');
+      mockClipboard(tester, 'first line\r\nsecond\tpart\nthird\n');
       await tester.tap(cell(2, 1));
       await tester.pump();
       await tester.pump(); // the cell's field is built, then takes the caret
@@ -390,20 +389,41 @@ void main() {
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
       await tester.pump();
       await tester.pump();
-      expect(
-          editor.document[1].text.split('\n').sublist(3), ['| b    | 7     |', '|      | 8     |', '|      | 9     |']);
-      expect(tableState(tester).cellRange, (2, 1, 4, 1));
+      expect(tableState(tester).hasCellRange, isFalse);
+      expect(focused(tester, cell(2, 1)), isTrue, reason: 'the caret stays in the cell');
+      final text = grid(tester).controllerAt(2, 1);
+      expect(text.text, '2first line\nsecond part\nthird',
+          reason: 'pasted at the caret; the last line break is dropped, tabs become spaces');
+      expect(text.selection, TextSelection.collapsed(offset: text.text.length));
+      expect(editor.document[1].text.split('\n').sublist(3), ['| b    | 2first line<br>second part<br>third |'],
+          reason: 'no other cell changes and no rows are added');
+      expect(tester.getSize(cell(2, 1)).height, greaterThan(TableBlockView.cellHeight),
+          reason: 'the row grows to show the lines');
 
       // Plain text still pastes at the caret.
-      await key(tester, LogicalKeyboardKey.escape);
-      expect(focused(tester, cell(2, 1)), isTrue);
-      expect(grid(tester).controllerAt(2, 1).selection, const TextSelection.collapsed(offset: 1));
-      await tester.runAsync(() => Clipboard.setData(const ClipboardData(text: '0')));
+      text.selection = const TextSelection.collapsed(offset: 6);
+      await tester.runAsync(() => Clipboard.setData(const ClipboardData(text: '!')));
       await key(tester, LogicalKeyboardKey.keyV, control: true);
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
       await tester.pump();
-      expect(grid(tester).controllerAt(2, 1).text, '70');
-      expect(editor.document[1].text.split('\n')[3], '| b    | 70    |');
+      expect(text.text, startsWith('2first! line'));
+      await settle(tester);
+    });
+
+    testWidgets('Ctrl+Shift+V spreads rows copied from a spreadsheet across the cells, adding rows', (tester) async {
+      await pumpEditor(tester, table);
+      mockClipboard(tester, '7\n8\n9\n');
+      await tester.tap(cell(2, 1));
+      await tester.pump();
+      await tester.pump(); // the cell's field is built, then takes the caret
+      await key(tester, LogicalKeyboardKey.keyV, control: true, shift: true);
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+      await tester.pump();
+      expect(
+          editor.document[1].text.split('\n').sublist(3), ['| b    | 7     |', '|      | 8     |', '|      | 9     |']);
+      expect(tableState(tester).cellRange, (2, 1, 4, 1));
+      await key(tester, LogicalKeyboardKey.escape);
       await settle(tester);
     });
 
