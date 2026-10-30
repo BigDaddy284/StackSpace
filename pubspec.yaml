@@ -51,6 +51,7 @@ flutter:
 
   assets:
     - assets/branding/logo.png
+    - assets/spelling/en_US.txt.gz
 
   # To add assets to your application, add an assets section, like this:
   # assets:

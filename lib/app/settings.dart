@@ -68,6 +68,13 @@ class AppSettings extends ChangeNotifier {
   bool get confirmDeletes => _prefs.getBool('confirmDeletes') ?? true;
   set confirmDeletes(bool value) => _set('confirmDeletes', value);
 
+  bool get checkSpelling => _prefs.getBool('checkSpelling') ?? true;
+  set checkSpelling(bool value) => _set('checkSpelling', value);
+
+  /// Words added to the spelling dictionary.
+  List<String> get spellingWords => _prefs.getStringList('spellingWords') ?? const [];
+  set spellingWords(List<String> words) => _prefs.setStringList('spellingWords', words);
+
   /// System follows the Windows light/dark setting.
   ThemeMode get themeMode => themeModeListenable.value;
   set themeMode(ThemeMode value) {
@@ -81,6 +88,12 @@ class AppSettings extends ChangeNotifier {
 
   double get dockHeight => _prefs.getDouble('dockHeight') ?? 360;
   set dockHeight(double value) => _set('dockHeight', value);
+
+  static const defaultSidebarWidth = 260.0;
+
+  /// Width of the pages panel, set by dragging its right edge.
+  double get sidebarWidth => _prefs.getDouble('sidebarWidth') ?? defaultSidebarWidth;
+  set sidebarWidth(double value) => _set('sidebarWidth', value);
 
   /// Folders folded in the pages panel, per workspace (Bug 3). A folder on
   /// disk has no identity but its path, so the paths are what is kept; the

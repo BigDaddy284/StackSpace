@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:collection/collection.dart';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -7,9 +8,11 @@ import 'package:flutter/services.dart';
 
 import '../../app/theme.dart';
 import '../../editor/blocks.dart';
+import '../../editor/spell_checker.dart';
 import '../../editor/table_data.dart';
 import 'block_metrics.dart';
 import 'header_button.dart';
+import 'spelling.dart';
 
 /// A table block as a grid of cells: a header strip with the row and column
 /// buttons, then one field per cell.
@@ -140,6 +143,14 @@ class TableBlockView extends StatefulWidget {
 }
 
 /// What the table menu can do.
+/// A spelling fix picked from the table's menu: a replacement, or adding or
+/// ignoring the word when there is none.
+class _SpellingChoice {
+  const _SpellingChoice({this.replacement, this.add = false});
+  final String? replacement;
+  final bool add;
+}
+
 enum _TableAction {
   insertRowAbove,
   insertRowBelow,
@@ -200,6 +211,12 @@ class TableBlockViewState extends State<TableBlockView> {
   void initState() {
     super.initState();
     _read(widget.block.text);
+    SpellChecker.instance.addListener(_onSpelling);
+  }
+
+  /// The word list loaded, a word was added, or checking was turned on or off.
+  void _onSpelling() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -210,6 +227,7 @@ class TableBlockViewState extends State<TableBlockView> {
 
   @override
   void dispose() {
+    SpellChecker.instance.removeListener(_onSpelling);
     _disposeCells();
     _scroll.dispose();
     super.dispose();
@@ -878,7 +896,7 @@ class TableBlockViewState extends State<TableBlockView> {
         if (hasCellRange) setState(() => _anchor = _extent = null);
         if (_focused != hit) focusCell(hit.$1, hit.$2);
       }
-      _openMenu(hit, event.position);
+      _openMenu(hit, event.position, click: event.position);
       return;
     }
     if (event.buttons != kPrimaryMouseButton) return;
@@ -1011,18 +1029,59 @@ class TableBlockViewState extends State<TableBlockView> {
     _openMenu(at, position);
   }
 
-  Future<void> _openMenu((int, int) at, Offset position) async {
+  /// The misspelled word in cell [at] under the mouse at [click] (global),
+  /// or at the caret when there was no click.
+  TextRange? _misspellingAt((int, int) at, Offset? click) {
+    final cell = _cells[at.$1][at.$2];
+    if (click == null) return cell.text.misspellingAtSelection();
+    final misspelled = cell.text.misspellings;
+    if (misspelled.isEmpty) return null;
+    final editable = cell.focus.context?.findAncestorStateOfType<EditableTextState>();
+    // A cell the mouse never hovered still shows its text, not a field.
+    final paragraph = cell.textKey.currentContext?.findRenderObject();
+    final int offset;
+    if (editable != null) {
+      offset = editable.renderEditable.getPositionForPoint(click).offset;
+    } else if (paragraph is RenderParagraph) {
+      offset = paragraph.getPositionForOffset(paragraph.globalToLocal(click)).offset;
+    } else {
+      return null;
+    }
+    return misspelled.firstWhereOrNull((r) => r.start <= offset && offset <= r.end);
+  }
+
+  Future<void> _openMenu((int, int) at, Offset position, {Offset? click}) async {
     final (r, c) = at;
     final range = cellRange ?? (r, c, r, c);
     final (top, left, bottom, right) = range;
     final rowsSelected = bottom - top + 1, columnsSelected = right - left + 1;
     final palette = StackColors.of(context);
     final columnName = _columnName(c);
+    final misspelled = cellRange == null ? _misspellingAt(at, click) : null;
+    final word = misspelled?.textInside(_cells[r][c].text.text);
+    final suggestions = word == null ? const <String>[] : SpellChecker.instance.suggestions(word, limit: 5);
     _menuOpen = true;
-    final action = await showMenu<_TableAction>(
+    final action = await showMenu<Object>(
       context: context,
       position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
       items: [
+        if (word != null) ...[
+          for (final s in suggestions)
+            PopupMenuItem<Object>(
+              value: _SpellingChoice(replacement: s),
+              height: 32,
+              child: Text(s, style: const TextStyle(fontWeight: FontWeight.w600)),
+            ),
+          if (suggestions.isEmpty)
+            PopupMenuItem<Object>(
+              enabled: false,
+              height: 32,
+              child: Text('No spelling suggestions', style: TextStyle(color: palette.subText)),
+            ),
+          _spellingItem(const _SpellingChoice(add: true), Icons.library_add_outlined, 'Add to dictionary', palette),
+          _spellingItem(const _SpellingChoice(), Icons.visibility_off_outlined, 'Ignore', palette),
+          const PopupMenuDivider(),
+        ],
         _item(_TableAction.insertRowAbove, Icons.north, 'Insert row above', palette),
         _item(_TableAction.insertRowBelow, Icons.south, 'Insert row below', palette),
         _item(_TableAction.insertColumnLeft, Icons.west, 'Insert column left', palette),
@@ -1064,8 +1123,55 @@ class TableBlockViewState extends State<TableBlockView> {
       _restoreFocus(at);
       return;
     }
-    await _run(action, at, range, position);
+    if (action is _SpellingChoice) {
+      _menuOpen = false;
+      _fixSpelling(at, misspelled!, word!, action);
+      return;
+    }
+    await _run(action as _TableAction, at, range, position);
     _menuOpen = false;
+  }
+
+  void _fixSpelling((int, int) at, TextRange misspelled, String word, _SpellingChoice choice) {
+    final replacement = choice.replacement;
+    if (replacement == null) {
+      if (choice.add) {
+        SpellChecker.instance.addWord(word);
+      } else {
+        SpellChecker.instance.ignore(word);
+      }
+      _restoreFocus(at);
+      return;
+    }
+    final (r, c) = at;
+    final cell = _cells[r][c];
+    final text = cell.text.text.replaceRange(misspelled.start, misspelled.end, replacement);
+    cell.focus.requestFocus();
+    cell.text.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: misspelled.start + replacement.length),
+    );
+    _cellChanged(r, c, text);
+  }
+
+  PopupMenuItem<Object> _spellingItem(_SpellingChoice value, IconData icon, String label, StackPalette palette) =>
+      PopupMenuItem<Object>(
+        value: value,
+        height: 32,
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 17, color: palette.subText),
+          const SizedBox(width: 10),
+          Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
+        ]),
+      );
+
+  void _cellChanged(int row, int column, String value) {
+    final wasMultiline = TableBlockView.multiline(_data, row, column);
+    _data.setCell(row, column, value);
+    if (wasMultiline || wasMultiline != TableBlockView.multiline(_data, row, column)) {
+      setState(() {}); // the row may grow or shrink
+    }
+    _emit();
   }
 
   /// After the menu closes without changing the shape, the caret (or the
@@ -1625,14 +1731,7 @@ class TableBlockViewState extends State<TableBlockView> {
         fontWeight: isHeader ? FontWeight.w600 : FontWeight.normal,
       ),
       textStyle: TableBlockView.textStyle(inputStyle, bold: isHeader).copyWith(color: palette.text),
-      onChanged: (value) {
-        final wasMultiline = TableBlockView.multiline(_data, row, column);
-        _data.setCell(row, column, value);
-        if (multiline || wasMultiline != TableBlockView.multiline(_data, row, column)) {
-          setState(() {}); // the row may grow or shrink
-        }
-        _emit();
-      },
+      onChanged: (value) => _cellChanged(row, column, value),
     );
   }
 }
@@ -1685,7 +1784,6 @@ class _TableCell extends StatefulWidget {
 class _TableCellState extends State<_TableCell> {
   bool _hover = false;
   bool _hadFocus = false;
-  final _textKey = GlobalKey();
 
   @override
   void initState() {
@@ -1713,12 +1811,14 @@ class _TableCellState extends State<_TableCell> {
     cell.focus.addListener(_onFocus);
     cell.editing.addListener(_changed);
     cell.nearby.addListener(_changed);
+    SpellChecker.instance.addListener(_changed);
   }
 
   void _unlisten(_Cell cell) {
     cell.focus.removeListener(_onFocus);
     cell.editing.removeListener(_changed);
     cell.nearby.removeListener(_changed);
+    SpellChecker.instance.removeListener(_changed);
   }
 
   void _onFocus() {
@@ -1742,7 +1842,7 @@ class _TableCellState extends State<_TableCell> {
     // Shift+click selects cells (the table handles it), leaving no caret.
     if (event.buttons != kPrimaryMouseButton || HardwareKeyboard.instance.isShiftPressed) return;
     final cell = widget.cell;
-    final paragraph = _textKey.currentContext?.findRenderObject();
+    final paragraph = widget.cell.textKey.currentContext?.findRenderObject();
     if (paragraph is RenderParagraph && cell.text.text.isNotEmpty) {
       final at = paragraph.getPositionForOffset(paragraph.globalToLocal(event.position));
       cell.text.selection = TextSelection.collapsed(offset: at.offset.clamp(0, cell.text.text.length));
@@ -1796,11 +1896,13 @@ class _TableCellState extends State<_TableCell> {
               builder: (context, value, _) {
                 final empty = value.text.isEmpty;
                 return Text.rich(
-                  TextSpan(
-                    text: empty ? (widget.hint ?? '') : value.text,
-                    style: empty ? widget.textStyle.copyWith(color: palette.subText.withAlpha(120)) : widget.textStyle,
-                  ),
-                  key: _textKey,
+                  empty
+                      ? TextSpan(
+                          text: widget.hint ?? '',
+                          style: widget.textStyle.copyWith(color: palette.subText.withAlpha(120)))
+                      // The controller's own span: the same text with its spelling marks.
+                      : cell.text.buildTextSpan(context: context, style: widget.textStyle, withComposing: false),
+                  key: cell.textKey,
                   textAlign: widget.align,
                   strutStyle: TableBlockView._strut,
                   maxLines: widget.multiline ? null : 1,
@@ -2009,8 +2111,8 @@ class _ColumnResizeHandleState extends State<_ColumnResizeHandle> {
 }
 
 class _Cell {
-  _Cell(String value, this.focus) : text = TextEditingController(text: value);
-  final TextEditingController text;
+  _Cell(String value, this.focus) : text = SpellCheckedController(text: value);
+  final SpellCheckedController text;
   final FocusNode focus;
 
   /// True from a request for the caret until the cell loses it: the cell
@@ -2019,6 +2121,9 @@ class _Cell {
 
   /// True while the caret is in a neighbouring cell, so the field is ready.
   final nearby = ValueNotifier(false);
+
+  /// The text the cell shows while it is not a field.
+  final textKey = GlobalKey();
 
   /// The cell's last widget and what it was built from (see `_cellField`).
   Object? look;

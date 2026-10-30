@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'app/app.dart';
 import 'app/settings.dart';
 import 'app/startup_log.dart';
+import 'editor/spell_checker.dart';
 
 Future<void> main() async {
   await runZonedGuarded(() async {
@@ -25,6 +26,13 @@ Future<void> main() async {
     Timer(const Duration(seconds: 10), () => WidgetsBinding.instance.removeObserver(sizeLogger));
     final settings = await AppSettings.load(onProblem: StartupLog.log);
     StartupLog.log('settings loaded: theme ${settings.themeMode.name}, workspace ${settings.workspacePath}');
+    final spelling = SpellChecker.instance
+      ..enabled = settings.checkSpelling
+      ..setAddedWords(settings.spellingWords)
+      ..onAddedChanged = (words) => settings.spellingWords = words;
+    // The word list loads in the background; pages show marks once it is in.
+    unawaited(spelling.load().then((_) => StartupLog.log('spelling dictionary loaded'),
+        onError: (Object e) => StartupLog.log('Spelling dictionary could not be loaded: $e')));
     runApp(StackSpaceApp(settings: settings));
   }, (error, stack) {
     StartupLog.log('Uncaught error: $error\n$stack');

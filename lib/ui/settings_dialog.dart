@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app/settings.dart';
+import '../editor/spell_checker.dart';
 import 'widgets/controls.dart';
 
 /// Returns true if anything changed.
@@ -22,6 +23,7 @@ class _SettingsDialogState extends State<_SettingsDialog> {
   late final _context = TextEditingController(text: '${widget.settings.contextLength}');
   late final _workspace = TextEditingController(text: widget.settings.workspacePath);
   late bool _confirmDeletes = widget.settings.confirmDeletes;
+  late bool _checkSpelling = widget.settings.checkSpelling;
   late ThemeMode _themeMode = widget.settings.themeMode;
 
   @override
@@ -38,6 +40,8 @@ class _SettingsDialogState extends State<_SettingsDialog> {
     s.contextLength = int.tryParse(_context.text.trim())?.clamp(2048, 262144) ?? AppSettings.defaultContextLength;
     if (_workspace.text.trim().isNotEmpty) s.workspacePath = _workspace.text.trim();
     s.confirmDeletes = _confirmDeletes;
+    s.checkSpelling = _checkSpelling;
+    SpellChecker.instance.enabled = _checkSpelling;
     s.themeMode = _themeMode;
     Navigator.pop(context, true);
   }
@@ -94,6 +98,15 @@ class _SettingsDialogState extends State<_SettingsDialog> {
               _field('Context length (tokens)', _context,
                   'How much text the model can see at once. Larger uses more memory.',
                   number: true),
+              const SectionLabel('Editor'),
+              SsToggle(
+                label: 'Check spelling as I type',
+                value: _checkSpelling,
+                onChanged: (v) => setState(() => _checkSpelling = v),
+              ),
+              const SizedBox(height: 4),
+              const HintText('Right-click an underlined word for suggestions. English (US).'),
+              const SizedBox(height: 10),
               const SectionLabel('Assistant'),
               SsToggle(
                 label: 'Ask before the assistant deletes pages',

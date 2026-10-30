@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../editor/links.dart';
+import 'spelling.dart';
 
 /// A text controller that shows inline Markdown (bold, italic, code, strike,
 /// links) styled while keeping the markers in the text, so what is saved is
 /// exactly what was typed.
-class InlineMarkdownController extends TextEditingController {
+class InlineMarkdownController extends TextEditingController with SpellingMarks {
   InlineMarkdownController({super.text});
 
   /// Off for code and other verbatim blocks.
@@ -61,12 +62,29 @@ class InlineMarkdownController extends TextEditingController {
   );
 
   @override
+  bool get checkSpelling => styled;
+
+  /// Inline code and link targets are not prose.
+  @override
+  List<TextRange> spellingSkips(String text) => [
+        for (final m in _pattern.allMatches(text))
+          if (m.group(2) != null)
+            TextRange(start: m.start, end: m.end)
+          else if (m.group(4) != null)
+            TextRange(start: m.start + m.group(4)!.indexOf(']'), end: m.end),
+      ];
+
+  @override
   TextSpan buildTextSpan({required BuildContext context, TextStyle? style, required bool withComposing}) {
     if (!styled || text.isEmpty || (withComposing && value.composing.isValid)) {
       return super.buildTextSpan(context: context, style: style, withComposing: withComposing);
     }
-    return spanFor(text, style ?? const TextStyle(),
-        styled: true, markerColor: markerColor, codeColor: codeColor, linkColor: linkColor);
+    // The marks only add decorations, so the span still measures the same as
+    // [spanFor] (which the editor uses to size blocks before building them).
+    return markMisspellings(
+        spanFor(text, style ?? const TextStyle(),
+            styled: true, markerColor: markerColor, codeColor: codeColor, linkColor: linkColor),
+        withComposing: withComposing);
   }
 
   /// The styled span for [text], also used to measure a block's height

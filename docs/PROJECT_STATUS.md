@@ -354,6 +354,12 @@ Causes and fixes:
 Tests: `block_metrics_test.dart` now checks that every table cell's text and its field have the same
 height at two widths and two text scales; table tests read cells through
 `TableBlockViewState.controllerAt` / `focusNodeAt`. Full suite 224 passed, 2 skipped (Linux).
+Checked in a Linux release build with a real mouse and keyboard (click places the caret mid-word,
+Tab / Down / Shift+Tab, drag-select and Delete, right-click menu, switching pages). The owner
+confirmed the build on Windows (2026-10-30: "much better performance"). Merged with the spell check
+work: cells drawn as text show the spelling marks (the controller's own span), a right-click on a
+cell that is not a field finds the word from the drawn text, and cached text blocks rebuild when the
+word list changes. Full suite after the merge 237 passed, 2 skipped.
 
 ## Next single task
 No code task is queued; the next phase starts from the owner's next request. Bug 5 is
