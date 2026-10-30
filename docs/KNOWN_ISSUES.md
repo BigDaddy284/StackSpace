@@ -127,9 +127,14 @@ machine with Ollama; that is the first thing to check with test build 2.
   inside a code space do not cross into the surrounding page.
 - The slash menu opens only when `/` is typed at the start of a block or after a space, so
   `http://` never opens it. It does not open on a pasted `/`.
-- Raw HTML is edited as its text in a boxed field. Table cells hold one line each; a table with more
-  columns than fit shows narrow cells (the text scrolls inside the cell) and there is no column
-  width or alignment control yet (alignments in the file are kept).
+- Raw HTML is edited as its text in a boxed field.
+- Tables: a filter hides rows, but a block of cells selected across hidden rows still copies,
+  clears and pastes into them. Sorting is one-off (rows are reordered in the file), not a live
+  sort that re-applies as you type. Cell colours, filters, unwrapped columns and a turned-off header
+  row are kept on a `<!-- table-style: ... -->` comment line, which other Markdown apps ignore, so
+  there the table shows plain, unfiltered and with its first row as a header. Line breaks in cells
+  are written as `<br>`, which GitHub and most Markdown apps show as a line break. The cell colour
+  and alignment submenus open where the menu was opened, not beside the item.
 - A folded section is remembered only while the page is open: switching pages, reloading after an
   assistant edit, or restarting the app unfolds everything. Folding is not written to the file.
 - Dragging a block to a point far down a long page scrolls the list while the pointer sits near its

@@ -239,8 +239,8 @@ List<Block> parseMarkdown(String markdown) {
         rows.add(lines[i]);
         i++;
       }
-      if (i < lines.length && TableData.widthsLine.hasMatch(lines[i].trim())) {
-        rows.add(lines[i]); // the column widths
+      while (i < lines.length && TableData.isMetaLine(lines[i])) {
+        rows.add(lines[i]); // the column widths and the table's style
         i++;
       }
       add(Block(kind: BlockKind.table, text: rows.join('\n')));

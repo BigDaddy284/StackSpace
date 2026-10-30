@@ -8,6 +8,15 @@ light and dark themes.
 
 ![StackSpace in dark mode](docs/screenshots/dark-assistant.png)
 
+## A hobby project, offered as-is
+
+This is a hobby project, made for fun in spare time. It is offered as-is, with no warranty, no
+support and no promised updates. There may be bugs, and some may never be fixed. Issues are turned
+off on this repository and I'm not able to answer questions, take requests or fix problems. You're
+welcome to use it, learn from it and change it for your own use under the terms of the license, at
+your own risk. Back up anything you care about, such as your workspace folder (by default
+`Documents\StackSpace`) with your pages and pictures, and any AppFlowy export you import from.
+
 ## What works today
 
 - **Workspace**: a folder on disk (default `Documents\StackSpace`). Every text file in it
@@ -22,6 +31,12 @@ light and dark themes.
 - **Block editor** for Markdown pages, with autosave and undo / redo. Each file keeps its own
   Markdown and line endings (CRLF stays CRLF), so pages stay readable in any other editor.
   - Headings, bulleted, numbered and to-do lists, quotes, callouts, dividers, tables and images.
+  - Tables: text wraps in its column (or not, per column) and a row grows to fit; Shift+Tab or
+    Shift+Enter starts a new line in a cell. Right-click a cell for insert row above / below,
+    insert column left / right, duplicate, sort A → Z / Z → A, filter, align, cell colour,
+    wrap, header row on or off, and delete. Drag the grip on a row's left edge or a column's top
+    edge to move it (or Alt+Shift+arrows), drag a column border to set its width, and drag across
+    cells to copy and paste them with Excel. Everything is kept in the page's Markdown.
   - Type `/` for the block menu. Select text for a formatting toolbar (bold, italic,
     strikethrough, inline code, link, "Turn into").
   - Code blocks with line numbers, syntax highlighting for 30 languages (picked or
@@ -58,7 +73,8 @@ light and dark themes.
   screen-reader labels, 24x24 click targets, and layout at 150% text size.
 - Keyboard: Ctrl+N new page, Ctrl+S save now, Ctrl+J opens and closes the assistant,
   Ctrl+B / I / E bold, italic and inline code, Ctrl+K link, Enter sends a message,
-  Shift+Enter adds a line, and F2 / Delete rename or delete the focused page in the sidebar.
+  Shift+Enter adds a line, and F2 / Delete rename or delete the focused page in the sidebar. In a
+  table, Tab and Ctrl+Shift+Tab move between cells and Shift+F10 opens the table menu.
   Help › Keyboard shortcuts lists them all.
 
 ## Using it with Ollama
@@ -90,8 +106,9 @@ Building the Windows .exe needs a Windows machine with Visual Studio's
   for it.
 - No databases, board or calendar views, and no sync or sharing: pages are plain files in
   your folder.
-- If a launch ever opens as an empty window, please send `startup.log` and `native.log` from
-  `%APPDATA%\com.stackspace\stack_space\`. They record each launch step by step.
+- The app keeps two log files, `startup.log` and `native.log`, in
+  `%APPDATA%\com.stackspace\stack_space\`. They record each launch step by step, which can help
+  if you're looking into a problem yourself, such as a launch that opens as an empty window.
 
 ## Licence and AppFlowy
 

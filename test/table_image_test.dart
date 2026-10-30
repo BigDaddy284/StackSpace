@@ -49,7 +49,7 @@ void main() {
       expect(TableData.parse('   '), isNull);
     });
 
-    test('rows and columns are added and removed, never the header or the last column', () {
+    test('rows and columns are added and removed, never the last row or the last column', () {
       final data = TableData.parse('| a | b |\n| --- | --- |\n| 1 | 2 |')!;
       data.insertRow(2);
       data.setCell(2, 0, 'new');
@@ -58,13 +58,17 @@ void main() {
       data.insertColumn(1, header: 'mid');
       expect(data.rows[0], ['a', 'mid', 'b']);
       expect(data.rows[1], ['1', '', '2']);
-      expect(data.removeRow(0), isFalse);
       expect(data.removeRow(1), isTrue);
       expect(data.rows[1], ['new', '', '']);
       expect(data.removeColumn(1), isTrue);
       expect(data.removeColumn(0), isTrue);
       expect(data.removeColumn(0), isFalse);
       expect(data.columns, 1);
+      expect(data.removeRow(0), isTrue, reason: 'the header can go; the next row takes its place');
+      expect(data.rows, [
+        ['']
+      ]);
+      expect(data.removeRow(0), isFalse, reason: 'the last row stays');
     });
 
     test('column widths are kept on a comment line under the rows and follow added and removed columns', () {
@@ -105,7 +109,7 @@ void main() {
           ],
           reason: 'Excel ends with a line break and uses CRLF');
       expect(TableData.parseTsv('"two\nlines"'), [
-        ['two lines']
+        ['two\nlines']
       ]);
 
       // One value fills the selection.
@@ -224,8 +228,8 @@ void main() {
       expect(focused(tester, cell(0, 1)), isTrue);
       await key(tester, LogicalKeyboardKey.tab);
       expect(focused(tester, cell(1, 0)), isTrue, reason: 'Tab wraps to the next row');
-      await key(tester, LogicalKeyboardKey.tab, shift: true);
-      expect(focused(tester, cell(0, 1)), isTrue);
+      await key(tester, LogicalKeyboardKey.tab, shift: true, control: true);
+      expect(focused(tester, cell(0, 1)), isTrue, reason: 'Ctrl+Shift+Tab goes back a cell');
       await key(tester, LogicalKeyboardKey.enter);
       expect(focused(tester, cell(1, 1)), isTrue, reason: 'Enter moves down');
       await key(tester, LogicalKeyboardKey.arrowDown);

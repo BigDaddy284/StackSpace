@@ -55,6 +55,16 @@ void main() {
         }
       });
 
+      test('text and subText reach 4.5:1 on every table cell colour', () {
+        for (final name in StackPalette.tableHues.keys) {
+          final tint = p.tableTint(name)!;
+          for (final (label, color) in [('text', p.text), ('subText', p.subText)]) {
+            expect(contrast(color, tint), greaterThanOrEqualTo(4.5),
+                reason: '$label on $name: ${contrast(color, tint).toStringAsFixed(2)}');
+          }
+        }
+      });
+
       test('Muted is below 4.5:1, so it is only used for disabled controls', () {
         expect(contrast(p.muted, p.panel), lessThan(4.5));
       });
