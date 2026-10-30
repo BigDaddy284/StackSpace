@@ -366,8 +366,7 @@ void main() {
       await settle(tester);
     });
 
-    testWidgets('pasting several lines into a cell keeps them in that cell, as line breaks',
-        (tester) async {
+    testWidgets('pasting several lines into a cell keeps them in that cell, as line breaks', (tester) async {
       await pumpEditor(tester, table);
       mockClipboard(tester, 'first line\r\nsecond\tpart\nthird\n');
       await tester.tap(cell(2, 1));
@@ -379,25 +378,25 @@ void main() {
       expect(tableState(tester).hasCellRange, isFalse);
       expect(focused(tester, cell(2, 1)), isTrue, reason: 'the caret stays in the cell');
       final field = tester.widget<TextField>(cell(2, 1)).controller!;
-      expect(field.text, 'first line\nsecond part\nthird', reason: 'the last line break is dropped, tabs become spaces');
+      expect(field.text, '2first line\nsecond part\nthird',
+          reason: 'pasted at the caret; the last line break is dropped, tabs become spaces');
       expect(field.selection, TextSelection.collapsed(offset: field.text.length));
-      expect(editor.document[1].text.split('\n').sublist(3), ['| b    | first line<br>second part<br>third |'],
+      expect(editor.document[1].text.split('\n').sublist(3), ['| b    | 2first line<br>second part<br>third |'],
           reason: 'no other cell changes and no rows are added');
       expect(tester.getSize(cell(2, 1)).height, greaterThan(TableBlockView.cellHeight),
           reason: 'the row grows to show the lines');
 
       // Plain text still pastes at the caret.
-      field.selection = const TextSelection.collapsed(offset: 5);
+      field.selection = const TextSelection.collapsed(offset: 6);
       await tester.runAsync(() => Clipboard.setData(const ClipboardData(text: '!')));
       await key(tester, LogicalKeyboardKey.keyV, control: true);
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
       await tester.pump();
-      expect(field.text, startsWith('first! line'));
+      expect(field.text, startsWith('2first! line'));
       await settle(tester);
     });
 
-    testWidgets('Ctrl+Shift+V spreads rows copied from a spreadsheet across the cells, adding rows',
-        (tester) async {
+    testWidgets('Ctrl+Shift+V spreads rows copied from a spreadsheet across the cells, adding rows', (tester) async {
       await pumpEditor(tester, table);
       mockClipboard(tester, '7\n8\n9\n');
       await tester.tap(cell(2, 1));

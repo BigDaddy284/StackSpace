@@ -54,6 +54,7 @@ class _HomePageState extends State<HomePage> {
     final room = MediaQuery.sizeOf(context).width - 360;
     return width.clamp(_minSidebarWidth, room.clamp(_minSidebarWidth, _maxSidebarWidth));
   }
+
   bool _ready = false;
 
   AppSettings get settings => widget.settings;
