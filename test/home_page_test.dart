@@ -83,6 +83,49 @@ void main() {
     expect(find.text('images'), findsNothing, reason: 'a folder of pictures only is hidden');
   });
 
+  testWidgets('drag the pages panel edge to resize it; the width is kept', (tester) async {
+    await pumpApp(tester);
+    final handle = find.byKey(const ValueKey('sidebar-resize-handle'));
+    double width() => tester.getSize(find.byType(Sidebar)).width;
+    expect(width(), 260);
+
+    // Drag wider: the panel follows the pointer and the width is saved when the drag ends.
+    await tester.drag(handle, const Offset(140, 0), touchSlopX: 0);
+    await tester.pump();
+    expect(width(), 400);
+    var prefs = await tester.runAsync(SharedPreferences.getInstance);
+    expect(prefs!.getDouble('sidebarWidth'), 400);
+
+    // Past the limits it stops at the smallest and largest widths.
+    await tester.drag(handle, const Offset(-600, 0), touchSlopX: 0);
+    await tester.pump();
+    expect(width(), 180);
+    await tester.drag(handle, const Offset(2000, 0), touchSlopX: 0);
+    await tester.pump();
+    expect(width(), 600);
+
+    // Hiding and showing the panel keeps its width.
+    await tester.tap(find.byTooltip('Hide the pages panel'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Show the pages panel'));
+    await tester.pumpAndSettle();
+    expect(width(), 600);
+
+    // A restart keeps it too.
+    await tester.pumpWidget(const SizedBox());
+    await pumpApp(tester);
+    expect(width(), 600);
+
+    // Double-click resets to the default.
+    await tester.tap(handle);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(handle);
+    await tester.pumpAndSettle();
+    expect(width(), 260);
+    prefs = await tester.runAsync(SharedPreferences.getInstance);
+    expect(prefs!.getDouble('sidebarWidth'), 260);
+  });
+
   testWidgets('folder fold state survives hiding the panel, renames, deletes and a restart', (tester) async {
     // Bug 3: the folded set lived in the panel's widget state, which is lost
     // whenever the panel is hidden (it is unmounted) and on every restart.

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/services.dart';
 
 import '../ai/chat_controller.dart';
@@ -38,6 +39,21 @@ class _HomePageState extends State<HomePage> {
   DockMode _dock = DockMode.closed;
   bool _showSidebar = true;
   final _sidebarKey = GlobalKey<SidebarState>();
+
+  /// Live width of the pages panel. Saved to settings when a drag ends, not
+  /// on every frame of it.
+  late final _sidebarWidth = ValueNotifier(settings.sidebarWidth);
+  double _dragStartWidth = 0;
+
+  static const _minSidebarWidth = 180.0;
+  static const _maxSidebarWidth = 600.0;
+
+  /// Keeps at least 360 px for the editor, so a wide panel saved on a big
+  /// screen does not squeeze the page away on a small window.
+  double _clampSidebarWidth(BuildContext context, double width) {
+    final room = MediaQuery.sizeOf(context).width - 360;
+    return width.clamp(_minSidebarWidth, room.clamp(_minSidebarWidth, _maxSidebarWidth));
+  }
   bool _ready = false;
 
   AppSettings get settings => widget.settings;
@@ -130,6 +146,7 @@ class _HomePageState extends State<HomePage> {
       _editor.dispose();
       _workspace.dispose();
     }
+    _sidebarWidth.dispose();
     super.dispose();
   }
 
@@ -279,8 +296,12 @@ class _HomePageState extends State<HomePage> {
                   child: Row(
                     children: [
                       if (_showSidebar) ...[
-                        SizedBox(
-                          width: 260,
+                        // Only this builder runs while the edge is dragged; the
+                        // editor next to it is laid out again but not rebuilt.
+                        ValueListenableBuilder<double>(
+                          valueListenable: _sidebarWidth,
+                          builder: (context, width, child) =>
+                              SizedBox(width: _clampSidebarWidth(context, width), child: child),
                           child: Sidebar(
                               key: _sidebarKey,
                               workspace: _workspace,
@@ -288,7 +309,16 @@ class _HomePageState extends State<HomePage> {
                               settings: settings,
                               onNewPage: _newPage),
                         ),
-                        Container(width: 1, color: p.barBorder),
+                        _SidebarResizeHandle(
+                          key: const ValueKey('sidebar-resize-handle'),
+                          onDragStart: () => _dragStartWidth = _sidebarWidth.value,
+                          onDrag: (dx) => _sidebarWidth.value = _clampSidebarWidth(context, _dragStartWidth + dx),
+                          onDragEnd: () => settings.sidebarWidth = _sidebarWidth.value,
+                          onReset: () {
+                            _sidebarWidth.value = AppSettings.defaultSidebarWidth;
+                            settings.sidebarWidth = AppSettings.defaultSidebarWidth;
+                          },
+                        ),
                       ],
                       Expanded(
                         child: ChatDockLayout(
@@ -463,6 +493,63 @@ class _HomePageState extends State<HomePage> {
         ],
         Text(status, style: sub),
       ]),
+    );
+  }
+}
+
+/// The right edge of the pages panel. Drag it to set the panel's width;
+/// double-click it to go back to the default width.
+class _SidebarResizeHandle extends StatefulWidget {
+  const _SidebarResizeHandle({
+    super.key,
+    required this.onDragStart,
+    required this.onDrag,
+    required this.onDragEnd,
+    required this.onReset,
+  });
+
+  final VoidCallback onDragStart;
+
+  /// How far the pointer has moved since the drag started, so the edge stays
+  /// under the pointer even after it passes a limit and comes back.
+  final ValueChanged<double> onDrag;
+  final VoidCallback onDragEnd;
+  final VoidCallback onReset;
+
+  @override
+  State<_SidebarResizeHandle> createState() => _SidebarResizeHandleState();
+}
+
+class _SidebarResizeHandleState extends State<_SidebarResizeHandle> {
+  double _startX = 0;
+  bool _hot = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = StackColors.of(context);
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      onEnter: (_) => setState(() => _hot = true),
+      onExit: (_) => setState(() => _hot = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        // Measure from where the button went down, not from where the drag
+        // was recognised, so the edge does not lag the pointer.
+        dragStartBehavior: DragStartBehavior.down,
+        onHorizontalDragStart: (d) {
+          _startX = d.globalPosition.dx;
+          widget.onDragStart();
+        },
+        onHorizontalDragUpdate: (d) => widget.onDrag(d.globalPosition.dx - _startX),
+        onHorizontalDragEnd: (_) => widget.onDragEnd(),
+        onDoubleTap: widget.onReset,
+        child: Container(
+          width: 5,
+          color: p.window,
+          alignment: Alignment.centerLeft,
+          child: Container(width: _hot ? 2 : 1, color: _hot ? p.accentA : p.barBorder),
+        ),
+      ),
     );
   }
 }

@@ -82,6 +82,12 @@ class AppSettings extends ChangeNotifier {
   double get dockHeight => _prefs.getDouble('dockHeight') ?? 360;
   set dockHeight(double value) => _set('dockHeight', value);
 
+  static const defaultSidebarWidth = 260.0;
+
+  /// Width of the pages panel, set by dragging its right edge.
+  double get sidebarWidth => _prefs.getDouble('sidebarWidth') ?? defaultSidebarWidth;
+  set sidebarWidth(double value) => _set('sidebarWidth', value);
+
   /// Folders folded in the pages panel, per workspace (Bug 3). A folder on
   /// disk has no identity but its path, so the paths are what is kept; the
   /// panel moves them on a rename and drops them on a delete.
