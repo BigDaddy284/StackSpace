@@ -368,3 +368,20 @@ every loading step can fail into a visible message (defaults for unreadable sett
 occurrence diagnosable without a debugger.
 **Status**: Done; `test/startup_test.dart`. Packages added: `path_provider`,
 `shared_preferences_platform_interface` (BSD-3).
+
+### Spell check (v0.3.13-spell.1)
+**Decision**: Spelling is checked in the app itself against a bundled English (US) word list:
+SCOWL size 60 (the size most spell checkers ship, about 123,000 words, 350 KB gzipped in
+`assets/spelling/`, licence in `assets/spelling/SCOWL-LICENSE.txt`). The list is ordered from the
+most common words to the rarest, which ranks suggestions. Misspelled words get a wavy red
+underline in text blocks and table cells; the word right before the caret is left alone while it
+is being typed. Right-click shows up to five corrections (one edit away, or two when one finds
+too few; swapped letters rank first), Add to dictionary (saved in settings as `spellingWords`) and
+Ignore (until the app closes). Code blocks, inline code, link addresses, URLs, paths, file names,
+words with digits or underscores, acronyms and words with capitals inside (StackSpace, iPhone) are
+not checked. Settings has a "Check spelling as I type" switch.
+**Rationale**: Flutter has no spell-check service on Windows, and the Windows spell-check API
+would need a native plugin. The marks only add decorations to the spans the field already draws,
+so block heights measured before building are unchanged. Results are cached per field until its
+text or the dictionary changes, and the list is unpacked and indexed off the UI thread at start-up.
+**Status**: Done; `test/spell_checker_test.dart`, `test/table_features_test.dart`.

@@ -6,11 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stack_space/editor/blocks.dart';
+import 'package:stack_space/editor/spell_checker.dart';
 import 'package:stack_space/editor/page_editor_controller.dart';
 import 'package:stack_space/editor/table_data.dart';
 import 'package:stack_space/ui/editor/block_editor.dart';
+import 'package:stack_space/ui/editor/spelling.dart';
 import 'package:stack_space/ui/editor/table_block.dart';
 import 'package:stack_space/workspace/workspace.dart';
+import 'spell_checker_test.dart' show bundledWords;
 import 'support/temp.dart';
 
 Future<void> settle(WidgetTester tester) async {
@@ -336,6 +339,19 @@ void main() {
       await menu(tester, (1, 0), 'Header row');
       expect(lines().last, '<!-- table-style: {"header":false,"colors":{"1,0":"yellow"}} -->');
       expect(tester.widget<TextField>(cell(0, 0)).style!.fontWeight, FontWeight.normal);
+      await settle(tester);
+    });
+
+    testWidgets('a misspelled word in a cell gets corrections at the top of the right-click menu', (tester) async {
+      SpellChecker.instance
+        ..useWords(bundledWords())
+        ..enabled = true;
+      addTearDown(() => SpellChecker.instance.enabled = false);
+      await pumpEditor(tester, '# T\n\n| Name | Count |\n| --- | --- |\n| teh | 1 |\n\nAfter\n');
+      expect((text(tester, 1, 0) as SpellCheckedController).misspellings, [const TextRange(start: 0, end: 3)]);
+      await menu(tester, (1, 0), 'the');
+      expect(lines()[2], startsWith('| the '));
+      expect((text(tester, 1, 0) as SpellCheckedController).misspellings, isEmpty);
       await settle(tester);
     });
 

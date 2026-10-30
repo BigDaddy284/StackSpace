@@ -68,6 +68,13 @@ class AppSettings extends ChangeNotifier {
   bool get confirmDeletes => _prefs.getBool('confirmDeletes') ?? true;
   set confirmDeletes(bool value) => _set('confirmDeletes', value);
 
+  bool get checkSpelling => _prefs.getBool('checkSpelling') ?? true;
+  set checkSpelling(bool value) => _set('checkSpelling', value);
+
+  /// Words added to the spelling dictionary.
+  List<String> get spellingWords => _prefs.getStringList('spellingWords') ?? const [];
+  set spellingWords(List<String> words) => _prefs.setStringList('spellingWords', words);
+
   /// System follows the Windows light/dark setting.
   ThemeMode get themeMode => themeModeListenable.value;
   set themeMode(ThemeMode value) {
