@@ -148,6 +148,7 @@ class _BlockEditorState extends State<BlockEditor> {
     final live = {for (final b in doc.blocks) b.id};
     _fieldKeys.removeWhere((id, _) => !live.contains(id));
     _bodyKeys.removeWhere((id, _) => !live.contains(id));
+    _rows.removeWhere((id, _) => !live.contains(id));
     _heights.removeWhere((id, _) => !live.contains(id));
     _captions.removeWhere((id) => !live.contains(id));
     for (final id in _hovers.keys.where((id) => !live.contains(id)).toList()) {
@@ -1906,9 +1907,56 @@ class _BlockEditorState extends State<BlockEditor> {
         child: const SizedBox(height: BlockMetrics.tailHeight, width: double.infinity),
       ));
 
+  /// Bumped by every [setState], so a row can tell the editor's own state
+  /// changing (a selection, a drag, a folded section) from an edit to some
+  /// other block, after which it hands back the same widgets (see [_row]).
+  int _stamp = 0;
+
+  @override
+  void setState(VoidCallback fn) {
+    _stamp++;
+    super.setState(fn);
+  }
+
+  /// Each row's last widgets and what they were built from.
+  final _rows = <int, (Object, Widget)>{};
+
   Widget _row(BuildContext context, StackPalette palette, int index, Block block) {
     if (_isHidden(index)) return SizedBox.shrink(key: ValueKey('row-${block.id}'));
     _applyPending(index);
+    final previous = index > 0 ? doc[index - 1] : null;
+    final folded = block.kind == BlockKind.heading && _collapsed.contains(block.id);
+    final look = (
+      _stamp,
+      block,
+      index,
+      previous,
+      _range,
+      _selectionColor,
+      widget.readOnly,
+      doc.plain,
+      palette,
+      _options,
+      folded ? doc.version : -1, // the count of hidden blocks
+      block.kind == BlockKind.numbered ? _numberedAbove(index) : 0, // its number
+    );
+    final cached = _rows[block.id];
+    if (cached != null && cached.$1 == look) return cached.$2;
+    final row = _buildRow(context, palette, index, block);
+    _rows[block.id] = (look, row);
+    return row;
+  }
+
+  /// How many numbered items run on right above [index].
+  int _numberedAbove(int index) {
+    var n = 0;
+    for (var i = index - 1; i >= 0 && doc[i].kind == BlockKind.numbered; i--) {
+      n++;
+    }
+    return n;
+  }
+
+  Widget _buildRow(BuildContext context, StackPalette palette, int index, Block block) {
     final node = _focusFor(block);
     final Widget body;
     switch (block.kind) {
@@ -2280,10 +2328,36 @@ class _TextBlockState extends State<_TextBlock> {
     if (mounted) setState(() {});
   }
 
+  /// The last build and what it was made from. The editor rebuilds every
+  /// row on each edit; a row whose block and state are unchanged returns the
+  /// same widgets, so its text field is not rebuilt (see [build]).
+  Object? _look;
+  Widget? _built;
+
   @override
   Widget build(BuildContext context) {
     final palette = StackColors.of(context);
     final block = widget.block;
+    final look = (
+      block,
+      widget.index,
+      widget.text,
+      widget.focusNode,
+      widget.focusNode.hasFocus,
+      widget.readOnly,
+      widget.plain,
+      widget.range,
+      widget.rangeRunsOn,
+      widget.rangeColor,
+      palette,
+      block.kind == BlockKind.numbered && block.number == null ? _numberOf() : 0,
+    );
+    if (look == _look) return _built!;
+    _look = look;
+    return _built = _build(palette, block);
+  }
+
+  Widget _build(StackPalette palette, Block block) {
     final style = BlockMetrics.styleFor(block, palette);
     widget.text.markerColor = palette.subText;
     widget.text.codeColor = palette.accentB;

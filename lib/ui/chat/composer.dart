@@ -164,7 +164,7 @@ class _ComposerState extends State<Composer> {
   static String _k(int n) => n >= 1000 ? '${(n / 1000).toStringAsFixed(1)}k' : '$n';
 
   Widget _contextChips() {
-    final ctx = widget.editor.chatContext;
+    final ctx = widget.editor.selectionContext;
     final chips = <Widget>[
       if (ctx.pagePath != null && _includePage)
         _ContextChip(

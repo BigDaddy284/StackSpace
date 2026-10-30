@@ -85,7 +85,7 @@ class PageDocument extends ChangeNotifier {
       for (var i = 0; i < _blocks.length; i++) {
         starts[i] = line;
         if (i + 1 < _blocks.length) {
-          line += '\n'.allMatches(blockToMarkdown(_blocks[i])).length + 1 + gapBetween(_blocks[i], _blocks[i + 1]);
+          line += _linesIn(_blocks[i]) + gapBetween(_blocks[i], _blocks[i + 1]);
         }
       }
       _lineStarts = starts;
@@ -93,6 +93,11 @@ class PageDocument extends ChangeNotifier {
     }
     return index < _lineStarts!.length ? _lineStarts![index] : 1;
   }
+
+  /// Lines a block takes in the file. Blocks never change (an edit makes a
+  /// new one), so each is counted once, not on every keystroke.
+  static final _lines = Expando<int>('lines');
+  static int _linesIn(Block block) => _lines[block] ??= '\n'.allMatches(blockToMarkdown(block)).length + 1;
 
   Map<int, int>? _index;
   int _indexVersion = -1;

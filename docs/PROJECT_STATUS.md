@@ -326,6 +326,35 @@ colour, Shift+Tab / Shift+Enter / Up inside a cell, dragging a row grip below th
 file was correct after each. The Windows CI build ran the full suite green, and the owner
 confirmed the build on Windows (2026-10-30); merged as PR #8.
 
+## Speed: tables and page switching (2026-10-30)
+Build v0.3.13-speed.1 (version 0.3.13+17). Reported: clicking and moving around a table and going
+back and forth between pages felt slow. Measured with the new `test/interaction_perf_test.dart`
+(two pages of ~200 blocks with a 31 × 6 table; test VM, debug, so upper bounds), before → after:
+page switch 950 → 160 ms, click a cell 160 → 23 ms, arrow / Tab to a cell 170 → 28 ms, type in a
+cell 160 → 22 ms, type in a paragraph 90 → 12 ms.
+
+Causes and fixes:
+- Every table cell was a full `TextField` (measured at ~20× the build cost of plain text), and the
+  whole table rebuilt on every click, caret move, keystroke and hover. Cells are now drawn as text
+  laid out exactly like the field (`_TableCell` in `table_block.dart`); a cell becomes a field while
+  it has the caret, while the mouse is over it (so a click lands on a real field), and while it is
+  next to the caret (so Tab, Enter and the arrows land in a field at once). A cell keeps the same
+  widget while its look is unchanged, and the table returns the same widgets when only another
+  block changed. Header buttons read the focused cell when pressed instead of rebuilding on each
+  caret move; clicks anywhere on the table (one tap region) no longer take the caret out of the
+  cell first, which also makes "Add column after" keep the caret's row.
+- Every keystroke rebuilt every visible row; rows and text blocks whose block and editor state are
+  unchanged now return the same widgets (`block_editor.dart`).
+- The chat box's context chips serialised the whole page on every caret move (`selectionContext`
+  in `page_editor_controller.dart`); the status bar's line number re-serialised every block per
+  edit (line counts are now cached per block in `page_document.dart`).
+- Saving and opening a page rebuilt the whole window, chat history included; now only the top bar,
+  status bar, pages panel and editor listen to the editor (`home_page.dart`).
+
+Tests: `block_metrics_test.dart` now checks that every table cell's text and its field have the same
+height at two widths and two text scales; table tests read cells through
+`TableBlockViewState.controllerAt` / `focusNodeAt`. Full suite 224 passed, 2 skipped (Linux).
+
 ## Next single task
 No code task is queued; the next phase starts from the owner's next request. Bug 5 is
 confirmed fixed with test build 9 (v0.3.5-test.2); `native.log` and `startup.log` are in

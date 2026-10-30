@@ -175,11 +175,17 @@ class PageEditorController extends ChangeNotifier {
   }
 
   /// The open page and the current selection, for the assistant.
-  ChatContext get chatContext {
+  ChatContext get chatContext => _context(withPage: true);
+
+  /// The same without the page's text, which takes a pass over the whole
+  /// page to write: for showing what will be sent, as the caret moves.
+  ChatContext get selectionContext => _context(withPage: false);
+
+  ChatContext _context({required bool withPage}) {
     final path = _path;
     if (path == null) return const ChatContext();
-    if (isLarge) return ChatContext(pagePath: path, pageText: largeLines!.join('\n'));
-    final text = document.toMarkdown();
+    if (isLarge) return ChatContext(pagePath: path, pageText: withPage ? largeLines!.join('\n') : null);
+    final text = withPage ? document.toMarkdown() : null;
     final sel = selection;
     if (!sel.isValid || sel.isCollapsed || focusedBlock >= document.length) {
       return ChatContext(pagePath: path, pageText: text);
