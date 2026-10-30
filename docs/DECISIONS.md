@@ -301,7 +301,7 @@ like the widths line, holds what Markdown can't say. Row heights are measured wi
 layout the cells use, so the editor still knows every block's height before building it (the
 fixed-extent list that keeps 50,000-line pages fast); `test/block_metrics_test.dart` checks
 wrapped, multi-line, unwrapped and filtered tables against the rendered rows.
-**Status**: Done; `test/table_features_test.dart`, `test/table_image_test.dart`,
+**Status**: Done, confirmed on Windows by the owner (2026-10-30); `test/table_features_test.dart`, `test/table_image_test.dart`,
 `test/block_metrics_test.dart`, `test/theme_contrast_test.dart`.
 
 ### One logo: the original mark, recoloured on a dark tile

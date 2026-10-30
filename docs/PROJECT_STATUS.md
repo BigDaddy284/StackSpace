@@ -1,6 +1,6 @@
 # PROJECT STATUS
 
-_Last updated: 2026-10-29 (table editing features, build v0.3.12-test.1, awaiting Windows check)_
+_Last updated: 2026-10-30 (table editing features confirmed on Windows with v0.3.12-test.1, merged)_
 
 ## Current phase
 Bug-fix phase (2026-10-26): five bugs reported from test build 2 on Windows, fixed one at a time in
@@ -323,14 +323,14 @@ log files. See `docs/DECISIONS.md`, "Table editing features". Files: `lib/editor
 Results: analyzer clean, full suite 223 passed, 2 skipped (Linux). Checked in a Linux debug build
 with a real mouse and keyboard (xdotool): long text wraps, the menu opens on right-click, Green cell
 colour, Shift+Tab / Shift+Enter / Up inside a cell, dragging a row grip below the last row; the
-file was correct after each. Not yet run on Windows.
+file was correct after each. The Windows CI build ran the full suite green, and the owner
+confirmed the build on Windows (2026-10-30); merged as PR #8.
 
 ## Next single task
-The owner checks the table build v0.3.12-test.1 on Windows; merge its PR once confirmed. Bug 5 is
+No code task is queued; the next phase starts from the owner's next request. Bug 5 is
 confirmed fixed with test build 9 (v0.3.5-test.2); `native.log` and `startup.log` are in
 `%APPDATA%\com.stackspace\stack_space\`. Table widths and cell copy/paste are
-confirmed with v0.3.6-test.1. No code task is queued; the next phase starts from the user's next
-request.
+confirmed with v0.3.6-test.1, and the table editing features with v0.3.12-test.1.
 
 ## Exact commands to resume
 ```bash
