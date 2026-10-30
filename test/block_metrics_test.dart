@@ -91,30 +91,63 @@ void main() {
                     ': rendered $rendered, computed $computed');
           }
         }
-        // A table's rows are sized by the same numbers, so check the cells' text really fits in them.
-        final cells = find.descendant(of: find.byType(TableBlockView), matching: find.byType(TextField));
-        expect(cells.evaluate().length, greaterThan(10));
-        for (final field in cells.evaluate()) {
-          final finder = find.byWidget(field.widget);
-          final box = find.ancestor(of: finder, matching: find.byType(Container)).first;
-          RenderEditable? editable;
+        // A table's rows are sized by the same numbers, so check the cells' text really fits in them. A cell
+        // shows its text until it gets the caret, then a field: both must lay the text out the same way.
+        double textHeight(RenderBox text) {
+          // The text's own height at its width, not the size the row squeezed it to.
+          final lines = text.getMinIntrinsicHeight(text.size.width);
+          // Text of more than one line keeps its padding above and below.
+          return lines > 14 * 1.3 * scale * 1.5 ? lines + 15.8 : lines;
+        }
+
+        RenderBox? find0<T extends RenderBox>(Finder cell) {
+          T? found;
           void visit(RenderObject object) {
-            if (object is RenderEditable) {
-              editable ??= object;
+            if (found != null) return;
+            if (object is T) {
+              found = object;
             } else {
               object.visitChildren(visit);
             }
           }
 
-          visit(tester.renderObject(finder));
-          // The text's own height at the field's width, not the size the row squeezed it to.
-          final lines = editable!.getMinIntrinsicHeight(editable!.size.width);
-          // Text of more than one line keeps its padding above and below.
-          final text = lines > 14 * 1.3 * scale * 1.5 ? lines + 15.8 : lines;
-          final row = tester.getSize(box).height;
-          if (text > row + 0.5) {
-            problems.add('table cell "${(field.widget as TextField).controller!.text}": text $text, row $row');
+          visit(tester.renderObject(cell));
+          return found;
+        }
+
+        final cells = find.byWidgetPredicate(
+            (w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('cell-'));
+        expect(cells.evaluate().length, greaterThan(10));
+        final keys = [for (final e in cells.evaluate()) (e.widget.key! as ValueKey<String>).value];
+        for (final key in keys) {
+          // No caret in a table: every cell shows its text.
+          FocusManager.instance.primaryFocus?.unfocus();
+          await tester.pump();
+          await tester.pump();
+          final cell = find.byKey(ValueKey(key));
+          final paragraph = find0<RenderParagraph>(cell);
+          if (paragraph == null) {
+            problems.add('table cell $key: a field without the caret');
+            continue;
           }
+          final shown = textHeight(paragraph);
+          final row = tester.getSize(cell).height;
+          if (shown > row + 0.5) problems.add('table cell $key: text $shown, row $row');
+          // Give it the caret: the field's text is as tall as the text was.
+          final parts = key.split('-');
+          final table =
+              tester.state<TableBlockViewState>(find.ancestor(of: cell, matching: find.byType(TableBlockView)));
+          table.focusCell(int.parse(parts[2]), int.parse(parts[3]));
+          await tester.pump();
+          await tester.pump();
+          final editable = find0<RenderEditable>(cell);
+          if (editable == null) {
+            problems.add('table cell $key: no field with the caret');
+            continue;
+          }
+          final edited = textHeight(editable);
+          if ((edited - shown).abs() > 0.5) problems.add('table cell $key: text $shown, field $edited');
+          if (tester.getSize(cell).height != row) problems.add('table cell $key: the row changed with the caret');
         }
         expect(problems, isEmpty);
         expect(doc.length, greaterThan(20));

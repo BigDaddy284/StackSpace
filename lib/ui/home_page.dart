@@ -289,11 +289,13 @@ class _HomePageState extends State<HomePage> {
         autofocus: true,
         child: Scaffold(
           backgroundColor: p.window,
+          // The editor's own changes (another page, saved / unsaved) rebuild
+          // only what shows them; the panels listen for themselves.
           body: ListenableBuilder(
-            listenable: Listenable.merge([_chat, _editor]),
+            listenable: _chat,
             builder: (context, _) => Column(
               children: [
-                _topBar(p),
+                ListenableBuilder(listenable: _editor, builder: (context, _) => _topBar(p)),
                 Expanded(
                   child: Row(
                     children: [
@@ -340,7 +342,9 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                 ),
-                ListenableBuilder(listenable: _editor.caretChanges, builder: (context, _) => _statusBar(p)),
+                ListenableBuilder(
+                    listenable: Listenable.merge([_editor, _editor.caretChanges]),
+                    builder: (context, _) => _statusBar(p)),
               ],
             ),
           ),

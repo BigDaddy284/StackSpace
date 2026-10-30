@@ -191,7 +191,14 @@ void main() {
       await tester.pump();
     }
 
-    bool focused(WidgetTester tester, Finder field) => tester.widget<TextField>(field).focusNode!.hasFocus;
+    TableBlockViewState grid(WidgetTester tester) => tester.state(find.byType(TableBlockView));
+    bool focused(WidgetTester tester, Finder field) {
+      final key = (tester.widget(field).key! as ValueKey<String>).value.split('-');
+      return grid(tester).focusNodeAt(int.parse(key[2]), int.parse(key[3])).hasFocus;
+    }
+
+    /// The cell's text field, which shows while the cell has the caret.
+    Finder field(int row, int column) => find.descendant(of: cell(row, column), matching: find.byType(TextField));
 
     /// Taps a header button; the grid is rebuilt and the caret lands in it a frame later.
     Future<void> tapButton(WidgetTester tester, String label) async {
@@ -205,13 +212,14 @@ void main() {
     testWidgets('a table shows as cells; typing writes padded Markdown and saves', (tester) async {
       await pumpEditor(tester, table);
       expect(find.byType(TableBlockView), findsOneWidget);
-      expect(tester.widget<TextField>(cell(0, 0)).controller!.text, 'Name');
-      expect(tester.widget<TextField>(cell(2, 1)).controller!.text, '2');
+      expect(grid(tester).controllerAt(0, 0).text, 'Name');
+      expect(grid(tester).controllerAt(2, 1).text, '2');
       expect(saved(), table, reason: 'an unedited table is written back as read');
 
       await tester.tap(cell(1, 1));
       await tester.pump();
-      await tester.enterText(cell(1, 1), '10');
+      await tester.pump(); // the cell's field is built, then takes the caret
+      await tester.enterText(field(1, 1), '10');
       await tester.pump();
       expect(editor.document[1].text, '| Name | Count |\n| ---- | ----- |\n| a    | 10    |\n| b    | 2     |');
       await settle(tester);
@@ -224,6 +232,7 @@ void main() {
       await pumpEditor(tester, table);
       await tester.tap(cell(0, 0));
       await tester.pump();
+      await tester.pump(); // the cell's field is built, then takes the caret
       await key(tester, LogicalKeyboardKey.tab);
       expect(focused(tester, cell(0, 1)), isTrue);
       await key(tester, LogicalKeyboardKey.tab);
@@ -243,6 +252,7 @@ void main() {
       expect(focused(tester, cell(3, 1)), isTrue, reason: 'Up from the block below enters the last cell');
       await tester.tap(cell(0, 0));
       await tester.pump();
+      await tester.pump(); // the cell's field is built, then takes the caret
       await key(tester, LogicalKeyboardKey.arrowUp);
       expect(editor.focusedBlock, 0, reason: 'Up from the header leaves the table');
       await key(tester, LogicalKeyboardKey.arrowDown);
@@ -254,11 +264,13 @@ void main() {
       await pumpEditor(tester, table);
       await tester.tap(cell(1, 0));
       await tester.pump();
+      await tester.pump(); // the cell's field is built, then takes the caret
       await tapButton(tester, 'Add column after');
       expect(editor.document[1].text.split('\n')[0], '| Name | Column 2 | Count |');
-      expect(focused(tester, cell(0, 1)), isTrue, reason: 'the new header cell gets the caret');
+      expect(focused(tester, cell(1, 1)), isTrue, reason: 'the caret moves to the new column in its row');
       await tester.tap(cell(2, 0));
       await tester.pump();
+      await tester.pump(); // the cell's field is built, then takes the caret
       await tapButton(tester, 'Add row below');
       expect(editor.document[1].text.split('\n').length, 5);
       expect(focused(tester, cell(3, 0)), isTrue);
@@ -325,7 +337,7 @@ void main() {
       expect(tableState(tester).cellRange, (0, 0, 2, 1), reason: 'Shift+arrows grow the selection');
       await key(tester, LogicalKeyboardKey.delete);
       expect(editor.document[1].text.split('\n').sublist(2), ['|     |     |', '|     |     |']);
-      expect(tester.widget<TextField>(cell(1, 0)).controller!.text, '');
+      expect(grid(tester).controllerAt(1, 0).text, '');
 
       // A copied block pastes from the top left of the selection.
       await tester.runAsync(() => Clipboard.setData(const ClipboardData(text: 'x\ty\r\nz\tw\r\n')));
@@ -335,7 +347,7 @@ void main() {
       await tester.pump();
       expect(editor.document[1].text, '| x   | y   |\n| --- | --- |\n| z   | w   |\n|     |     |');
       expect(tableState(tester).cellRange, (0, 0, 1, 1), reason: 'the pasted cells stay selected');
-      expect(tester.widget<TextField>(cell(1, 1)).controller!.text, 'w');
+      expect(grid(tester).controllerAt(1, 1).text, 'w');
 
       await key(tester, LogicalKeyboardKey.keyZ, control: true);
       expect(editor.document[1].text.split('\n')[0], '|     |     |', reason: 'the paste is one undo step');
@@ -352,6 +364,7 @@ void main() {
       mockClipboard(tester);
       await tester.tap(cell(1, 0));
       await tester.pump();
+      await tester.pump(); // the cell's field is built, then takes the caret
       await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
       await tester.tap(cell(2, 1), kind: PointerDeviceKind.mouse);
       await tester.pump();
@@ -362,7 +375,7 @@ void main() {
       await key(tester, LogicalKeyboardKey.keyQ);
       expect(tableState(tester).hasCellRange, isFalse);
       expect(focused(tester, cell(1, 0)), isTrue);
-      expect(tester.widget<TextField>(cell(1, 0)).controller!.text, 'q');
+      expect(grid(tester).controllerAt(1, 0).text, 'q');
       await settle(tester);
     });
 
@@ -371,28 +384,29 @@ void main() {
       mockClipboard(tester, 'first line\r\nsecond\tpart\nthird\n');
       await tester.tap(cell(2, 1));
       await tester.pump();
+      await tester.pump(); // the cell's field is built, then takes the caret
       await key(tester, LogicalKeyboardKey.keyV, control: true);
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
       await tester.pump();
       await tester.pump();
       expect(tableState(tester).hasCellRange, isFalse);
       expect(focused(tester, cell(2, 1)), isTrue, reason: 'the caret stays in the cell');
-      final field = tester.widget<TextField>(cell(2, 1)).controller!;
-      expect(field.text, '2first line\nsecond part\nthird',
+      final text = grid(tester).controllerAt(2, 1);
+      expect(text.text, '2first line\nsecond part\nthird',
           reason: 'pasted at the caret; the last line break is dropped, tabs become spaces');
-      expect(field.selection, TextSelection.collapsed(offset: field.text.length));
+      expect(text.selection, TextSelection.collapsed(offset: text.text.length));
       expect(editor.document[1].text.split('\n').sublist(3), ['| b    | 2first line<br>second part<br>third |'],
           reason: 'no other cell changes and no rows are added');
       expect(tester.getSize(cell(2, 1)).height, greaterThan(TableBlockView.cellHeight),
           reason: 'the row grows to show the lines');
 
       // Plain text still pastes at the caret.
-      field.selection = const TextSelection.collapsed(offset: 6);
+      text.selection = const TextSelection.collapsed(offset: 6);
       await tester.runAsync(() => Clipboard.setData(const ClipboardData(text: '!')));
       await key(tester, LogicalKeyboardKey.keyV, control: true);
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
       await tester.pump();
-      expect(field.text, startsWith('2first! line'));
+      expect(text.text, startsWith('2first! line'));
       await settle(tester);
     });
 
@@ -401,6 +415,7 @@ void main() {
       mockClipboard(tester, '7\n8\n9\n');
       await tester.tap(cell(2, 1));
       await tester.pump();
+      await tester.pump(); // the cell's field is built, then takes the caret
       await key(tester, LogicalKeyboardKey.keyV, control: true, shift: true);
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
       await tester.pump();
@@ -453,20 +468,20 @@ void main() {
 
     testWidgets('the slash menu inserts a table and the caret lands in its first cell', (tester) async {
       await pumpEditor(tester, '# T\n\nx\n');
-      final field = find.byType(TextField).at(1);
-      await tester.enterText(field, '');
+      final paragraph = find.byType(TextField).at(1);
+      await tester.enterText(paragraph, '');
       await tester.pump();
-      await tester.enterText(field, '/');
+      await tester.enterText(paragraph, '/');
       await tester.pump();
       await tester.pump();
-      await tester.enterText(field, '/table');
+      await tester.enterText(paragraph, '/table');
       await tester.pump();
       await tester.pump();
       await key(tester, LogicalKeyboardKey.enter);
       await tester.pump();
       expect(editor.document[1].kind, BlockKind.table);
       expect(focused(tester, cell(0, 0)), isTrue);
-      await tester.enterText(cell(0, 0), 'Task');
+      await tester.enterText(field(0, 0), 'Task');
       await tester.pump();
       await settle(tester);
       await waitSaved(tester, editor);

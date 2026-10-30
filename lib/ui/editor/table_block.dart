@@ -264,15 +264,56 @@ class TableBlockViewState extends State<TableBlockView> {
       for (var r = 0; r < _data.rowCount; r++)
         [
           for (var c = 0; c < _data.columns; c++)
-            _Cell(_data.rows[r][c], FocusNode(debugLabel: 'cell $r,$c')..addListener(_onCellFocus))
+            _Cell(_data.rows[r][c], FocusNode(debugLabel: 'cell $r,$c')..addListener(() => _noteFocus(r, c)))
         ]
     ];
+    _lastFocus = null;
+    _nearby = const [];
   }
 
-  /// The header buttons act on the focused cell, so they follow it.
-  void _onCellFocus() {
-    if (mounted) setState(() {});
+  /// The cell that last had the caret. A click on a header button takes the
+  /// caret out of the cell before the button acts, so the button goes by this.
+  (int, int)? _lastFocus;
+
+  void _noteFocus(int row, int column) {
+    if (row >= _cells.length || column >= _cells[row].length || !_cells[row][column].focus.hasFocus) return;
+    _lastFocus = (row, column);
+    _refocusing = false;
+    // The cells the keys move to next get their fields ready, so Tab, Enter
+    // and the arrows land in a field at once.
+    final above = _rowAbove(row), below = _rowBelow(row), last = _data.columns - 1;
+    final next = {
+      for (final (r, c) in [
+        (row, column - 1),
+        (row, column + 1),
+        if (above != null) ...[(above, column), (above, last)],
+        if (below != null) ...[(below, column), (below, 0)],
+      ])
+        if (c >= 0 && c <= last) _cells[r][c],
+    };
+    for (final cell in _nearby) {
+      if (!next.contains(cell)) cell.nearby.value = false;
+    }
+    for (final cell in next) {
+      cell.nearby.value = true;
+    }
+    _nearby = next.toList();
   }
+
+  /// The cells whose fields are kept ready around the caret.
+  List<_Cell> _nearby = const [];
+
+  void _clearNearby() {
+    for (final cell in _nearby) {
+      cell.nearby.value = false;
+    }
+    _nearby = const [];
+  }
+
+  /// The cell the header buttons act on: the focused one, the selected
+  /// block's first corner, the cell last edited, or the last cell. Read when
+  /// a button is pressed, so moving between cells doesn't rebuild the table.
+  (int, int) get _target => _focused ?? _anchor ?? _lastFocus ?? (_data.rowCount - 1, _data.columns - 1);
 
   void _emit({bool structural = false}) {
     _written = _data.toMarkdown();
@@ -311,10 +352,20 @@ class TableBlockViewState extends State<TableBlockView> {
     }
     final c = column.clamp(0, _cells[r].length - 1);
     final cell = _cells[r][c];
-    cell.focus.requestFocus();
+    // Coming in from outside the table, the buttons show at once rather than
+    // when the caret lands (a cell drawn as text builds its field first).
+    if (!widget.focusNode.hasFocus && !_refocusing && mounted) setState(() => _refocusing = true);
+    cell.edit();
     final length = cell.text.text.length;
     cell.text.selection = TextSelection.collapsed(offset: atStart ? 0 : length);
   }
+
+  /// A cell's text and focus. Only the cell being edited (or under the
+  /// mouse) has a text field, so tests read the cells through these.
+  @visibleForTesting
+  TextEditingController controllerAt(int row, int column) => _cells[row][column].text;
+  @visibleForTesting
+  FocusNode focusNodeAt(int row, int column) => _cells[row][column].focus;
 
   void focusFirst() {
     final shown = _data.visibleRows;
@@ -351,7 +402,7 @@ class TableBlockViewState extends State<TableBlockView> {
   void _focusAfterBuild(int row, int column) {
     _refocusing = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _refocusing = false;
+      // The buttons stay until the caret is back in a cell (see _noteFocus).
       if (mounted) focusCell(row, column);
     });
   }
@@ -791,7 +842,11 @@ class TableBlockViewState extends State<TableBlockView> {
     // The editor focuses the block itself when the caret arrives from a
     // neighbour; that goes to the first cell.
     if (has && widget.focusNode.hasPrimaryFocus && !hasCellRange && !_menuOpen) focusFirst();
-    if (!has && !_menuOpen) _anchor = _extent = null; // clicked away
+    if (!has && !_menuOpen) {
+      _anchor = _extent = null; // clicked away
+      _clearNearby();
+    }
+    if (has) _refocusing = false;
     if (mounted) setState(() {});
   }
 
@@ -818,6 +873,16 @@ class TableBlockViewState extends State<TableBlockView> {
       return null;
     }
     return (_layoutRows[visible], column);
+  }
+
+  /// The bottom-left corner of a cell on the screen, from the last layout.
+  Offset _cellBottomLeft(int row, int column) {
+    final box = _gridKey.currentContext?.findRenderObject();
+    final visible = _layoutRows.indexOf(row);
+    if (box is! RenderBox || visible < 0 || column >= _layoutWidths.length) return Offset.zero;
+    final x = _layoutWidths.take(column).fold(0.0, (a, b) => a + b);
+    final y = _layoutHeights.take(visible + 1).fold(0.0, (a, b) => a + b);
+    return box.localToGlobal(Offset(x, y));
   }
 
   void _onPointerDown(PointerDownEvent event) {
@@ -953,10 +1018,7 @@ class TableBlockViewState extends State<TableBlockView> {
   void _openMenuForKeys() {
     final at = _anchor ?? _focused;
     if (at == null) return;
-    final context = _cells[at.$1][at.$2].focus.context;
-    final box = context?.findRenderObject();
-    final position = box is RenderBox ? box.localToGlobal(Offset(0, box.size.height)) : Offset.zero;
-    _openMenu(at, position);
+    _openMenu(at, _cellBottomLeft(at.$1, at.$2));
   }
 
   void _openMenuFromButton() {
@@ -974,8 +1036,16 @@ class TableBlockViewState extends State<TableBlockView> {
     final misspelled = cell.text.misspellings;
     if (misspelled.isEmpty) return null;
     final editable = cell.focus.context?.findAncestorStateOfType<EditableTextState>();
-    if (editable == null) return null;
-    final offset = editable.renderEditable.getPositionForPoint(click).offset;
+    // A cell the mouse never hovered still shows its text, not a field.
+    final paragraph = cell.textKey.currentContext?.findRenderObject();
+    final int offset;
+    if (editable != null) {
+      offset = editable.renderEditable.getPositionForPoint(click).offset;
+    } else if (paragraph is RenderParagraph) {
+      offset = paragraph.getPositionForOffset(paragraph.globalToLocal(click)).offset;
+    } else {
+      return null;
+    }
     return misspelled.firstWhereOrNull((r) => r.start <= offset && offset <= r.end);
   }
 
@@ -1114,7 +1184,7 @@ class TableBlockViewState extends State<TableBlockView> {
     } else if (at.$1 < _cells.length && at.$2 < _cells[at.$1].length) {
       final cell = _cells[at.$1][at.$2];
       final sel = cell.text.selection;
-      cell.focus.requestFocus();
+      cell.edit();
       if (sel.isValid) cell.text.selection = sel;
     }
   }
@@ -1312,126 +1382,159 @@ class TableBlockViewState extends State<TableBlockView> {
     );
   }
 
+  /// Bumped by every [setState], so [build] can tell a change of the
+  /// table's own state from the editor rebuilding every row for an edit
+  /// elsewhere on the page, and hand back the same widgets for the latter.
+  int _stamp = 0;
+  Object? _look;
+  Widget? _built;
+
+  @override
+  void setState(VoidCallback fn) {
+    _stamp++;
+    super.setState(fn);
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = StackColors.of(context);
+    final look = (
+      _stamp,
+      widget.block,
+      widget.readOnly,
+      widget.focusNode.hasFocus,
+      palette,
+      MediaQuery.textScalerOf(context),
+      BlockMetrics.inputStyleOf(context),
+    );
+    if (look == _look) return _built!;
+    _look = look;
+    return _built = _build(palette);
+  }
+
+  Widget _build(StackPalette palette) {
     final focused = widget.focusNode.hasFocus;
     final showTools = (_hover || focused || _refocusing || _menuOpen) && !widget.readOnly;
     final rows = _data.rowCount, columns = _data.columns;
-    final (r, c) = _focused ?? _anchor ?? (rows - 1, columns - 1);
     final shown = _data.visibleRows.length;
 
-    return Semantics(
-      container: true,
-      label: 'Table, $rows rows, $columns columns',
-      child: Focus(
-        focusNode: widget.focusNode,
-        skipTraversal: true,
-        onKeyEvent: _onKey,
-        onFocusChange: _onFocusChange,
-        child: MouseRegion(
-          onEnter: (_) => setState(() => _hover = true),
-          onExit: (_) => setState(() {
-            _hover = false;
-            if (_movingRow == null && _movingColumn == null) _hoverCell = null;
-          }),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: focused ? palette.accentA : palette.barBorder),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(1), // inside the border
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    height: TableBlockView.headerHeight,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 2, 4, 0),
-                      child: Row(children: [
-                        Icon(Icons.table_chart_outlined, size: 14, color: palette.subText),
-                        const SizedBox(width: 6),
-                        Text('Table',
-                            style:
-                                TextStyle(color: palette.text, fontSize: StackType.hint, fontWeight: FontWeight.w600)),
-                        const SizedBox(width: 6),
-                        Text('$rows × $columns', style: TextStyle(color: palette.subText, fontSize: StackType.hint)),
-                        if (_data.isFiltered) ...[
-                          const SizedBox(width: 10),
-                          Icon(Icons.filter_alt, size: 14, color: palette.accentA),
-                          const SizedBox(width: 3),
-                          Flexible(
-                            child: Tooltip(
-                              message: [
-                                for (var i = 0; i < columns; i++)
-                                  if (_data.filters[i] != null) _data.filters[i]!.describe(_columnName(i)),
-                              ].join('\n'),
-                              child: Text(
-                                'Showing ${shown - _data.firstBodyRow} of ${rows - _data.firstBodyRow} rows',
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(color: palette.subText, fontSize: StackType.hint),
+    // Clicks anywhere on the table (another cell, a header button) are not
+    // "outside" the cell being edited, so they don't take its caret first.
+    return TapRegion(
+      groupId: this,
+      child: Semantics(
+        container: true,
+        label: 'Table, $rows rows, $columns columns',
+        child: Focus(
+          focusNode: widget.focusNode,
+          skipTraversal: true,
+          onKeyEvent: _onKey,
+          onFocusChange: _onFocusChange,
+          child: MouseRegion(
+            onEnter: (_) => setState(() => _hover = true),
+            onExit: (_) => setState(() {
+              _hover = false;
+              if (_movingRow == null && _movingColumn == null) _hoverCell = null;
+            }),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: focused ? palette.accentA : palette.barBorder),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(1), // inside the border
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      height: TableBlockView.headerHeight,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 2, 4, 0),
+                        child: Row(children: [
+                          Icon(Icons.table_chart_outlined, size: 14, color: palette.subText),
+                          const SizedBox(width: 6),
+                          Text('Table',
+                              style: TextStyle(
+                                  color: palette.text, fontSize: StackType.hint, fontWeight: FontWeight.w600)),
+                          const SizedBox(width: 6),
+                          Text('$rows × $columns', style: TextStyle(color: palette.subText, fontSize: StackType.hint)),
+                          if (_data.isFiltered) ...[
+                            const SizedBox(width: 10),
+                            Icon(Icons.filter_alt, size: 14, color: palette.accentA),
+                            const SizedBox(width: 3),
+                            Flexible(
+                              child: Tooltip(
+                                message: [
+                                  for (var i = 0; i < columns; i++)
+                                    if (_data.filters[i] != null) _data.filters[i]!.describe(_columnName(i)),
+                                ].join('\n'),
+                                child: Text(
+                                  'Showing ${shown - _data.firstBodyRow} of ${rows - _data.firstBodyRow} rows',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(color: palette.subText, fontSize: StackType.hint),
+                                ),
                               ),
                             ),
-                          ),
-                          if (!widget.readOnly)
+                            if (!widget.readOnly)
+                              HeaderButton(
+                                tooltip: 'Clear filters',
+                                semanticLabel: 'Clear filters',
+                                onPressed: () {
+                                  final (r, c) = _target;
+                                  _data.filters.fillRange(0, columns, null);
+                                  _reshaped(r, c);
+                                },
+                                child: Icon(Icons.filter_alt_off_outlined, size: 16, color: palette.subText),
+                              ),
+                          ],
+                          const Spacer(),
+                          if (showTools) ...[
                             HeaderButton(
-                              tooltip: 'Clear filters',
-                              semanticLabel: 'Clear filters',
-                              onPressed: () {
-                                _data.filters.fillRange(0, columns, null);
-                                _reshaped(r, c);
-                              },
-                              child: Icon(Icons.filter_alt_off_outlined, size: 16, color: palette.subText),
+                              tooltip: 'Add row below',
+                              semanticLabel: 'Add row below',
+                              onPressed: () => _addRow(_target.$1),
+                              child: Icon(Icons.playlist_add, size: 17, color: palette.subText),
                             ),
-                        ],
-                        const Spacer(),
-                        if (showTools) ...[
-                          HeaderButton(
-                            tooltip: 'Add row below',
-                            semanticLabel: 'Add row below',
-                            onPressed: () => _addRow(r),
-                            child: Icon(Icons.playlist_add, size: 17, color: palette.subText),
-                          ),
-                          HeaderButton(
-                            tooltip: 'Add column after',
-                            semanticLabel: 'Add column after',
-                            onPressed: () => _addColumn(c),
-                            child: Icon(Icons.view_column_outlined, size: 16, color: palette.subText),
-                          ),
-                          HeaderButton(
-                            tooltip: rows == 1 ? 'The last row stays' : 'Delete row',
-                            semanticLabel: 'Delete row',
-                            onPressed: rows == 1 ? null : () => _removeRow(r),
-                            child: Icon(Icons.playlist_remove,
-                                size: 17, color: rows == 1 ? palette.barBorder : palette.subText),
-                          ),
-                          HeaderButton(
-                            tooltip: columns == 1 ? 'The last column stays' : 'Delete column',
-                            semanticLabel: 'Delete column',
-                            onPressed: columns == 1 ? null : () => _removeColumn(c),
-                            child: Icon(Icons.remove_circle_outline,
-                                size: 16, color: columns == 1 ? palette.barBorder : palette.subText),
-                          ),
-                          HeaderButton(
-                            key: _menuButtonKey,
-                            tooltip: 'Table options (or right-click a cell)',
-                            semanticLabel: 'Table options',
-                            onPressed: _openMenuFromButton,
-                            child: Icon(Icons.more_horiz, size: 17, color: palette.subText),
-                          ),
-                          HeaderButton(
-                            tooltip: 'Delete table',
-                            semanticLabel: 'Delete table',
-                            onPressed: widget.onDelete,
-                            child: Icon(Icons.delete_outline, size: 16, color: palette.subText),
-                          ),
-                        ],
-                      ]),
+                            HeaderButton(
+                              tooltip: 'Add column after',
+                              semanticLabel: 'Add column after',
+                              onPressed: () => _addColumn(_target.$2),
+                              child: Icon(Icons.view_column_outlined, size: 16, color: palette.subText),
+                            ),
+                            HeaderButton(
+                              tooltip: rows == 1 ? 'The last row stays' : 'Delete row',
+                              semanticLabel: 'Delete row',
+                              onPressed: rows == 1 ? null : () => _removeRow(_target.$1),
+                              child: Icon(Icons.playlist_remove,
+                                  size: 17, color: rows == 1 ? palette.barBorder : palette.subText),
+                            ),
+                            HeaderButton(
+                              tooltip: columns == 1 ? 'The last column stays' : 'Delete column',
+                              semanticLabel: 'Delete column',
+                              onPressed: columns == 1 ? null : () => _removeColumn(_target.$2),
+                              child: Icon(Icons.remove_circle_outline,
+                                  size: 16, color: columns == 1 ? palette.barBorder : palette.subText),
+                            ),
+                            HeaderButton(
+                              key: _menuButtonKey,
+                              tooltip: 'Table options (or right-click a cell)',
+                              semanticLabel: 'Table options',
+                              onPressed: _openMenuFromButton,
+                              child: Icon(Icons.more_horiz, size: 17, color: palette.subText),
+                            ),
+                            HeaderButton(
+                              tooltip: 'Delete table',
+                              semanticLabel: 'Delete table',
+                              onPressed: widget.onDelete,
+                              child: Icon(Icons.delete_outline, size: 16, color: palette.subText),
+                            ),
+                          ],
+                        ]),
+                      ),
                     ),
-                  ),
-                  LayoutBuilder(builder: (context, constraints) => _grid(palette, constraints.maxWidth)),
-                ],
+                    LayoutBuilder(builder: (context, constraints) => _grid(palette, constraints.maxWidth)),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1484,7 +1587,8 @@ class TableBlockViewState extends State<TableBlockView> {
               TableRow(
                 decoration: _data.header && shown[v] == 0 ? BoxDecoration(color: palette.panel) : null,
                 children: [
-                  for (var column = 0; column < columns; column++) _cellField(palette, shown[v], column, heights[v]),
+                  for (var column = 0; column < columns; column++)
+                    _cellField(palette, inputStyle, shown[v], column, heights[v]),
                 ],
               ),
           ],
@@ -1598,7 +1702,10 @@ class TableBlockViewState extends State<TableBlockView> {
         child: IgnorePointer(child: ColoredBox(color: palette.accentA)),
       );
 
-  Widget _cellField(StackPalette palette, int row, int column, double height) {
+  /// The cell's widget. A cell whose look hasn't changed keeps the same
+  /// widget, so a rebuild of the table (a hover, a keystroke, the caret
+  /// moving) skips it.
+  Widget _cellField(StackPalette palette, TextStyle inputStyle, int row, int column, double height) {
     final cell = _cells[row][column];
     final align = switch (_data.aligns[column]) {
       TableAlign.center => TextAlign.center,
@@ -1609,38 +1716,217 @@ class TableBlockViewState extends State<TableBlockView> {
     final tint = palette.tableTint(_data.colors[row][column]);
     final selected = _inRange(row, column) ? palette.accentA.withAlpha(46) : null;
     final multiline = TableBlockView.multiline(_data, row, column);
-    return Container(
+    final color = selected != null && tint != null ? Color.alphaBlend(selected, tint) : selected ?? tint;
+    final look = (row, column, align, isHeader, color, multiline, height, widget.readOnly, palette, inputStyle);
+    if (cell.look == look) return cell.widget!;
+    cell.look = look;
+    return cell.widget = _TableCell(
+      key: ValueKey('cell-${widget.block.id}-$row-$column'),
+      cell: cell,
+      group: this,
       height: height,
-      color: selected != null && tint != null ? Color.alphaBlend(selected, tint) : selected ?? tint,
-      child: Center(
-        child: TextField(
-          key: ValueKey('cell-${widget.block.id}-$row-$column'),
-          controller: cell.text,
-          focusNode: cell.focus,
-          readOnly: widget.readOnly,
-          maxLines: multiline ? null : 1,
-          keyboardType: multiline ? TextInputType.multiline : TextInputType.text,
-          textAlign: align,
-          // The table's own menu takes the right-click.
-          contextMenuBuilder: null,
-          style: TableBlockView.cellStyle.copyWith(
-            color: palette.text,
-            fontWeight: isHeader ? FontWeight.w600 : FontWeight.normal,
-          ),
-          strutStyle: TableBlockView._strut,
-          cursorColor: palette.accentA,
-          decoration: InputDecoration(
-            isCollapsed: true,
-            filled: false,
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(horizontal: TableBlockView._cellPadding),
-            hintText: isHeader ? 'Header' : null,
-            hintStyle: TextStyle(color: palette.subText.withAlpha(120)),
-          ),
-          onChanged: (value) => _cellChanged(row, column, value),
+      color: color,
+      align: align,
+      multiline: multiline,
+      readOnly: widget.readOnly,
+      hint: isHeader ? 'Header' : null,
+      palette: palette,
+      fieldStyle: TableBlockView.cellStyle.copyWith(
+        color: palette.text,
+        fontWeight: isHeader ? FontWeight.w600 : FontWeight.normal,
+      ),
+      textStyle: TableBlockView.textStyle(inputStyle, bold: isHeader).copyWith(color: palette.text),
+      onChanged: (value) => _cellChanged(row, column, value),
+    );
+  }
+}
+
+/// One cell of the grid. A text field costs about twenty times what plain
+/// text does to build, so a cell is drawn as text and becomes a field only
+/// while it has the caret or the mouse is over it (so a click lands on a
+/// real field and places the caret where it should). The text is laid out
+/// exactly as the field lays it out, so nothing moves when it switches.
+class _TableCell extends StatefulWidget {
+  const _TableCell({
+    super.key,
+    required this.cell,
+    required this.group,
+    required this.height,
+    required this.color,
+    required this.align,
+    required this.multiline,
+    required this.readOnly,
+    required this.hint,
+    required this.palette,
+    required this.fieldStyle,
+    required this.textStyle,
+    required this.onChanged,
+  });
+
+  final _Cell cell;
+
+  /// The table's tap region: a click elsewhere on the table is not a click
+  /// outside the field.
+  final Object group;
+  final double height;
+  final Color? color;
+  final TextAlign align;
+  final bool multiline;
+  final bool readOnly;
+  final String? hint;
+  final StackPalette palette;
+
+  /// The style given to the field, which merges it onto the theme's, and
+  /// the same style already merged, for the text.
+  final TextStyle fieldStyle;
+  final TextStyle textStyle;
+  final ValueChanged<String> onChanged;
+
+  @override
+  State<_TableCell> createState() => _TableCellState();
+}
+
+class _TableCellState extends State<_TableCell> {
+  bool _hover = false;
+  bool _hadFocus = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _listen(widget.cell);
+  }
+
+  @override
+  void didUpdateWidget(_TableCell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.cell != widget.cell) {
+      _unlisten(oldWidget.cell);
+      _listen(widget.cell);
+    }
+  }
+
+  @override
+  void dispose() {
+    _unlisten(widget.cell);
+    super.dispose();
+  }
+
+  void _listen(_Cell cell) {
+    _hadFocus = cell.focus.hasFocus;
+    cell.focus.addListener(_onFocus);
+    cell.editing.addListener(_changed);
+    cell.nearby.addListener(_changed);
+    SpellChecker.instance.addListener(_changed);
+  }
+
+  void _unlisten(_Cell cell) {
+    cell.focus.removeListener(_onFocus);
+    cell.editing.removeListener(_changed);
+    cell.nearby.removeListener(_changed);
+    SpellChecker.instance.removeListener(_changed);
+  }
+
+  void _onFocus() {
+    final has = widget.cell.focus.hasFocus;
+    // Losing the caret ends the editing; a request still waiting for the
+    // field to be built (no focus yet) is left alone.
+    if (_hadFocus && !has) widget.cell.editing.value = false;
+    _hadFocus = has;
+    _changed();
+  }
+
+  void _changed() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _field => _hover || widget.cell.editing.value || widget.cell.nearby.value || widget.cell.focus.hasFocus;
+
+  /// A press on the text (a touch, or a click that came before any hover)
+  /// opens the field with the caret where it was pressed.
+  void _onTextDown(PointerDownEvent event) {
+    // Shift+click selects cells (the table handles it), leaving no caret.
+    if (event.buttons != kPrimaryMouseButton || HardwareKeyboard.instance.isShiftPressed) return;
+    final cell = widget.cell;
+    final paragraph = widget.cell.textKey.currentContext?.findRenderObject();
+    if (paragraph is RenderParagraph && cell.text.text.isNotEmpty) {
+      final at = paragraph.getPositionForOffset(paragraph.globalToLocal(event.position));
+      cell.text.selection = TextSelection.collapsed(offset: at.offset.clamp(0, cell.text.text.length));
+    }
+    cell.edit();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cell = widget.cell;
+    final palette = widget.palette;
+    final Widget child;
+    if (_field) {
+      child = TextField(
+        controller: cell.text,
+        focusNode: cell.focus,
+        groupId: widget.group,
+        readOnly: widget.readOnly,
+        maxLines: widget.multiline ? null : 1,
+        keyboardType: widget.multiline ? TextInputType.multiline : TextInputType.text,
+        textAlign: widget.align,
+        // The table's own menu takes the right-click.
+        contextMenuBuilder: null,
+        style: widget.fieldStyle,
+        strutStyle: TableBlockView._strut,
+        cursorColor: palette.accentA,
+        decoration: InputDecoration(
+          isCollapsed: true,
+          filled: false,
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: TableBlockView._cellPadding),
+          hintText: widget.hint,
+          hintStyle: TextStyle(color: palette.subText.withAlpha(120)),
         ),
+        onChanged: widget.onChanged,
+      );
+    } else {
+      child = Listener(
+        onPointerDown: _onTextDown,
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          width: double.infinity,
+          child: Padding(
+            // The field keeps room for the caret at the right; so does the text.
+            padding: const EdgeInsets.only(
+                left: TableBlockView._cellPadding, right: TableBlockView._cellPadding + TableBlockView._caretMargin),
+            child: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: cell.text,
+              builder: (context, value, _) {
+                final empty = value.text.isEmpty;
+                return Text.rich(
+                  empty
+                      ? TextSpan(
+                          text: widget.hint ?? '',
+                          style: widget.textStyle.copyWith(color: palette.subText.withAlpha(120)))
+                      // The controller's own span: the same text with its spelling marks.
+                      : cell.text.buildTextSpan(context: context, style: widget.textStyle, withComposing: false),
+                  key: cell.textKey,
+                  textAlign: widget.align,
+                  strutStyle: TableBlockView._strut,
+                  maxLines: widget.multiline ? null : 1,
+                  softWrap: widget.multiline,
+                  overflow: TextOverflow.clip,
+                );
+              },
+            ),
+          ),
+        ),
+      );
+    }
+    return Container(
+      height: widget.height,
+      color: widget.color,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: Center(child: child),
       ),
     );
   }
@@ -1834,8 +2120,30 @@ class _Cell {
   final SpellCheckedController text;
   final FocusNode focus;
 
+  /// True from a request for the caret until the cell loses it: the cell
+  /// shows its field, and the focus request lands once the field is built.
+  final editing = ValueNotifier(false);
+
+  /// True while the caret is in a neighbouring cell, so the field is ready.
+  final nearby = ValueNotifier(false);
+
+  /// The text the cell shows while it is not a field.
+  final textKey = GlobalKey();
+
+  /// The cell's last widget and what it was built from (see `_cellField`).
+  Object? look;
+  Widget? widget;
+
+  /// Puts the caret in the cell, building its field first if it shows text.
+  void edit() {
+    editing.value = true;
+    focus.requestFocus();
+  }
+
   void dispose() {
     text.dispose();
     focus.dispose();
+    editing.dispose();
+    nearby.dispose();
   }
 }

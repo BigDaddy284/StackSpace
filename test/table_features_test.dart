@@ -192,8 +192,8 @@ void main() {
     List<String> lines() => tableText().split('\n');
 
     Finder cell(int row, int column) => find.byKey(ValueKey('cell-${editor.document[1].id}-$row-$column'));
-    TextEditingController text(WidgetTester tester, int row, int column) =>
-        tester.widget<TextField>(cell(row, column)).controller!;
+    TableBlockViewState grid(WidgetTester tester) => tester.state(find.byType(TableBlockView));
+    TextEditingController text(WidgetTester tester, int row, int column) => grid(tester).controllerAt(row, column);
 
     Future<void> key(WidgetTester tester, LogicalKeyboardKey k, {bool shift = false, bool control = false}) async {
       if (shift) await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
@@ -205,7 +205,13 @@ void main() {
       await tester.pump();
     }
 
-    bool focused(WidgetTester tester, Finder field) => tester.widget<TextField>(field).focusNode!.hasFocus;
+    bool focused(WidgetTester tester, Finder field) {
+      final key = (tester.widget(field).key! as ValueKey<String>).value.split('-');
+      return grid(tester).focusNodeAt(int.parse(key[2]), int.parse(key[3])).hasFocus;
+    }
+
+    /// The cell's text field, which shows while the cell has the caret.
+    Finder field(int row, int column) => find.descendant(of: cell(row, column), matching: find.byType(TextField));
 
     /// Right-clicks a cell and picks [item] from the table menu.
     Future<void> menu(WidgetTester tester, (int, int) at, String item) async {
@@ -220,18 +226,19 @@ void main() {
     testWidgets('Shift+Tab and Shift+Enter start a new line in the cell; it saves as <br> and the row grows',
         (tester) async {
       await pumpEditor(tester, table);
-      Finder box(int row, int column) => find.ancestor(of: cell(row, column), matching: find.byType(Container)).first;
+      Finder box(int row, int column) => find.descendant(of: cell(row, column), matching: find.byType(Container)).first;
       final before = tester.getSize(box(1, 0)).height;
       expect(before, TableBlockView.cellHeight);
       await tester.tap(cell(1, 0));
       await tester.pump();
+      await tester.pump(); // the cell's field is built, then takes the caret
       await key(tester, LogicalKeyboardKey.tab, shift: true);
       expect(focused(tester, cell(1, 0)), isTrue, reason: 'the caret stays in the cell');
       expect(text(tester, 1, 0).text, 'a\n');
-      await tester.enterText(cell(1, 0), 'a\nsecond');
+      await tester.enterText(field(1, 0), 'a\nsecond');
       await tester.pump();
       await key(tester, LogicalKeyboardKey.enter, shift: true);
-      await tester.enterText(cell(1, 0), 'a\nsecond\nthird');
+      await tester.enterText(field(1, 0), 'a\nsecond\nthird');
       await tester.pump();
       await tester.pump();
       expect(lines()[2], '| a<br>second<br>third | 1     |');
@@ -262,7 +269,7 @@ void main() {
     testWidgets('long text wraps in its column, and the column can be set not to wrap', (tester) async {
       final long = List.filled(30, 'word').join(' ');
       await pumpEditor(tester, '# T\n\n| Name | Note |\n| --- | --- |\n| a | $long |\n\nAfter\n');
-      Finder box(int row, int column) => find.ancestor(of: cell(row, column), matching: find.byType(Container)).first;
+      Finder box(int row, int column) => find.descendant(of: cell(row, column), matching: find.byType(Container)).first;
       expect(tester.getSize(box(1, 1)).height, greaterThan(TableBlockView.cellHeight * 2));
       expect(tester.getSize(box(1, 0)).height, tester.getSize(box(1, 1)).height,
           reason: 'every cell of a row is as tall as its tallest');
@@ -327,18 +334,21 @@ void main() {
       await tester.tap(find.text('Yellow'));
       await tester.pumpAndSettle();
       expect(lines().last, '<!-- table-style: {"colors":{"1,0":"yellow"}} -->');
-      final box = find.ancestor(of: cell(1, 0), matching: find.byType(Container)).first;
+      final box = find.descendant(of: cell(1, 0), matching: find.byType(Container)).first;
       expect((tester.widget<Container>(box).color), isNotNull);
 
       await menu(tester, (1, 1), 'Align column');
       await tester.tap(find.text('Right'));
       await tester.pumpAndSettle();
       expect(lines()[1], '| ---- | ----: |');
-      expect(tester.widget<TextField>(cell(1, 1)).textAlign, TextAlign.right);
+      expect(tester.widget<TextField>(field(1, 1)).textAlign, TextAlign.right);
 
       await menu(tester, (1, 0), 'Header row');
       expect(lines().last, '<!-- table-style: {"header":false,"colors":{"1,0":"yellow"}} -->');
-      expect(tester.widget<TextField>(cell(0, 0)).style!.fontWeight, FontWeight.normal);
+      final header = field(0, 0).evaluate().isEmpty
+          ? tester.widget<Text>(find.descendant(of: cell(0, 0), matching: find.byType(Text))).textSpan!.style!
+          : tester.widget<TextField>(field(0, 0)).style!;
+      expect(header.fontWeight, FontWeight.normal);
       await settle(tester);
     });
 
@@ -349,6 +359,15 @@ void main() {
       addTearDown(() => SpellChecker.instance.enabled = false);
       await pumpEditor(tester, '# T\n\n| Name | Count |\n| --- | --- |\n| teh | 1 |\n\nAfter\n');
       expect((text(tester, 1, 0) as SpellCheckedController).misspellings, [const TextRange(start: 0, end: 3)]);
+      // A cell without the caret shows its text, marks included.
+      expect(field(1, 0), findsNothing);
+      final shown = tester.widget<Text>(find.descendant(of: cell(1, 0), matching: find.byType(Text))).textSpan!;
+      final wavy = <String>[];
+      shown.visitChildren((span) {
+        if (span is TextSpan && span.style?.decorationStyle == TextDecorationStyle.wavy) wavy.add(span.text!);
+        return true;
+      });
+      expect(wavy, ['teh']);
       await menu(tester, (1, 0), 'the');
       expect(lines()[2], startsWith('| the '));
       expect((text(tester, 1, 0) as SpellCheckedController).misspellings, isEmpty);
@@ -359,6 +378,7 @@ void main() {
       await pumpEditor(tester, table);
       await tester.tap(cell(2, 0));
       await tester.pump();
+      await tester.pump(); // the cell's field is built, then takes the caret
       await key(tester, LogicalKeyboardKey.f10, shift: true);
       await tester.pumpAndSettle();
       expect(find.text('Insert row above'), findsOneWidget);
@@ -423,6 +443,7 @@ void main() {
       await pumpEditor(tester, '# T\n\n| Name | Count |\n| --- | --- |\n| a | 1 |\n| b | 2 |\n\nAfter\n');
       await tester.tap(cell(1, 0));
       await tester.pump();
+      await tester.pump(); // the cell's field is built, then takes the caret
       Future<void> altShift(LogicalKeyboardKey k) async {
         await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
         await key(tester, k, shift: true);
@@ -476,6 +497,7 @@ void main() {
       expect(cell(2, 0), findsNothing);
       await tester.tap(cell(1, 0));
       await tester.pump();
+      await tester.pump(); // the cell's field is built, then takes the caret
       await key(tester, LogicalKeyboardKey.arrowDown);
       expect(focused(tester, cell(3, 0)), isTrue);
       await key(tester, LogicalKeyboardKey.arrowUp);
