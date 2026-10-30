@@ -17,6 +17,7 @@ import '../../editor/code_languages.dart';
 import '../../editor/page_document.dart';
 import '../../editor/page_editor_controller.dart';
 import '../../editor/slash_commands.dart';
+import '../../editor/spell_checker.dart';
 import 'block_menu.dart';
 import 'block_metrics.dart';
 import 'code_block.dart';
@@ -24,6 +25,7 @@ import 'format_toolbar.dart';
 import 'inline_markdown.dart';
 import 'image_dialog.dart';
 import 'slash_menu.dart';
+import 'spelling.dart';
 import 'table_block.dart';
 
 /// Edits a page block by block. Each block is its own text field, so a page
@@ -2253,6 +2255,7 @@ class _TextBlockState extends State<_TextBlock> {
     super.initState();
     widget.text.addListener(widget.onSelection);
     widget.focusNode.addListener(_onFocus);
+    SpellChecker.instance.addListener(_onSpelling);
   }
 
   @override
@@ -2272,7 +2275,13 @@ class _TextBlockState extends State<_TextBlock> {
   void dispose() {
     widget.text.removeListener(widget.onSelection);
     widget.focusNode.removeListener(_onFocus);
+    SpellChecker.instance.removeListener(_onSpelling);
     super.dispose();
+  }
+
+  /// The word list loaded, a word was added, or checking was turned on or off.
+  void _onSpelling() {
+    if (mounted && widget.text.checkSpelling) setState(() {});
   }
 
   void _onFocus() {
@@ -2307,6 +2316,7 @@ class _TextBlockState extends State<_TextBlock> {
       style: style,
       cursorColor: palette.accentA,
       onChanged: widget.onChanged,
+      contextMenuBuilder: spellingContextMenu,
       // The tap has already put the caret where it landed. Ctrl+click opens
       // the link there; a plain click only edits. Read-only: any click opens.
       onTap: () {
