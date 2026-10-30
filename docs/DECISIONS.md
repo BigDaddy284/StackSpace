@@ -273,6 +273,7 @@ text, Delete empties it, typing starts the first cell afresh, and Ctrl+V pastes 
 over it: one value fills every cell, a block that fits a whole number of times repeats, anything
 else pastes once from the top-left, adding rows and columns past the edge. Pasting tab-separated
 text into a single cell fills the cells from there; plain text still pastes at the caret.
+(Changed in v0.3.13-paste.1: see "Multi-line paste stays in one cell" below.)
 **Rationale**: Tab-separated text is what Excel, Google Sheets and Notion put on the clipboard, so
 cells move both ways. An HTML comment is hidden by other Markdown readers, so the page still reads
 as a plain table; a table that was never resized writes back exactly as before.
@@ -385,3 +386,15 @@ would need a native plugin. The marks only add decorations to the spans the fiel
 so block heights measured before building are unchanged. Results are cached per field until its
 text or the dictionary changes, and the list is unpacked and indexed off the UI thread at start-up.
 **Status**: Done; `test/spell_checker_test.dart`, `test/table_features_test.dart`.
+
+### Multi-line paste stays in one cell (v0.3.13-paste.1)
+**Decision**: Ctrl+V with the caret in a table cell puts the whole clipboard into that cell at the
+caret: line breaks become line breaks in the cell (saved as `<br>`), tabs become spaces, a single
+trailing line break is dropped, and no other cell changes. Spreading tab- or line-separated text
+across the cells, as a spreadsheet does, is now a deliberate choice: Ctrl+Shift+V, or "Paste into
+separate cells" in the cell's right-click menu. With a block of cells selected, Ctrl+V still
+pastes over the block as before.
+**Rationale**: The user pastes notes and paragraphs into cells far more often than spreadsheet
+data, and the old rule (any line break spreads) scattered them over rows and added rows they did
+not want. Selecting cells first, or the extra Shift, is a clear signal that a grid is meant.
+**Status**: Done; `test/table_image_test.dart`.

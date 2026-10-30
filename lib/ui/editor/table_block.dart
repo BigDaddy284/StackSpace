@@ -34,8 +34,10 @@ import 'spelling.dart';
 /// Like a spreadsheet, a drag across cells (or Shift+click, or Shift+Up and
 /// Down) selects a block of cells: Ctrl+C copies it as tab-separated text,
 /// Ctrl+X cuts, Delete empties it, and Ctrl+V pastes a copied block (from
-/// here or from Excel) over it. The column borders drag to set widths;
-/// double-clicking one makes the columns even again.
+/// here or from Excel) over it. Pasted into one cell, text keeps its line
+/// breaks in that cell; Ctrl+Shift+V spreads it across the cells instead.
+/// The column borders drag to set widths; double-clicking one makes the
+/// columns even again.
 class TableBlockView extends StatefulWidget {
   const TableBlockView({
     super.key,
@@ -169,6 +171,7 @@ enum _TableAction {
   cut,
   copy,
   paste,
+  pasteIntoCells,
   clear,
   deleteRows,
   deleteColumns,
@@ -500,19 +503,15 @@ class TableBlockViewState extends State<TableBlockView> {
   }
 
   /// Pastes the clipboard over the selected cells, or from [at] when no
-  /// block is selected. Text without a tab or line break goes into the cell
-  /// at [at] like typing.
-  Future<void> _paste({(int, int)? at}) async {
+  /// block is selected. With no block selected the text goes into the cell
+  /// at [at] like typing, line breaks and all; [spread] (Ctrl+Shift+V)
+  /// fills the cells from there instead, as a spreadsheet does.
+  Future<void> _paste({(int, int)? at, bool spread = false}) async {
     final clip = (await Clipboard.getData(Clipboard.kTextPlain))?.text;
     if (clip == null || clip.isEmpty || !mounted) return;
     final range = cellRange;
-    var single = clip;
-    if (single.endsWith('\r\n')) {
-      single = single.substring(0, single.length - 2);
-    } else if (single.endsWith('\n')) {
-      single = single.substring(0, single.length - 1);
-    }
-    if (range == null && at != null && !single.contains(RegExp('[\t\n\r]'))) {
+    if (range == null && at != null && !spread) {
+      final single = clip.replaceAll(RegExp(r'\r\n?'), '\n').replaceFirst(RegExp(r'\n$'), '').replaceAll('\t', ' ');
       final cell = _cells[at.$1][at.$2];
       final value = cell.text.value;
       final sel = value.selection.isValid ? value.selection : TextSelection.collapsed(offset: value.text.length);
@@ -698,7 +697,7 @@ class TableBlockViewState extends State<TableBlockView> {
     }
     if (ctrl && !keys.isAltPressed) {
       if (key == LogicalKeyboardKey.keyV) {
-        _paste(at: at);
+        _paste(at: at, spread: shift);
         return KeyEventResult.handled;
       }
       final text = _cells[r][c].text;
@@ -1036,6 +1035,9 @@ class TableBlockViewState extends State<TableBlockView> {
         _item(_TableAction.cut, Icons.content_cut, 'Cut', palette, shortcut: 'Ctrl+X'),
         _item(_TableAction.copy, Icons.content_copy, 'Copy', palette, shortcut: 'Ctrl+C'),
         _item(_TableAction.paste, Icons.content_paste, 'Paste', palette, shortcut: 'Ctrl+V'),
+        if (!hasCellRange)
+          _item(_TableAction.pasteIntoCells, Icons.grid_on, 'Paste into separate cells', palette,
+              shortcut: 'Ctrl+Shift+V'),
         _item(_TableAction.clear, Icons.backspace_outlined, 'Clear contents', palette, shortcut: 'Delete'),
         const PopupMenuDivider(),
         _item(_TableAction.deleteRows, Icons.playlist_remove,
@@ -1230,6 +1232,9 @@ class TableBlockViewState extends State<TableBlockView> {
       case _TableAction.paste:
         _restoreFocus(at);
         await _paste(at: hasCellRange ? null : at);
+      case _TableAction.pasteIntoCells:
+        _restoreFocus(at);
+        await _paste(at: at, spread: true);
       case _TableAction.clear:
         if (!hasCellRange) {
           _anchor = _extent = at;
