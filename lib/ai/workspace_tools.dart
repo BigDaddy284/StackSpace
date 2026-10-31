@@ -182,15 +182,18 @@ class WorkspaceTools {
 
   Future<void> revert(AiEdit edit) async {
     if (edit.reverted) return;
+    // Marked as the assistant's, so an open page reloads to show it (as one
+    // undo step) rather than keeping, and later saving, the text it undoes.
+    const ai = ChangeSource.ai;
     switch (edit.kind) {
       case AiEditKind.created:
-        await workspace.delete(edit.path);
+        await workspace.delete(edit.path, source: ai);
       case AiEditKind.modified:
-        await workspace.write(edit.path, edit.before ?? '');
+        await workspace.write(edit.path, edit.before ?? '', source: ai);
       case AiEditKind.deleted:
-        await workspace.restore(edit.trashPath!, edit.path);
+        await workspace.restore(edit.trashPath!, edit.path, source: ai);
       case AiEditKind.renamed:
-        await workspace.rename(edit.newPath!, edit.path);
+        await workspace.rename(edit.newPath!, edit.path, source: ai);
     }
     edit.reverted = true;
   }

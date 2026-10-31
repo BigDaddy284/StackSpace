@@ -398,3 +398,29 @@ pastes over the block as before.
 data, and the old rule (any line break spreads) scattered them over rows and added rows they did
 not want. Selecting cells first, or the extra Shift, is a clear signal that a grid is meant.
 **Status**: Done; `test/table_image_test.dart`.
+
+### Spreadsheet-like tables, table paste and undo for the assistant (v0.3.14-test.1)
+**Decision**: Text copied from a table pastes across the cells even with plain Ctrl+V: tab-separated
+lines where every line has the same number of cells (what Excel, Google Sheets and web pages put on
+the clipboard), a Markdown table, or a table drawn with `+---+`, `|`, `│`, `─`, `═` lines (border
+lines are dropped). Any other multi-line text still goes into the one cell (see "Multi-line paste
+stays in one cell"); Ctrl+Shift+V still spreads any lines. The same tables pasted into a text block
+of a page become a table block (`lib/editor/table_clip.dart`, `pasteTable` in `block_range.dart`).
+The selected cells (or the caret's cell) get a frame: its border drags to move them (Ctrl copies;
+the block stays inside the table and overwrites what it lands on, as in Excel; Ctrl+Z undoes it),
+and its corner square drags to fill down, up or across. Fill carries a series: numbers by the last
+step (one number repeats, as in Excel), text ending in a number counts up, ISO dates by day or step,
+day and month names in order, anything else repeats. A fill stops at the table's edge and does not
+add rows. Ctrl+D / Ctrl+R fill down / right from the first row / column (or the cell above / to the
+left). Ctrl+Space selects the column; Shift+Space selects the rows only while cells are selected,
+because in a cell it types a space. Ctrl+arrows jump to the edge only while cells are selected, since
+in a cell they move by word. The table header shows Count, Sum and Average of a selection.
+The assistant's edit to the open page now loads as one undo step instead of clearing the history,
+and the chat's Undo writes its revert as the assistant's change so the open page shows it. Edit has
+Undo, Redo and "Undo AI change" (the last change not yet undone, on any page).
+**Rationale**: The owner asked for the table features of Excel and Google Sheets and for an undo
+that also covers AI changes when the chat's Undo button was missed. A spreadsheet copy is clearly a
+grid; notes with line breaks are not, so the earlier rule stays for them.
+**Status**: Done; `test/table_clip_test.dart`, `test/spreadsheet_features_test.dart`,
+`test/undo_ai_and_dock_test.dart`.
+

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:collection/collection.dart';
 
@@ -9,6 +10,7 @@ import 'package:flutter/services.dart';
 import '../../app/theme.dart';
 import '../../editor/blocks.dart';
 import '../../editor/spell_checker.dart';
+import '../../editor/table_clip.dart';
 import '../../editor/table_data.dart';
 import 'block_metrics.dart';
 import 'header_button.dart';
@@ -206,6 +208,14 @@ class TableBlockViewState extends State<TableBlockView> {
   /// The cell under the mouse, for the row and column grips.
   (int, int)? _hoverCell;
 
+  /// The cell with the caret, for the frame and fill handle drawn around it.
+  /// A notifier, so moving the caret rebuilds only the frame.
+  final _active = ValueNotifier<(int, int)?>(null);
+
+  /// A drag of the selection's border (moving its cells) or of its fill
+  /// handle, while the button is down.
+  _BlockDrag? _blockDrag;
+
   /// The row or column being dragged by its grip, and the row or column it
   /// would land before (in the table's own order) if let go now.
   int? _movingRow, _movingColumn, _dropBefore;
@@ -231,8 +241,10 @@ class TableBlockViewState extends State<TableBlockView> {
   @override
   void dispose() {
     SpellChecker.instance.removeListener(_onSpelling);
+    _stopEdgeScroll();
     _disposeCells();
     _scroll.dispose();
+    _active.dispose();
     super.dispose();
   }
 
@@ -278,6 +290,7 @@ class TableBlockViewState extends State<TableBlockView> {
   void _noteFocus(int row, int column) {
     if (row >= _cells.length || column >= _cells[row].length || !_cells[row][column].focus.hasFocus) return;
     _lastFocus = (row, column);
+    _active.value = (row, column);
     _refocusing = false;
     // The cells the keys move to next get their fields ready, so Tab, Enter
     // and the arrows land in a field at once.
@@ -411,19 +424,23 @@ class TableBlockViewState extends State<TableBlockView> {
 
   /// Adds an empty row at [at] (0 puts it above the first row); the caret
   /// goes to its cell in [column], or in the focused cell's column.
-  void _insertRow(int at, {int? column}) {
+  void _insertRow(int at, {int? column, int count = 1}) {
     column ??= _focused?.$2 ?? _anchor?.$2 ?? 0;
     final r = at.clamp(0, _data.rowCount);
-    _data.insertRow(r);
+    for (var i = 0; i < count; i++) {
+      _data.insertRow(r);
+    }
     _reshaped(r, column);
   }
 
   void _addColumn(int after) => _insertColumn(after + 1);
 
-  void _insertColumn(int at) {
+  void _insertColumn(int at, {int count = 1}) {
     final row = _focused?.$1 ?? _anchor?.$1 ?? 0;
     final c = at.clamp(0, _data.columns);
-    _data.insertColumn(c, header: 'Column ${c + 1}');
+    for (var i = count - 1; i >= 0; i--) {
+      _data.insertColumn(c, header: 'Column ${c + i + 1}');
+    }
     _reshaped(row, c);
   }
 
@@ -554,14 +571,17 @@ class TableBlockViewState extends State<TableBlockView> {
   }
 
   /// Pastes the clipboard over the selected cells, or from [at] when no
-  /// block is selected. With no block selected the text goes into the cell
-  /// at [at] like typing, line breaks and all; [spread] (Ctrl+Shift+V)
-  /// fills the cells from there instead, as a spreadsheet does.
+  /// block is selected. With no block selected, text copied from a table
+  /// (a spreadsheet, a web page, a Markdown or drawn table) fills the cells
+  /// from [at] across its rows and columns, adding rows as needed; other
+  /// text goes into the cell at [at] like typing, line breaks and all.
+  /// [spread] (Ctrl+Shift+V) spreads any lines over the cells.
   Future<void> _paste({(int, int)? at, bool spread = false}) async {
     final clip = (await Clipboard.getData(Clipboard.kTextPlain))?.text;
     if (clip == null || clip.isEmpty || !mounted) return;
     final range = cellRange;
-    if (range == null && at != null && !spread) {
+    final table = parseTableText(clip);
+    if (range == null && at != null && !spread && table == null) {
       final single = clip.replaceAll(RegExp(r'\r\n?'), '\n').replaceFirst(RegExp(r'\n$'), '').replaceAll('\t', ' ');
       final cell = _cells[at.$1][at.$2];
       final value = cell.text.value;
@@ -576,7 +596,7 @@ class TableBlockViewState extends State<TableBlockView> {
     }
     final (top, left, bottom, right) = range ?? (at!.$1, at.$2, at.$1, at.$2);
     final shape = (_data.rowCount, _data.columns);
-    final (t, l, b, r) = _data.paste(top, left, bottom, right, TableData.parseTsv(clip));
+    final (t, l, b, r) = _data.paste(top, left, bottom, right, table ?? TableData.parseTsv(clip));
     if (shape != (_data.rowCount, _data.columns)) {
       _rebuildCells();
     } else {
@@ -652,9 +672,25 @@ class TableBlockViewState extends State<TableBlockView> {
         if (!widget.readOnly) _paste();
       } else if (key == LogicalKeyboardKey.keyA) {
         selectCells((0, 0), (_data.rowCount - 1, _data.columns - 1));
+      } else if (key == LogicalKeyboardKey.keyD || key == LogicalKeyboardKey.keyR) {
+        _fillCopy(down: key == LogicalKeyboardKey.keyD);
+      } else if (key == LogicalKeyboardKey.space) {
+        _selectColumns();
+      } else if (_toEdge(key) case final to?) {
+        // Ctrl+arrows go to the table's edge; with Shift the selection grows there.
+        if (keys.isShiftPressed) {
+          selectCells(anchor, to(extent));
+        } else {
+          final at = to(extent);
+          _clearRange(to: at);
+        }
       } else {
         return KeyEventResult.ignored; // undo and the app's shortcuts
       }
+      return KeyEventResult.handled;
+    }
+    if (keys.isShiftPressed && key == LogicalKeyboardKey.space) {
+      _selectRows();
       return KeyEventResult.handled;
     }
     if (_isMenuKey(event)) {
@@ -705,6 +741,30 @@ class TableBlockViewState extends State<TableBlockView> {
     return KeyEventResult.handled;
   }
 
+  /// For Ctrl+an arrow: the cell at the table's edge that way, from a cell.
+  (int, int) Function((int, int))? _toEdge(LogicalKeyboardKey key) {
+    final shown = _data.visibleRows;
+    return switch (key) {
+      LogicalKeyboardKey.arrowUp => (at) => (shown.first, at.$2),
+      LogicalKeyboardKey.arrowDown => (at) => (shown.last, at.$2),
+      LogicalKeyboardKey.arrowLeft => (at) => (at.$1, 0),
+      LogicalKeyboardKey.arrowRight => (at) => (at.$1, _data.columns - 1),
+      _ => null,
+    };
+  }
+
+  /// Ctrl+Space: the whole columns of the selection (or of the caret's cell).
+  void _selectColumns() {
+    final (_, left, _, right) = _frameRange ?? (0, 0, 0, 0);
+    selectCells((0, left), (_data.rowCount - 1, right));
+  }
+
+  /// Shift+Space with cells selected: their whole rows.
+  void _selectRows() {
+    final (top, _, bottom, _) = _frameRange ?? (0, 0, 0, 0);
+    selectCells((top, 0), (bottom, _data.columns - 1));
+  }
+
   /// Shift+F10 or the menu key: the keyboard's right-click.
   bool _isMenuKey(KeyEvent event) =>
       event.logicalKey == LogicalKeyboardKey.contextMenu ||
@@ -749,6 +809,14 @@ class TableBlockViewState extends State<TableBlockView> {
     if (ctrl && !keys.isAltPressed) {
       if (key == LogicalKeyboardKey.keyV) {
         _paste(at: at, spread: shift);
+        return KeyEventResult.handled;
+      }
+      if ((key == LogicalKeyboardKey.keyD || key == LogicalKeyboardKey.keyR) && !shift) {
+        _fillCopy(down: key == LogicalKeyboardKey.keyD);
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.space && !shift) {
+        _selectColumns();
         return KeyEventResult.handled;
       }
       final text = _cells[r][c].text;
@@ -844,6 +912,7 @@ class TableBlockViewState extends State<TableBlockView> {
     if (has && widget.focusNode.hasPrimaryFocus && !hasCellRange && !_menuOpen) focusFirst();
     if (!has && !_menuOpen) {
       _anchor = _extent = null; // clicked away
+      _active.value = null;
       _clearNearby();
     }
     if (has) _refocusing = false;
@@ -911,16 +980,224 @@ class TableBlockViewState extends State<TableBlockView> {
   }
 
   void _onPointerMove(PointerMoveEvent event) {
+    if (_dragFrom == null) return;
+    _dragTo(event.position);
+    // Near the top or bottom of the page (or the sides of a wide table) the
+    // page scrolls, and the selection follows the cells that come under the
+    // pointer.
+    if (hasCellRange) _scrollNearEdges(event.position, () => _dragTo(_edgePointer!));
+  }
+
+  /// Extends the cells selected by the mouse to the cell under [global].
+  void _dragTo(Offset global) {
     final from = _dragFrom;
-    if (from == null) return;
-    final hit = _cellAt(event.localPosition, clamp: true);
+    final local = _toGrid(global);
+    if (from == null || local == null) return;
+    final hit = _cellAt(local, clamp: true);
     if (hit == null || (!hasCellRange && hit == from) || hit == _extent) return;
     selectCells(from, hit);
   }
 
   void _onPointerUp(PointerEvent event) {
     _dragFrom = null;
+    _stopEdgeScroll();
     if (hasCellRange) _holdRangeFocus();
+  }
+
+  // Scrolling while a drag is near an edge.
+
+  Timer? _edgeTimer;
+  double _edgeDy = 0, _edgeDx = 0;
+  Offset? _edgePointer;
+  VoidCallback? _edgeFollow;
+
+  /// Scrolls the page while [global] is near its top or bottom (and the
+  /// table sideways near its sides, when it is wider than the page), faster
+  /// the further out the pointer is; [follow] runs after each step, once the
+  /// cells have moved.
+  void _scrollNearEdges(Offset global, VoidCallback follow) {
+    _edgePointer = global;
+    _edgeFollow = follow;
+    double speed(double at, double size, double zone) {
+      if (at < zone) return -math.min(zone - at, 80) / 2;
+      if (at > size - zone) return math.min(at - (size - zone), 80) / 2;
+      return 0;
+    }
+
+    final pageBox = Scrollable.maybeOf(context)?.context.findRenderObject();
+    _edgeDy =
+        pageBox is RenderBox && pageBox.hasSize ? speed(pageBox.globalToLocal(global).dy, pageBox.size.height, 40) : 0;
+    final box = context.findRenderObject();
+    _edgeDx = _scroll.hasClients && box is RenderBox && box.hasSize
+        ? speed(box.globalToLocal(global).dx, box.size.width, 30)
+        : 0;
+    if (_edgeDy == 0 && _edgeDx == 0) {
+      _stopEdgeScroll();
+      return;
+    }
+    _edgeTimer ??= Timer.periodic(const Duration(milliseconds: 16), (_) => _edgeStep());
+  }
+
+  void _edgeStep() {
+    if (!mounted) return _stopEdgeScroll();
+    var moved = false;
+    bool step(ScrollPosition? position, double by) {
+      if (by == 0 || position == null || !position.hasPixels) return false;
+      final to = (position.pixels + by).clamp(position.minScrollExtent, position.maxScrollExtent);
+      if (to == position.pixels) return false;
+      position.jumpTo(to);
+      return true;
+    }
+
+    moved = step(Scrollable.maybeOf(context)?.position, _edgeDy);
+    if (_scroll.hasClients) moved = step(_scroll.position, _edgeDx) || moved;
+    if (moved) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _edgeTimer != null) _edgeFollow?.call();
+      });
+    }
+  }
+
+  void _stopEdgeScroll() {
+    _edgeTimer?.cancel();
+    _edgeTimer = null;
+    _edgeFollow = null;
+  }
+
+  // Dragging the selection's border moves its cells (Ctrl copies them);
+  // dragging its fill handle carries them on down or across.
+
+  /// The selected cells, or the cell with the caret, as (top, left, bottom, right).
+  (int, int, int, int)? get _frameRange {
+    final range = cellRange;
+    if (range != null) return range;
+    final at = _active.value;
+    return at == null ? null : (at.$1, at.$2, at.$1, at.$2);
+  }
+
+  void _startBlockDrag(Offset global, {required bool fill}) {
+    final range = _frameRange;
+    final local = _toGrid(global);
+    if (range == null || local == null || widget.readOnly) return;
+    final at = _cellAt(local, clamp: true);
+    if (at == null) return;
+    setState(() => _blockDrag = _BlockDrag(fill: fill, range: range, from: at, to: at));
+  }
+
+  void _updateBlockDrag(Offset global) {
+    final drag = _blockDrag;
+    final local = _toGrid(global);
+    if (drag == null || local == null) return;
+    final at = _cellAt(local, clamp: true);
+    if (at != null && at != drag.to) setState(() => drag.to = at);
+    _scrollNearEdges(global, () {
+      final p = _edgePointer;
+      if (p != null && _blockDrag != null) _updateBlockDrag(p);
+    });
+  }
+
+  /// Where a moved block would land: its top left, kept inside the table.
+  (int, int, int, int) _moveTarget(_BlockDrag drag) {
+    final (top, left, bottom, right) = drag.range;
+    final height = bottom - top + 1, width = right - left + 1;
+    final r = (top + drag.to.$1 - drag.from.$1).clamp(0, _data.rowCount - height);
+    final c = (left + drag.to.$2 - drag.from.$2).clamp(0, _data.columns - width);
+    return (r, c, r + height - 1, c + width - 1);
+  }
+
+  /// How far a fill reaches: down or up to a row, or across to a column,
+  /// whichever way the pointer has gone further. Null while it is inside.
+  ({int? row, int? column})? _fillTarget(_BlockDrag drag) {
+    final (top, left, bottom, right) = drag.range;
+    final (row, column) = drag.to;
+    final vertical = math.max(row - bottom, top - row), across = math.max(column - right, left - column);
+    if (vertical <= 0 && across <= 0) return null;
+    if (vertical >= across) {
+      // A fill upwards stops under the header row.
+      final to = row < top && top >= _data.firstBodyRow ? math.max(row, _data.firstBodyRow) : row;
+      return to == top ? null : (row: to, column: null);
+    }
+    return (row: null, column: column);
+  }
+
+  /// The cells a block drag would change, for its outline.
+  (int, int, int, int)? _dragPreview(_BlockDrag drag) {
+    if (!drag.fill) return drag.to == drag.from ? null : _moveTarget(drag);
+    final target = _fillTarget(drag);
+    if (target == null) return null;
+    final (top, left, bottom, right) = drag.range;
+    if (target.row case final row?) return (math.min(top, row), left, math.max(bottom, row), right);
+    final column = target.column!;
+    return (top, math.min(left, column), bottom, math.max(right, column));
+  }
+
+  void _endBlockDrag({bool cancelled = false}) {
+    final drag = _blockDrag;
+    _stopEdgeScroll();
+    if (drag == null) return;
+    setState(() => _blockDrag = null);
+    if (cancelled) return;
+    final (top, left, bottom, right) = drag.range;
+    (int, int, int, int)? done;
+    if (drag.fill) {
+      final target = _fillTarget(drag);
+      if (target != null) done = _data.fill(top, left, bottom, right, toRow: target.row, toColumn: target.column);
+    } else if (drag.to != drag.from) {
+      final (r, c, _, _) = _moveTarget(drag);
+      final keys = HardwareKeyboard.instance;
+      done = _data.moveBlock(top, left, bottom, right, r, c, copy: keys.isControlPressed || keys.isMetaPressed);
+    }
+    if (done == null) return;
+    _syncCells();
+    _emit(structural: true);
+    final (t, l, b, r) = done;
+    if (t == b && l == r) {
+      setState(() => _anchor = _extent = null);
+      _focusAfterBuild(t, l);
+    } else {
+      selectCells((t, l), (b, r));
+    }
+  }
+
+  /// Puts the data's text back into any cell whose field shows other text.
+  void _syncCells() {
+    for (var r = 0; r < _cells.length; r++) {
+      for (var c = 0; c < _cells[r].length; c++) {
+        final text = _data.rows[r][c];
+        if (_cells[r][c].text.text != text) {
+          _cells[r][c].text.value =
+              TextEditingValue(text: text, selection: TextSelection.collapsed(offset: text.length));
+        }
+      }
+    }
+  }
+
+  /// Ctrl+D (down) and Ctrl+R (right): the selection's first row (or
+  /// column) is copied into the rest of it; with one cell, or one row,
+  /// the cell above (or to the left) is copied in.
+  void _fillCopy({required bool down}) {
+    final (top, left, bottom, right) = _frameRange ?? (-1, -1, -1, -1);
+    if (top < 0 || widget.readOnly) return;
+    if (down) {
+      final from = bottom > top ? top : top - 1;
+      if (from < 0) return;
+      for (var r = from + 1; r <= bottom; r++) {
+        for (var c = left; c <= right; c++) {
+          _data.setCell(r, c, _data.rows[from][c]);
+        }
+      }
+    } else {
+      final from = right > left ? left : left - 1;
+      if (from < 0) return;
+      for (var r = top; r <= bottom; r++) {
+        for (var c = from + 1; c <= right; c++) {
+          _data.setCell(r, c, _data.rows[r][from]);
+        }
+      }
+    }
+    _syncCells();
+    setState(() {});
+    _emit(structural: true);
   }
 
   void _onHover(PointerHoverEvent event) {
@@ -1081,10 +1358,14 @@ class TableBlockViewState extends State<TableBlockView> {
           _spellingItem(const _SpellingChoice(), Icons.visibility_off_outlined, 'Ignore', palette),
           const PopupMenuDivider(),
         ],
-        _item(_TableAction.insertRowAbove, Icons.north, 'Insert row above', palette),
-        _item(_TableAction.insertRowBelow, Icons.south, 'Insert row below', palette),
-        _item(_TableAction.insertColumnLeft, Icons.west, 'Insert column left', palette),
-        _item(_TableAction.insertColumnRight, Icons.east, 'Insert column right', palette),
+        _item(_TableAction.insertRowAbove, Icons.north,
+            rowsSelected > 1 ? 'Insert $rowsSelected rows above' : 'Insert row above', palette),
+        _item(_TableAction.insertRowBelow, Icons.south,
+            rowsSelected > 1 ? 'Insert $rowsSelected rows below' : 'Insert row below', palette),
+        _item(_TableAction.insertColumnLeft, Icons.west,
+            columnsSelected > 1 ? 'Insert $columnsSelected columns left' : 'Insert column left', palette),
+        _item(_TableAction.insertColumnRight, Icons.east,
+            columnsSelected > 1 ? 'Insert $columnsSelected columns right' : 'Insert column right', palette),
         const PopupMenuDivider(),
         _item(_TableAction.duplicateRow, Icons.copy_outlined, 'Duplicate row', palette),
         _item(_TableAction.duplicateColumn, Icons.copy_all_outlined, 'Duplicate column', palette),
@@ -1221,13 +1502,13 @@ class TableBlockViewState extends State<TableBlockView> {
     final (top, left, bottom, right) = range;
     switch (action) {
       case _TableAction.insertRowAbove:
-        _insertRow(top);
+        _insertRow(top, count: bottom - top + 1);
       case _TableAction.insertRowBelow:
-        _insertRow(bottom + 1);
+        _insertRow(bottom + 1, count: bottom - top + 1);
       case _TableAction.insertColumnLeft:
-        _insertColumn(left);
+        _insertColumn(left, count: right - left + 1);
       case _TableAction.insertColumnRight:
-        _insertColumn(right + 1);
+        _insertColumn(right + 1, count: right - left + 1);
       case _TableAction.duplicateRow:
         _data.duplicateRow(r);
         _reshaped(r + 1, c);
@@ -1412,6 +1693,26 @@ class TableBlockViewState extends State<TableBlockView> {
     return _built = _build(palette);
   }
 
+  /// Count, sum and average of the selected cells, as a spreadsheet shows
+  /// them; null unless two or more cells are selected.
+  String? _statsText() {
+    final range = cellRange;
+    if (range == null) return null;
+    final (top, left, bottom, right) = range;
+    if (top == bottom && left == right) return null;
+    final s = _data.stats(top, left, bottom, right);
+    String n(double v) {
+      final text = v.toStringAsFixed(v == v.roundToDouble() ? 0 : 2);
+      return text.contains('.') ? text.replaceFirst(RegExp(r'\.?0+$'), '') : text;
+    }
+
+    return [
+      'Count ${s.count}',
+      if (s.sum != null) 'Sum ${n(s.sum!)}',
+      if (s.average != null && s.numbers > 1) 'Average ${n(s.average!)}',
+    ].join('  ·  ');
+  }
+
   Widget _build(StackPalette palette) {
     final focused = widget.focusNode.hasFocus;
     final showTools = (_hover || focused || _refocusing || _menuOpen) && !widget.readOnly;
@@ -1458,6 +1759,15 @@ class TableBlockViewState extends State<TableBlockView> {
                                   color: palette.text, fontSize: StackType.hint, fontWeight: FontWeight.w600)),
                           const SizedBox(width: 6),
                           Text('$rows × $columns', style: TextStyle(color: palette.subText, fontSize: StackType.hint)),
+                          if (_statsText() case final stats?) ...[
+                            const SizedBox(width: 12),
+                            Flexible(
+                              child: Text(stats,
+                                  key: ValueKey('table-stats-${widget.block.id}'),
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(color: palette.subText, fontSize: StackType.hint)),
+                            ),
+                          ],
                           if (_data.isFiltered) ...[
                             const SizedBox(width: 10),
                             Icon(Icons.filter_alt, size: 14, color: palette.accentA),
@@ -1645,6 +1955,13 @@ class TableBlockViewState extends State<TableBlockView> {
         ),
     ];
 
+    if (!widget.readOnly && !moving) {
+      children.add(ValueListenableBuilder<(int, int)?>(
+        valueListenable: _active,
+        builder: (context, _, __) => _selectionFrame(palette, widths, heights, shown),
+      ));
+    }
+
     // While a row or column is dragged: it is shaded, and a line shows where it would land.
     final movingRow = _movingRow, movingColumn = _movingColumn, before = _dropBefore;
     if (movingRow != null) {
@@ -1691,6 +2008,98 @@ class TableBlockViewState extends State<TableBlockView> {
       );
     }
     return Align(alignment: Alignment.topLeft, child: grid);
+  }
+
+  /// The rectangle of the cells from ([top], [left]) to ([bottom],
+  /// [right]) in the grid, over the rows that show; null when none do.
+  Rect? _rectOf((int, int, int, int) range, List<double> widths, List<double> heights, List<int> shown) {
+    final (top, left, bottom, right) = range;
+    final first = shown.indexWhere((r) => r >= top);
+    final last = shown.lastIndexWhere((r) => r <= bottom);
+    if (first < 0 || last < first || right >= widths.length) return null;
+    final x = widths.take(left).fold(0.0, (a, b) => a + b);
+    final y = heights.take(first).fold(0.0, (a, b) => a + b);
+    final w = widths.skip(left).take(right - left + 1).fold(0.0, (a, b) => a + b);
+    final h = heights.skip(first).take(last - first + 1).fold(0.0, (a, b) => a + b);
+    return Rect.fromLTWH(x, y, w, h);
+  }
+
+  /// A frame around the selected cells (or the caret's cell): drag its
+  /// border to move them, or the square at its corner to fill on from them.
+  /// Inside the frame, clicks go to the cells.
+  Widget _selectionFrame(StackPalette palette, List<double> widths, List<double> heights, List<int> shown) {
+    final range = _frameRange;
+    final rect = range == null ? null : _rectOf(range, widths, heights, shown);
+    final drag = _blockDrag;
+    final preview = drag == null ? null : _dragPreview(drag);
+    final previewRect = preview == null ? null : _rectOf(preview, widths, heights, shown);
+    const edge = 6.0, handle = 9.0;
+    Widget grab(String name, MouseCursor cursor, {required bool fill}) => MouseRegion(
+          cursor: cursor,
+          child: GestureDetector(
+            key: ValueKey('$name-${widget.block.id}'),
+            behavior: HitTestBehavior.opaque,
+            dragStartBehavior: DragStartBehavior.down,
+            onPanStart: (d) => _startBlockDrag(d.globalPosition, fill: fill),
+            onPanUpdate: (d) => _updateBlockDrag(d.globalPosition),
+            onPanEnd: (_) => _endBlockDrag(),
+            onPanCancel: () => _endBlockDrag(cancelled: true),
+          ),
+        );
+    return Positioned.fill(
+      child: Stack(clipBehavior: Clip.none, children: [
+        if (rect != null) ...[
+          Positioned.fromRect(
+            rect: rect.inflate(1),
+            child: IgnorePointer(
+              child: DecoratedBox(decoration: BoxDecoration(border: Border.all(color: palette.accentA, width: 2))),
+            ),
+          ),
+          // The border, to move the cells.
+          for (final (name, side) in [
+            ('left', Rect.fromLTWH(rect.left - edge / 2, rect.top, edge, rect.height)),
+            ('right', Rect.fromLTWH(rect.right - edge / 2, rect.top, edge, rect.height - handle)),
+            ('top', Rect.fromLTWH(rect.left, rect.top - edge / 2, rect.width, edge)),
+            ('bottom', Rect.fromLTWH(rect.left, rect.bottom - edge / 2, rect.width - handle, edge)),
+          ])
+            Positioned.fromRect(rect: side, child: grab('move-cells-$name', SystemMouseCursors.move, fill: false)),
+          // The fill handle.
+          Positioned(
+            left: rect.right - handle + 1,
+            top: rect.bottom - handle + 1,
+            width: handle,
+            height: handle,
+            child: Tooltip(
+              message: 'Drag to fill',
+              waitDuration: const Duration(milliseconds: 600),
+              child: Stack(children: [
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: palette.accentA,
+                      border: Border.all(color: palette.window, width: 1),
+                    ),
+                  ),
+                ),
+                Positioned.fill(child: grab('fill-handle', SystemMouseCursors.precise, fill: true)),
+              ]),
+            ),
+          ),
+        ],
+        if (previewRect != null)
+          Positioned.fromRect(
+            rect: previewRect.inflate(1),
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: palette.accentA.withAlpha(drag!.fill ? 20 : 36),
+                  border: Border.all(color: palette.accentA.withAlpha(170), width: 2),
+                ),
+              ),
+            ),
+          ),
+      ]),
+    );
   }
 
   Widget _dropLine(StackPalette palette, {required bool horizontal, required double offset, required double length}) =>
@@ -2113,6 +2522,16 @@ class _ColumnResizeHandleState extends State<_ColumnResizeHandle> {
       ),
     );
   }
+}
+
+/// A drag of the selection's border or fill handle: the cells it started
+/// with, the cell it started on, and the cell under the pointer now.
+class _BlockDrag {
+  _BlockDrag({required this.fill, required this.range, required this.from, required this.to});
+  final bool fill;
+  final (int, int, int, int) range;
+  final (int, int) from;
+  (int, int) to;
 }
 
 class _Cell {

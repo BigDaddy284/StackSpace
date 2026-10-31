@@ -18,6 +18,7 @@ import '../../editor/page_document.dart';
 import '../../editor/page_editor_controller.dart';
 import '../../editor/slash_commands.dart';
 import '../../editor/spell_checker.dart';
+import '../../editor/table_clip.dart';
 import 'block_menu.dart';
 import 'block_metrics.dart';
 import 'code_block.dart';
@@ -58,6 +59,13 @@ class _BlockEditorState extends State<BlockEditor> {
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
+    widget.controller.historyHandler = _history;
+  }
+
+  /// Undo or redo, with the caret put back where the change was.
+  void _history({required bool redo}) {
+    _setRange(null);
+    _moveCaret(redo ? doc.redo() : doc.undo());
   }
 
   final _fieldKeys = <int, GlobalKey>{};
@@ -83,6 +91,7 @@ class _BlockEditorState extends State<BlockEditor> {
 
   @override
   void dispose() {
+    if (widget.controller.historyHandler == _history) widget.controller.historyHandler = null;
     _autoScroll?.cancel();
     _selectScroll?.cancel();
     _scroll.removeListener(_onScroll);
@@ -282,11 +291,11 @@ class _BlockEditorState extends State<BlockEditor> {
     }
 
     if (ctrl && key == LogicalKeyboardKey.keyZ) {
-      _moveCaret(shift ? doc.redo() : doc.undo());
+      _history(redo: shift);
       return KeyEventResult.handled;
     }
     if (ctrl && key == LogicalKeyboardKey.keyY) {
-      _moveCaret(doc.redo());
+      _history(redo: true);
       return KeyEventResult.handled;
     }
     if (ctrl && (key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.arrowDown) && shift) {
@@ -966,6 +975,7 @@ class _BlockEditorState extends State<BlockEditor> {
     }
     final sel = text.selection;
     if (block.isText && !doc.plain && _pasteRangeClip(index, block, value, sel)) return;
+    if (block.isText && !doc.plain && _pasteTable(index, block, value, sel)) return;
     if (block.isText && !doc.plain) _trackSlash(index, block, value, sel);
     if (block.isText && _splitOnNewline(index, block, value, sel)) return;
     // A URL pasted over selected words links them (Bug 2). A URL pasted on
@@ -1471,6 +1481,32 @@ class _BlockEditorState extends State<BlockEditor> {
     final caret = pasteBlocks(doc, index, head, tail, clip);
     if (caret == null) return false;
     text.expectChange(value, doc[index].text);
+    _placeCaret(caret);
+    return true;
+  }
+
+  /// A table pasted into a text block (from a spreadsheet, a web page, or
+  /// Markdown or text drawn with border lines) becomes a table block, with
+  /// the border lines left out.
+  bool _pasteTable(int index, Block block, String value, TextSelection sel) {
+    final old = block.text;
+    if (!sel.isValid || !sel.isCollapsed || value.length <= old.length) return false;
+    var start = 0;
+    while (start < old.length && old.codeUnitAt(start) == value.codeUnitAt(start)) {
+      start++;
+    }
+    var end = 0;
+    while (
+        end < old.length - start && old.codeUnitAt(old.length - 1 - end) == value.codeUnitAt(value.length - 1 - end)) {
+      end++;
+    }
+    final pasted = value.substring(start, value.length - end);
+    if (!pasted.contains('\n') || sel.extentOffset != value.length - end) return false;
+    final grid = parseTableText(pasted, minRows: 2);
+    if (grid == null) return false;
+    final text = _textFor(block);
+    final caret = pasteTable(doc, index, old.substring(0, start), old.substring(old.length - end), grid);
+    if (doc[index].isText) text.expectChange(value, doc[index].text);
     _placeCaret(caret);
     return true;
   }

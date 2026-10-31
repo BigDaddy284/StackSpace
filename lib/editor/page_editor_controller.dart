@@ -167,7 +167,17 @@ class PageEditorController extends ChangeNotifier {
       case WorkspaceChangeKind.modified || WorkspaceChangeKind.created:
         if (change.source != ChangeSource.ai) return;
         final content = await workspace.read(path);
-        _setContent(content);
+        if (_path != path) return;
+        if (isLarge || content.length > largeCharCount || '\n'.allMatches(content).length >= largeLineCount) {
+          _setContent(content);
+        } else if (content != document.toMarkdown()) {
+          // One undo step, so Ctrl+Z (or Edit > Undo) takes the change back.
+          document.replaceContent(content,
+              markdown: isMarkdown(path), language: languageForExtension(p.extension(path))?.id);
+          _autosave?.cancel(); // the file already has it
+          _savedVersion = document.version;
+          _wasDirty = false;
+        }
         focusedBlock = focusedBlock.clamp(0, (document.length - 1).clamp(0, 1 << 30));
         selection = const TextSelection.collapsed(offset: 0);
         notifyListeners();
@@ -224,6 +234,18 @@ class PageEditorController extends ChangeNotifier {
     final column = offset - (before.lastIndexOf('\n') + 1) + 1;
     return (_lineOf(index, offset), column);
   }
+
+  /// Set by the editor on screen, so Edit > Undo and Redo also move its
+  /// caret to the change.
+  void Function({required bool redo})? historyHandler;
+
+  bool get canUndo => _path != null && !isLarge && document.canUndo;
+  bool get canRedo => _path != null && !isLarge && document.canRedo;
+
+  /// Undoes the last edit to the page, the assistant's included.
+  void undo() => historyHandler != null ? historyHandler!(redo: false) : document.undo();
+
+  void redo() => historyHandler != null ? historyHandler!(redo: true) : document.redo();
 
   @override
   void dispose() {

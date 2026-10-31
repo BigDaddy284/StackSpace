@@ -232,7 +232,15 @@ class _HomePageState extends State<HomePage> {
               'Drag or Shift+click across table cells  Select cells (Ctrl+C / X / V, Delete)\n'
               'Drag a table column border  Set its width (double-click: even columns)\n'
               'In a table: Tab / Ctrl+Shift+Tab  Next / previous cell; Shift+Tab or Shift+Enter  New line in the cell\n'
-              'In a table: Ctrl+V  Paste into the cell, lines and all; Ctrl+Shift+V  Paste across separate cells\n'
+              'In a table: Ctrl+V  Paste; a table copied from Excel, a web page or Markdown fills the cells, '
+              'other text goes into the cell, lines and all; Ctrl+Shift+V  Paste across separate cells\n'
+              'In a table: drag the selection\'s border  Move the cells (hold Ctrl to copy); '
+              'drag its corner square  Fill down or across (1, 2 → 3; Item 1 → Item 2; Monday → Tuesday)\n'
+              'In a table: Ctrl+D / Ctrl+R  Fill down / right; Ctrl+Space  Select the column; '
+              'Shift+Space  Select the rows (cells selected); Ctrl+arrows  Go to the table\'s edge\n'
+              'Paste a table (Excel, web page, Markdown, or drawn with + - | lines) into a page  It becomes a table\n'
+              'Edit > Undo / Redo (Ctrl+Z / Ctrl+Y)  Also undoes the assistant\'s change to the open page; '
+              'Edit > Undo AI change  Reverts its last change to any page\n'
               'In a table: right-click a cell or Shift+F10  Table menu (insert, sort, filter, colour, wrap…)\n'
               'In a table: drag a row or column grip, or Alt+Shift+arrows  Move the row or column\n'
               'Enter  Send a message\nShift+Enter  New line in a message'),
@@ -395,6 +403,29 @@ class _HomePageState extends State<HomePage> {
           item('Settings...', _openSettings, icon: Icons.settings_outlined),
         ], style: barItem, child: const Text('File')),
         SubmenuButton(menuChildren: [
+          // Built only while the menu is open, so typing doesn't rebuild the bar.
+          ListenableBuilder(
+            listenable: _editor.document,
+            builder: (context, _) =>
+                item('Undo', _editor.canUndo ? _editor.undo : null, icon: Icons.undo, shortcut: 'Ctrl+Z'),
+          ),
+          ListenableBuilder(
+            listenable: _editor.document,
+            builder: (context, _) =>
+                item('Redo', _editor.canRedo ? _editor.redo : null, icon: Icons.redo, shortcut: 'Ctrl+Y'),
+          ),
+          ListenableBuilder(
+            listenable: _chat,
+            builder: (context, _) {
+              final last = _chat.lastUndoableEdit;
+              final summary =
+                  last == null || last.summary.length <= 48 ? last?.summary : '${last.summary.substring(0, 47)}…';
+              return item(summary == null ? 'Undo AI change' : 'Undo AI change: $summary',
+                  last == null || _chat.busy ? null : () => _chat.revert(last),
+                  icon: Icons.auto_awesome_outlined);
+            },
+          ),
+          const Divider(height: 8),
           item('Rename page',
               path == null || _sidebarKey.currentState == null ? null : () => _sidebarKey.currentState!.rename(path),
               icon: Icons.drive_file_rename_outline, shortcut: 'F2'),

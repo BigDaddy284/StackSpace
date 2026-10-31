@@ -361,6 +361,34 @@ work: cells drawn as text show the spelling marks (the controller's own span), a
 cell that is not a field finds the word from the drawn text, and cached text blocks rebuild when the
 word list changes. Full suite after the merge 237 passed, 2 skipped.
 
+## Spreadsheet tables, table paste, undo for AI changes, drag fixes (2026-10-31)
+Build v0.3.14-test.1 (version 0.3.14+18). Asked for: paste a table into a page as a table without
+the border lines; multi-line paste that comes from a table fills rows; drag selected cells; the
+table features of Excel / Google Sheets; Undo / Redo in the Edit menu that also undoes AI changes;
+fix the page scrolling oddly while drag-selecting cells and the assistant panel's edge not staying
+with the mouse.
+
+- Paste: `parseTableText` (`lib/editor/table_clip.dart`) reads spreadsheet, Markdown and drawn
+  tables; a table pasted into a cell fills the cells from there, into a text block becomes a table.
+- Cells: a frame around the selection (or caret cell) with a draggable border (move, Ctrl copies)
+  and a fill handle (series); Ctrl+D / R; Ctrl+Space, Shift+Space, Ctrl+(Shift+)arrows; count /
+  sum / average in the table header; "Insert N rows / columns" when N are selected.
+- Drag-selecting cells past the top or bottom of the page now scrolls it (and a wide table
+  sideways), with the selection following; it did not scroll at all before, so the page only moved
+  in jumps. The frame moves with the caret through a notifier, so moving between cells still does
+  not rebuild the table (interaction timings unchanged).
+- The assistant panel's top edge is measured from where the drag started (it drifted from the
+  mouse after passing a limit, and lost the first few pixels), is easier to grab, highlights on
+  hover, and only the dock rebuilds while it moves; the height is saved when the drag ends.
+- Undo: the assistant's edit to the open page is one undo step (it used to clear the history), the
+  chat's Undo now reloads the open page, and Edit has Undo, Redo and Undo AI change.
+
+Tests: `table_clip_test.dart` (18), `spreadsheet_features_test.dart` (10),
+`undo_ai_and_dock_test.dart` (3). Full suite 269 passed, 2 skipped. Checked in a Linux release build
+with a real mouse and keyboard: fill handle, moving cells and Ctrl+Z, drag-selecting past the bottom
+(the page scrolls, selection follows), the assistant edge past its limit and back, copying cells and
+pasting them into a page as a table, and the Edit menu.
+
 ## Next single task
 No code task is queued; the next phase starts from the owner's next request. Bug 5 is
 confirmed fixed with test build 9 (v0.3.5-test.2); `native.log` and `startup.log` are in

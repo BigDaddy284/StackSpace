@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 /// A Markdown (GitHub style) table as cells: the header row, the column
 /// alignments and the body rows.
@@ -447,6 +448,8 @@ class TableData {
 
   static final _numberText = RegExp(r'^[-+]?[$€£¥]?\s*[-+]?[\d,]*\.?\d+(e[-+]?\d+)?\s*%?$', caseSensitive: false);
 
+  static double? number(String text) => _number(text.trim());
+
   static double? _number(String text) {
     if (!_numberText.hasMatch(text)) return null;
     final negative = text.startsWith('-') || text.contains(RegExp(r'^[$€£¥]\s*-'));
@@ -526,6 +529,212 @@ class TableData {
     row.add(cell.toString());
     rows.add(row);
     return rows;
+  }
+
+  /// Moves (or with [copy], copies) the cells from ([top], [left]) to
+  /// ([bottom], [right]) with their colours so the block's top left lands on
+  /// ([toRow], [toColumn]), which is clamped so the block stays inside the
+  /// table. The cells it leaves (and that the block does not cover again)
+  /// are emptied. Returns where the block went as (top, left, bottom, right).
+  (int, int, int, int) moveBlock(int top, int left, int bottom, int right, int toRow, int toColumn,
+      {bool copy = false}) {
+    final height = bottom - top + 1, width = right - left + 1;
+    final r0 = toRow.clamp(0, rowCount - height), c0 = toColumn.clamp(0, columns - width);
+    final text = [
+      for (var r = top; r <= bottom; r++) rows[r].sublist(left, right + 1),
+    ];
+    final colour = [
+      for (var r = top; r <= bottom; r++) colors[r].sublist(left, right + 1),
+    ];
+    if (!copy) {
+      for (var r = top; r <= bottom; r++) {
+        for (var c = left; c <= right; c++) {
+          rows[r][c] = '';
+          colors[r][c] = null;
+        }
+      }
+    }
+    for (var r = 0; r < height; r++) {
+      for (var c = 0; c < width; c++) {
+        rows[r0 + r][c0 + c] = text[r][c];
+        colors[r0 + r][c0 + c] = colour[r][c];
+      }
+    }
+    return (r0, c0, r0 + height - 1, c0 + width - 1);
+  }
+
+  /// Fills from the cells ([top], [left]) to ([bottom], [right]) out to row
+  /// [toRow] (down or up) or column [toColumn] (right or left), the way a
+  /// spreadsheet's fill handle does: each row or column of the block is
+  /// carried on as a series (see [series]), and colours repeat. Only one of
+  /// [toRow] and [toColumn] is used. Returns the cells filled.
+  (int, int, int, int) fill(int top, int left, int bottom, int right, {int? toRow, int? toColumn}) {
+    if (toRow != null && (toRow > bottom || toRow < top)) {
+      final down = toRow > bottom;
+      final count = down ? toRow - bottom : top - toRow;
+      for (var c = left; c <= right; c++) {
+        var source = [for (var r = top; r <= bottom; r++) rows[r][c]];
+        final colour = [for (var r = top; r <= bottom; r++) colors[r][c]];
+        if (!down) source = source.reversed.toList();
+        final values = series(source, count);
+        for (var i = 0; i < count; i++) {
+          final r = down ? bottom + 1 + i : top - 1 - i;
+          rows[r][c] = values[i];
+          colors[r][c] = (down ? colour : colour.reversed.toList())[i % colour.length];
+        }
+      }
+      return down ? (top, left, toRow, right) : (toRow, left, bottom, right);
+    }
+    if (toColumn != null && (toColumn > right || toColumn < left)) {
+      final rightwards = toColumn > right;
+      final count = rightwards ? toColumn - right : left - toColumn;
+      for (var r = top; r <= bottom; r++) {
+        var source = rows[r].sublist(left, right + 1);
+        var colour = colors[r].sublist(left, right + 1);
+        if (!rightwards) {
+          source = source.reversed.toList();
+          colour = colour.reversed.toList();
+        }
+        final values = series(source, count);
+        for (var i = 0; i < count; i++) {
+          final c = rightwards ? right + 1 + i : left - 1 - i;
+          rows[r][c] = values[i];
+          colors[r][c] = colour[i % colour.length];
+        }
+      }
+      return rightwards ? (top, left, bottom, toColumn) : (top, toColumn, bottom, right);
+    }
+    return (top, left, bottom, right);
+  }
+
+  static const _days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  static const _months = [
+    'January', 'February', 'March', 'April', 'May', 'June', //
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+  static final _isoDate = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$');
+  static final _plainNumber = RegExp(r'^([-+]?[$€£¥]?)(-?\d[\d,]*(?:\.(\d+))?)(%?)$');
+  static final _trailingNumber = RegExp(r'^(.*?)(\d+)$');
+
+  /// The next [count] values after [source], the way a fill handle
+  /// continues them: numbers go on by the step between the last two (one
+  /// number repeats), dates by days, day and month names in order, text
+  /// that ends in a number counts up ("Item 3", "Item 4"), and anything else
+  /// repeats the cells in turn.
+  static List<String> series(List<String> source, int count) {
+    if (count <= 0 || source.isEmpty) return const [];
+    final cells = [for (final s in source) s.trim()];
+    String repeat(int i) => source[i % source.length];
+
+    // Numbers, with a currency sign or % kept.
+    final numbers = [for (final c in cells) _plainNumber.firstMatch(c)];
+    if (cells.length > 1 && numbers.every((m) => m != null)) {
+      final values = [for (final m in numbers) double.parse(m!.group(2)!.replaceAll(',', ''))];
+      final step = values.last - values[values.length - 2];
+      final decimals = numbers.map((m) => m!.group(3)?.length ?? 0).fold(0, (a, b) => a > b ? a : b);
+      final prefix = numbers.last!.group(1)!, suffix = numbers.last!.group(4)!;
+      final grouped = numbers.any((m) => m!.group(2)!.contains(','));
+      return [
+        for (var i = 1; i <= count; i++) '$prefix${_formatNumber(values.last + step * i, decimals, grouped)}$suffix',
+      ];
+    }
+
+    // Dates.
+    final dates = [for (final c in cells) _isoDate.hasMatch(c) ? DateTime.tryParse(c) : null];
+    if (dates.every((d) => d != null)) {
+      final step = dates.length > 1 ? dates.last!.difference(dates[dates.length - 2]!).inDays : 1;
+      String format(DateTime d) =>
+          '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      final last = dates.last!;
+      return [for (var i = 1; i <= count; i++) format(DateTime(last.year, last.month, last.day + step * i))];
+    }
+
+    // Day and month names, full or short, keeping the case written.
+    for (final names in [_days, _months]) {
+      int? indexOf(String c) {
+        final lower = c.toLowerCase();
+        for (var i = 0; i < names.length; i++) {
+          final name = names[i].toLowerCase();
+          if (lower == name || (lower.length == 3 && name.startsWith(lower))) return i;
+        }
+        return null;
+      }
+
+      final found = [for (final c in cells) indexOf(c)];
+      if (found.every((i) => i != null)) {
+        final step = found.length > 1 ? (found.last! - found[found.length - 2]!) % names.length : 1;
+        final sample = cells.last;
+        final short = sample.length == 3;
+        String styled(String name) {
+          final word = short ? name.substring(0, 3) : name;
+          if (sample == sample.toUpperCase()) return word.toUpperCase();
+          if (sample == sample.toLowerCase()) return word.toLowerCase();
+          return word;
+        }
+
+        return [for (var i = 1; i <= count; i++) styled(names[(found.last! + step * i) % names.length])];
+      }
+    }
+
+    // Text ending in a number: "Item 3" → "Item 4"; the step comes from the
+    // last two when they share the text.
+    final last = _trailingNumber.firstMatch(cells.last);
+    if (last != null && last.group(1)!.isNotEmpty) {
+      final head = last.group(1)!, digits = last.group(2)!;
+      var step = 1;
+      if (cells.length > 1) {
+        final before = _trailingNumber.firstMatch(cells[cells.length - 2]);
+        if (before != null && before.group(1) == head) step = int.parse(digits) - int.parse(before.group(2)!);
+      }
+      return [
+        for (var i = 1; i <= count; i++)
+          '$head${math.max(0, int.parse(digits) + step * i).toString().padLeft(digits.length, '0')}',
+      ];
+    }
+    return [for (var i = 0; i < count; i++) repeat(i)];
+  }
+
+  static String _formatNumber(double value, int decimals, bool grouped) {
+    var text = value.toStringAsFixed(decimals);
+    if (text == '-0' || RegExp(r'^-0\.0+$').hasMatch(text)) text = text.substring(1);
+    if (!grouped) return text;
+    final negative = text.startsWith('-');
+    if (negative) text = text.substring(1);
+    final dot = text.indexOf('.');
+    final whole = dot < 0 ? text : text.substring(0, dot), rest = dot < 0 ? '' : text.substring(dot);
+    final out = StringBuffer();
+    for (var i = 0; i < whole.length; i++) {
+      if (i > 0 && (whole.length - i) % 3 == 0) out.write(',');
+      out.write(whole[i]);
+    }
+    return '${negative ? '-' : ''}$out$rest';
+  }
+
+  /// Count, sum and average of the cells from ([top], [left]) to
+  /// ([bottom], [right]), as a spreadsheet's status bar shows them: count is
+  /// of cells with something in them, sum and average of those that are
+  /// numbers (null when none are).
+  ({int count, int numbers, double? sum, double? average}) stats(int top, int left, int bottom, int right) {
+    var count = 0, numbers = 0;
+    var sum = 0.0;
+    for (var r = top; r <= bottom; r++) {
+      for (var c = left; c <= right; c++) {
+        final text = rows[r][c].trim();
+        if (text.isEmpty) continue;
+        count++;
+        final value = _number(text);
+        if (value != null) {
+          numbers++;
+          sum += value;
+        }
+      }
+    }
+    return (
+      count: count,
+      numbers: numbers,
+      sum: numbers == 0 ? null : sum,
+      average: numbers == 0 ? null : sum / numbers,
+    );
   }
 
   /// Empties the cells from ([top], [left]) to ([bottom], [right]).

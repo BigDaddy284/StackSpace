@@ -53,6 +53,26 @@ class PageDocument extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Replaces the content as one undo step, keeping the history: the
+  /// assistant's edit to the open page, which Ctrl+Z then takes back like
+  /// any other edit.
+  void replaceContent(String content, {bool markdown = true, String? language}) {
+    if (_plain == markdown || _blocks.isEmpty) {
+      load(content, markdown: markdown, language: language);
+      return;
+    }
+    var next = markdown
+        ? parseMarkdown(content)
+        : [
+            Block(
+                kind: BlockKind.code,
+                language: language,
+                text: content.endsWith('\n') ? content.substring(0, content.length - 1) : content)
+          ];
+    if (next.isEmpty) next = [Block(kind: BlockKind.paragraph)];
+    _commit(next);
+  }
+
   void clear() {
     _blocks = const [];
     _undo.clear();

@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 
 import '../../ai/chat_controller.dart';
@@ -13,7 +14,7 @@ import 'composer.dart';
 enum DockMode { closed, minimized, open, maximized }
 
 /// Places the chat dock under [content] according to [mode].
-class ChatDockLayout extends StatelessWidget {
+class ChatDockLayout extends StatefulWidget {
   const ChatDockLayout({
     super.key,
     required this.mode,
@@ -25,6 +26,8 @@ class ChatDockLayout extends StatelessWidget {
 
   final DockMode mode;
   final double height;
+
+  /// Called once, when a drag of the dock's top edge ends.
   final ValueChanged<double> onHeightChanged;
   final Widget content;
   final Widget dock;
@@ -32,8 +35,18 @@ class ChatDockLayout extends StatelessWidget {
   static const minHeight = 220.0;
 
   @override
+  State<ChatDockLayout> createState() => _ChatDockLayoutState();
+}
+
+class _ChatDockLayoutState extends State<ChatDockLayout> {
+  /// The height while the edge is dragged; only this widget rebuilds then.
+  double? _dragHeight;
+  double _startHeight = 0, _startY = 0;
+
+  @override
   Widget build(BuildContext context) {
-    switch (mode) {
+    final content = widget.content, dock = widget.dock;
+    switch (widget.mode) {
       case DockMode.closed:
         return content;
       case DockMode.minimized:
@@ -42,12 +55,26 @@ class ChatDockLayout extends StatelessWidget {
         return dock;
       case DockMode.open:
         return LayoutBuilder(builder: (context, constraints) {
-          final maxHeight = (constraints.maxHeight - 120).clamp(minHeight, double.infinity);
-          final h = height.clamp(minHeight, maxHeight);
+          final maxHeight = (constraints.maxHeight - 120).clamp(ChatDockLayout.minHeight, double.infinity);
+          double clamp(double h) => h.clamp(ChatDockLayout.minHeight, maxHeight);
+          final h = clamp(_dragHeight ?? widget.height);
           return Column(
             children: [
               Expanded(child: content),
-              _ResizeHandle(onDrag: (dy) => onHeightChanged((h - dy).clamp(minHeight, maxHeight))),
+              _ResizeHandle(
+                onStart: (y) {
+                  _startY = y;
+                  _startHeight = h;
+                },
+                // Measured from where the drag started, so the edge stays under
+                // the pointer, even after it passes a limit and comes back.
+                onDrag: (y) => setState(() => _dragHeight = clamp(_startHeight - (y - _startY))),
+                onEnd: () {
+                  final height = _dragHeight;
+                  setState(() => _dragHeight = null);
+                  if (height != null) widget.onHeightChanged(height);
+                },
+              ),
               SizedBox(height: h, child: dock),
             ],
           );
@@ -56,23 +83,42 @@ class ChatDockLayout extends StatelessWidget {
   }
 }
 
-class _ResizeHandle extends StatelessWidget {
-  const _ResizeHandle({required this.onDrag});
+class _ResizeHandle extends StatefulWidget {
+  const _ResizeHandle({required this.onStart, required this.onDrag, required this.onEnd});
+  final ValueChanged<double> onStart;
+
+  /// The pointer's position on the screen, top to bottom.
   final ValueChanged<double> onDrag;
+  final VoidCallback onEnd;
+
+  @override
+  State<_ResizeHandle> createState() => _ResizeHandleState();
+}
+
+class _ResizeHandleState extends State<_ResizeHandle> {
+  bool _hot = false;
 
   @override
   Widget build(BuildContext context) {
     final p = StackColors.of(context);
     return MouseRegion(
       cursor: SystemMouseCursors.resizeRow,
+      onEnter: (_) => setState(() => _hot = true),
+      onExit: (_) => setState(() => _hot = false),
       child: GestureDetector(
+        key: const ValueKey('chat-dock-resize'),
         behavior: HitTestBehavior.opaque,
-        onVerticalDragUpdate: (d) => onDrag(d.delta.dy),
+        // From where the button went down, not where the drag was recognised.
+        dragStartBehavior: DragStartBehavior.down,
+        onVerticalDragStart: (d) => widget.onStart(d.globalPosition.dy),
+        onVerticalDragUpdate: (d) => widget.onDrag(d.globalPosition.dy),
+        onVerticalDragEnd: (_) => widget.onEnd(),
+        onVerticalDragCancel: widget.onEnd,
         child: Container(
-          height: 5,
+          height: 7,
           color: p.panel,
-          alignment: Alignment.topCenter,
-          child: Container(height: 1, color: p.barBorder),
+          alignment: Alignment.center,
+          child: Container(height: _hot ? 2 : 1, color: _hot ? p.accentA : p.barBorder),
         ),
       ),
     );

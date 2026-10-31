@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 
 import 'blocks.dart';
 import 'page_document.dart';
+import 'table_clip.dart';
 
 /// Whether a block's text is edited in a plain text field, so a selection can
 /// start or end part-way through it. Code spaces, tables, images and dividers
@@ -268,6 +269,31 @@ Caret? pasteBlocks(PageDocument doc, int index, String head, String tail, String
       out.add(Block(kind: BlockKind.paragraph, text: tail));
       caret = (block: index + out.length - 1, offset: 0);
     }
+  }
+  doc.replaceRange(index, index + 1, out, before: (block: index, offset: head.length), after: caret);
+  return caret;
+}
+
+/// Pastes a table read from the clipboard into block [index], between
+/// [head] and [tail]: the text before the caret stays in the block, the
+/// table follows it as a real table, and the text after the caret goes to a
+/// paragraph under it. Returns where the caret goes: the line under the table.
+Caret pasteTable(PageDocument doc, int index, String head, String tail, List<List<String>> grid) {
+  final current = doc[index];
+  final keepHead = head.trim().isNotEmpty;
+  final out = <Block>[
+    if (keepHead) current.copyWith(text: head),
+    Block(kind: BlockKind.table, text: gridToMarkdown(grid), gapBefore: keepHead ? null : current.gapBefore),
+  ];
+  // The caret goes on under the table: to the text after it, or to the
+  // next line of text, or to a new empty paragraph.
+  final next = index + 1 < doc.length ? doc[index + 1] : null;
+  Caret caret;
+  if (tail.trim().isNotEmpty || next == null || !hasInlineText(next)) {
+    out.add(Block(kind: BlockKind.paragraph, text: tail.trimLeft()));
+    caret = (block: index + out.length - 1, offset: 0);
+  } else {
+    caret = (block: index + out.length, offset: 0);
   }
   doc.replaceRange(index, index + 1, out, before: (block: index, offset: head.length), after: caret);
   return caret;

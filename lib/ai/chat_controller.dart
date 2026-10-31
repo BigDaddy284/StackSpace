@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -358,6 +359,11 @@ class ChatController extends ChangeNotifier {
       reply.thoughtFor = (reply._thinkingEnded ?? DateTime.now()).difference(reply.started);
     }
   }
+
+  /// The assistant's most recent change that has not been undone, for
+  /// Edit > Undo AI change; null when there is none.
+  ToolItem? get lastUndoableEdit =>
+      items.whereType<ToolItem>().lastWhereOrNull((i) => i.edit != null && !i.edit!.reverted);
 
   Future<void> revert(ToolItem item) async {
     final edit = item.edit;
