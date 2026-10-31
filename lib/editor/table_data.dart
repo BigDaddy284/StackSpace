@@ -103,6 +103,40 @@ class TableData {
 
   static final _separatorCell = RegExp(r'^:?-+:?$');
 
+  /// The cell of [to] where it first differs from [from], and the caret
+  /// offset in that cell at the end of the changed text: where Ctrl+Z or
+  /// Ctrl+Y puts the caret. Cells are compared, not the Markdown, because a
+  /// longer cell re-pads its whole column. A row or column added or removed
+  /// at the end gives the nearest cell that is left; null when only the
+  /// widths or style changed.
+  static (int, int, int)? firstChange(String from, String to) {
+    final a = parse(from), b = parse(to);
+    if (b == null) return null;
+    if (a == null) return (0, 0, 0);
+    for (var r = 0; r < b.rowCount; r++) {
+      for (var c = 0; c < b.columns; c++) {
+        final before = r < a.rowCount && c < a.columns ? a.rows[r][c] : null;
+        final after = b.rows[r][c];
+        if (before == after) continue;
+        if (before == null) return (r, c, after.length);
+        var start = 0;
+        while (start < before.length && start < after.length && before[start] == after[start]) {
+          start++;
+        }
+        var end = 0;
+        while (end < before.length - start &&
+            end < after.length - start &&
+            before[before.length - 1 - end] == after[after.length - 1 - end]) {
+          end++;
+        }
+        return (r, c, after.length - end);
+      }
+    }
+    if (a.rowCount != b.rowCount) return (b.rowCount - 1, 0, 0);
+    if (a.columns != b.columns) return (0, b.columns - 1, 0);
+    return null;
+  }
+
   /// Reads the lines of a table block. Lines that are not `| ... |` rows are
   /// skipped; a missing separator row makes every row a body row after the
   /// first. Null when there is no row at all.

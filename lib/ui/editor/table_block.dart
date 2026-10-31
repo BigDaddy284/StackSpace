@@ -259,6 +259,10 @@ class TableBlockViewState extends State<TableBlockView> {
 
   /// Loads [markdown] into the grid (an undo, or the assistant's edit).
   void _read(String markdown) {
+    final focused = _focused;
+    _focusBeforeRead = focused == null
+        ? null
+        : (focused.$1, focused.$2, _cells[focused.$1][focused.$2].text.selection.extentOffset);
     _written = markdown;
     _data = TableData.parse(markdown) ??
         TableData([
@@ -353,9 +357,9 @@ class TableBlockViewState extends State<TableBlockView> {
     return null;
   }
 
-  /// Puts the caret in a cell, at its end (or [atStart]). A row the filters
-  /// hide gives way to the nearest one that shows.
-  void focusCell(int row, int column, {bool atStart = false}) {
+  /// Puts the caret in a cell, at its end (or [atStart], or at [offset]). A
+  /// row the filters hide gives way to the nearest one that shows.
+  void focusCell(int row, int column, {bool atStart = false, int? offset}) {
     if (_cells.isEmpty) return;
     var r = row.clamp(0, _cells.length - 1);
     if (!_data.rowVisible(r)) {
@@ -370,8 +374,24 @@ class TableBlockViewState extends State<TableBlockView> {
     if (!widget.focusNode.hasFocus && !_refocusing && mounted) setState(() => _refocusing = true);
     cell.edit();
     final length = cell.text.text.length;
-    cell.text.selection = TextSelection.collapsed(offset: atStart ? 0 : length);
+    cell.text.selection = TextSelection.collapsed(offset: offset?.clamp(0, length) ?? (atStart ? 0 : length));
   }
+
+  /// After Ctrl+Z or Ctrl+Y: the caret goes to [cell] (row, column, offset),
+  /// the cell the undone or redone change was in, else back to the cell it
+  /// was in before the grid was reloaded, else the first cell.
+  void focusChange((int, int, int)? cell) {
+    final at = cell ?? _focusBeforeRead;
+    _focusBeforeRead = null;
+    if (at == null) {
+      focusFirst();
+    } else {
+      focusCell(at.$1, at.$2, offset: at.$3);
+    }
+  }
+
+  /// The cell with the caret when the grid was last reloaded, and its offset.
+  (int, int, int)? _focusBeforeRead;
 
   /// A cell's text and focus. Only the cell being edited (or under the
   /// mouse) has a text field, so tests read the cells through these.

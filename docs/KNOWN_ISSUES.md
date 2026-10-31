@@ -3,6 +3,15 @@
 ## Overview
 This document tracks known issues and problems identified during the audit phase of the AppFlowy replacement project. Issues are categorized by severity and impact.
 
+## Reported from v0.3.14-test.1 (2026-10-31)
+
+### Ctrl+Z moves the caret to the last cell of a table
+**Status**: Fixed 2026-10-31 (v0.3.14-test.2). Undo and redo (keys or the Edit menu) now put the
+caret in the cell the change was in, at the end of the changed text; redo had the same problem
+and is fixed too. `test/table_undo_caret_test.dart`.
+Remaining limit: typing in two cells of the same table less than a second apart is one undo step,
+so one Ctrl+Z takes back both and the caret goes to the first of them.
+
 ## Bugs reported from test build 2 on Windows (2026-10-26)
 
 ### Bug 1 — Backspace does not work in code blocks

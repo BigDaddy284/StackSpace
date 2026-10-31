@@ -19,6 +19,7 @@ import '../../editor/page_editor_controller.dart';
 import '../../editor/slash_commands.dart';
 import '../../editor/spell_checker.dart';
 import '../../editor/table_clip.dart';
+import '../../editor/table_data.dart';
 import 'block_menu.dart';
 import 'block_metrics.dart';
 import 'code_block.dart';
@@ -65,8 +66,20 @@ class _BlockEditorState extends State<BlockEditor> {
   /// Undo or redo, with the caret put back where the change was.
   void _history({required bool redo}) {
     _setRange(null);
-    _moveCaret(redo ? doc.redo() : doc.undo());
+    final before = doc.blocks;
+    final caret = redo ? doc.redo() : doc.undo();
+    // In a table the caret goes to the cell that changed, not the last one.
+    _pendingCell = null;
+    if (caret != null && caret.block < doc.length && doc[caret.block].kind == BlockKind.table) {
+      final table = doc[caret.block];
+      final old = before.indexWhere((b) => b.id == table.id);
+      _pendingCell = (table.id, old < 0 ? null : TableData.firstChange(before[old].text, table.text));
+    }
+    _moveCaret(caret);
   }
+
+  /// The table block an undo or redo changed, and the cell in it for the caret.
+  (int, (int, int, int)?)? _pendingCell;
 
   final _fieldKeys = <int, GlobalKey>{};
 
@@ -205,8 +218,17 @@ class _BlockEditorState extends State<BlockEditor> {
     final block = doc[index];
     final node = _focusFor(block);
     final text = _textFor(block);
+    final cell = _pendingCell;
+    _pendingCell = null;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      if (cell != null && cell.$1 == block.id) {
+        final table = _tableKeyFor(block).currentState;
+        if (table != null) {
+          table.focusChange(cell.$2);
+          return;
+        }
+      }
       // A field that already has focus keeps its caret: setting the selection
       // would also send the field's text back to the platform, over any
       // typing still on its way in.
