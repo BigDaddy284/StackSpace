@@ -12,16 +12,17 @@ class StackSpaceApp extends StatelessWidget {
 
   static final _light = buildTheme(StackPalette.lightPalette);
   static final _dark = buildTheme(StackPalette.darkPalette);
+  static final _graphite = buildTheme(StackPalette.graphitePalette);
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: settings.themeModeListenable,
+      listenable: Listenable.merge([settings.themeModeListenable, settings.darkStyleListenable]),
       builder: (context, child) => MaterialApp(
         title: 'StackSpace',
         debugShowCheckedModeBanner: false,
         theme: _light,
-        darkTheme: _dark,
+        darkTheme: settings.darkStyle == DarkStyle.classic ? _dark : _graphite,
         themeMode: settings.themeMode,
         builder: (context, child) {
           TitleBar.sync(StackColors.of(context));
@@ -34,7 +35,7 @@ class StackSpaceApp extends StatelessWidget {
   }
 }
 
-/// What the window shows before the settings are loaded: the dark palette's
+/// What the window shows before the settings are loaded: the Graphite palette's
 /// window colour and one line of text, so a slow or stuck start is visible
 /// as such rather than as an unpainted window.
 class StartupScreen extends StatelessWidget {
@@ -44,10 +45,10 @@ class StartupScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = StackPalette.darkPalette;
+    final p = StackPalette.graphitePalette;
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: StackSpaceApp._dark,
+      theme: StackSpaceApp._graphite,
       home: Scaffold(
         backgroundColor: p.window,
         body: Center(

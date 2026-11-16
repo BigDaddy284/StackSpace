@@ -67,9 +67,11 @@ void main() {
     await settle(tester);
   }
 
-  for (final palette in [StackPalette.lightPalette, StackPalette.darkPalette]) {
-    final mode = palette.brightness.name;
-
+  for (final (mode, palette) in [
+    ('light', StackPalette.lightPalette),
+    ('dark', StackPalette.darkPalette),
+    ('graphite', StackPalette.graphitePalette),
+  ]) {
     testWidgets('$mode: closed dock meets contrast, label and target guidelines', (tester) async {
       final handle = tester.ensureSemantics();
       await pumpApp(tester, palette);

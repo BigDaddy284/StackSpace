@@ -412,6 +412,13 @@ class _HomePageState extends State<HomePage> {
           themeItem('Follow Windows', ThemeMode.system),
           themeItem('Light', ThemeMode.light),
           themeItem('Dark', ThemeMode.dark),
+          const Divider(height: 8),
+          for (final style in DarkStyle.values)
+            MenuItemButton(
+              leadingIcon: Icon(settings.darkStyle == style ? Icons.check : null, size: 17, color: p.accentA),
+              onPressed: () => setState(() => settings.darkStyle = style),
+              child: Text('Dark style: ${style.label}'),
+            ),
         ], style: barItem, child: const Text('View')),
         SubmenuButton(menuChildren: [
           item('Keyboard shortcuts', _showShortcuts, icon: Icons.keyboard_outlined),

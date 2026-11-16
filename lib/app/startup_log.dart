@@ -6,7 +6,7 @@ import 'package:path_provider/path_provider.dart';
 
 /// A small log of what happened while the app started (Bug 5), so an odd
 /// launch can be explained afterwards. Lines go to `startup.log` in the app's
-/// support folder (`%APPDATA%\com.stackspace\stack_space` on Windows) and to
+/// support folder (`%APPDATA%\com.stackspace\StackSpace` on Windows) and to
 /// the debug console; the file keeps the last few hundred lines.
 class StartupLog {
   StartupLog._();

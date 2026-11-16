@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// The Stills & Reels palette, copied value for value from its `src/Theme.cs`
+/// The app's palettes. The classic dark and light ones are the Stills & Reels palette, copied value for value from its `src/Theme.cs`
 /// (github.com/BigDaddy284/Stills-and-Reels). Field names match that file so
 /// the two apps can be kept in step.
 ///
@@ -31,6 +31,7 @@ class StackPalette {
     required this.glow,
     required this.error,
     required this.success,
+    this.tableTintAlpha,
   });
 
   final bool dark;
@@ -80,9 +81,22 @@ class StackPalette {
   final Color error;
   final Color success;
 
+  /// How strongly a table cell colour is mixed into the canvas; null for the
+  /// default (64 dark, 56 light). Graphite's lighter canvas needs less so
+  /// subText keeps 4.5:1 on yellow.
+  final int? tableTintAlpha;
+
   Brightness get brightness => dark ? Brightness.dark : Brightness.light;
 
   LinearGradient get accentGradient => LinearGradient(colors: [accentA, accentB]);
+
+  /// The fill of primary buttons, which carry a white label. Palettes whose
+  /// [accentB] is too light for white text (Graphite's sky end) use the
+  /// solid blue [selectedGradient] instead of the full accent gradient.
+  LinearGradient get primaryGradient {
+    final l = accentB.computeLuminance();
+    return (1.05 / (l + 0.05)) >= 4.0 ? accentGradient : selectedGradient;
+  }
 
   /// The selected cell in the mode toolbar: a vertical blue gradient.
   LinearGradient get selectedGradient => LinearGradient(
@@ -118,7 +132,7 @@ class StackPalette {
   Color? tableTint(String? name) {
     final hue = tableHues[name];
     if (hue == null) return null;
-    return Color.alphaBlend(hue.withAlpha(dark ? 64 : 56), canvas);
+    return Color.alphaBlend(hue.withAlpha(tableTintAlpha ?? (dark ? 64 : 56)), canvas);
   }
 
   /// Surfaces text sits on, for the contrast test.
@@ -155,6 +169,38 @@ class StackPalette {
     glow: Color.fromARGB(255, 40, 70, 150),
     error: Color.fromARGB(255, 255, 120, 140),
     success: Color.fromARGB(255, 80, 200, 140),
+  );
+
+  /// Graphite: soft charcoal greys with a sky-blue accent, from the Myiles
+  /// Graphite theme (`graphite-theme.json`). Bar, panel, canvas (Graphite's
+  /// "window", the main content), control, pressed, borders, text, disabled
+  /// and the sky end are its values. Hover sits between control and pressed
+  /// so buttons filled with [control] still show a hover; the blue and the
+  /// subtext are nudged slightly so `test/theme_contrast_test.dart` passes.
+  static const graphitePalette = StackPalette(
+    dark: true,
+    window: Color(0xFF1D1E21), // Graphite canvas
+    bar: Color(0xFF1B1C1F),
+    barBorder: Color(0xFF383A40),
+    canvas: Color(0xFF2A2B2F), // Graphite window: the main content
+    panel: Color(0xFF222327),
+    text: Color(0xFFECECEE),
+    subText: Color(0xFFADB0B7), // Graphite #a9acb3, a touch lighter for 4.5:1 on tinted table cells
+    muted: Color(0xFF75787F),
+    hover: Color(0xFF3A3C41),
+    pressed: Color(0xFF3D4046),
+    pill: Color(0xFF1D1E22),
+    pillSep: Color(0xFF52555C),
+    accentA: Color(0xFF1E75DE), // Graphite #2580ee, a touch deeper so white labels reach 4.5:1
+    accentB: Color(0xFF8CC4FF),
+    selectedText: Color(0xFFFFFFFF),
+    control: Color(0xFF35373C),
+    controlBorder: Color(0xFF4A4D54),
+    warning: Color.fromARGB(255, 255, 190, 110),
+    glow: Color(0xFF356089),
+    error: Color.fromARGB(255, 255, 120, 140),
+    success: Color.fromARGB(255, 80, 200, 140),
+    tableTintAlpha: 40,
   );
 
   static const lightPalette = StackPalette(

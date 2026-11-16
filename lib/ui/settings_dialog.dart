@@ -25,6 +25,7 @@ class _SettingsDialogState extends State<_SettingsDialog> {
   late bool _confirmDeletes = widget.settings.confirmDeletes;
   late bool _checkSpelling = widget.settings.checkSpelling;
   late ThemeMode _themeMode = widget.settings.themeMode;
+  late DarkStyle _darkStyle = widget.settings.darkStyle;
 
   @override
   void dispose() {
@@ -43,6 +44,7 @@ class _SettingsDialogState extends State<_SettingsDialog> {
     s.checkSpelling = _checkSpelling;
     SpellChecker.instance.enabled = _checkSpelling;
     s.themeMode = _themeMode;
+    s.darkStyle = _darkStyle;
     Navigator.pop(context, true);
   }
 
@@ -92,6 +94,24 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                   ),
                 ],
               ]),
+              const SizedBox(height: 14),
+              const SectionLabel('Dark theme style'),
+              const SizedBox(height: 6),
+              Row(children: [
+                for (final style in DarkStyle.values) ...[
+                  if (style != DarkStyle.values.first) const SizedBox(width: 8),
+                  Expanded(
+                    child: SsButton(
+                      icon: style == DarkStyle.graphite ? Icons.contrast : Icons.nights_stay_outlined,
+                      label: style.label,
+                      checked: _darkStyle == style,
+                      onPressed: () => setState(() => _darkStyle = style),
+                    ),
+                  ),
+                ],
+              ]),
+              const SizedBox(height: 4),
+              const HintText('Graphite: charcoal greys with a sky-blue accent. Classic: navy with blue and purple.'),
               const SizedBox(height: 14),
               _field('Workspace folder', _workspace, 'Every text file in this folder is a page.'),
               _field('Ollama address', _url, 'Default ${AppSettings.defaultOllamaUrl}'),

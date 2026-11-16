@@ -26,7 +26,7 @@ std::wstring LogPath() {
   std::wstring folder = std::wstring(roaming) + L"\\com.stackspace";
   CoTaskMemFree(roaming);
   CreateDirectory(folder.c_str(), nullptr);
-  folder += L"\\stack_space";
+  folder += L"\\StackSpace";
   CreateDirectory(folder.c_str(), nullptr);
   return folder + L"\\native.log";
 }

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
@@ -18,6 +19,41 @@ enum ThinkLevel {
   final String label;
 }
 
+/// Which palette the dark theme uses. Graphite is the default; Classic is the
+/// original navy and purple.
+enum DarkStyle {
+  graphite('Graphite'),
+  classic('Classic');
+
+  const DarkStyle(this.label);
+  final String label;
+}
+
+/// Copies the settings folder an older build used into the current one, once.
+///
+/// Builds before the StackSpace rename were named `stack_space` in the
+/// executable's version info, and Windows keeps app data under that name
+/// (`%APPDATA%\com.stackspace\stack_space`). The renamed build looks in
+/// `...\StackSpace`, so without this the first launch after the update would
+/// lose the saved workspace and settings. Files already in [current] are kept.
+/// Returns true when settings were copied.
+bool migrateOldSupportFolder(Directory old, Directory current) {
+  try {
+    final oldPrefs = File(p.join(old.path, 'shared_preferences.json'));
+    final newPrefs = File(p.join(current.path, 'shared_preferences.json'));
+    if (!oldPrefs.existsSync() || newPrefs.existsSync()) return false;
+    current.createSync(recursive: true);
+    for (final entity in old.listSync()) {
+      if (entity is! File) continue;
+      final target = File(p.join(current.path, p.basename(entity.path)));
+      if (!target.existsSync()) entity.copySync(target.path);
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 /// User settings, saved with shared_preferences.
 class AppSettings extends ChangeNotifier {
   AppSettings._(this._prefs);
@@ -26,6 +62,15 @@ class AppSettings extends ChangeNotifier {
   /// damaged file, a locked folder), the app starts with defaults in memory
   /// instead of never starting (Bug 5); [onProblem] gets the reason.
   static Future<AppSettings> load({void Function(String problem)? onProblem}) async {
+    if (Platform.isWindows) {
+      try {
+        final current = await getApplicationSupportDirectory();
+        final old = Directory(p.join(current.parent.path, 'stack_space'));
+        if (migrateOldSupportFolder(old, current)) {
+          onProblem?.call('Settings copied from ${old.path}');
+        }
+      } catch (_) {}
+    }
     try {
       return AppSettings._(await SharedPreferences.getInstance());
     } catch (e) {
@@ -85,6 +130,16 @@ class AppSettings extends ChangeNotifier {
   /// Separate from [notifyListeners] so dragging the dock doesn't rebuild the whole app.
   late final themeModeListenable =
       ValueNotifier(ThemeMode.values.asNameMap()[_prefs.getString('themeMode')] ?? ThemeMode.system);
+
+  /// The palette for the dark theme (and for Follow Windows when Windows is dark).
+  DarkStyle get darkStyle => darkStyleListenable.value;
+  set darkStyle(DarkStyle value) {
+    darkStyleListenable.value = value;
+    _set('darkStyle', value.name);
+  }
+
+  late final darkStyleListenable =
+      ValueNotifier(DarkStyle.values.asNameMap()[_prefs.getString('darkStyle')] ?? DarkStyle.graphite);
 
   double get dockHeight => _prefs.getDouble('dockHeight') ?? 360;
   set dockHeight(double value) => _set('dockHeight', value);

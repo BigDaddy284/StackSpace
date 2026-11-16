@@ -289,7 +289,7 @@ Win32Window::MessageHandler(HWND hwnd,
       // the system setting) so any part of the client area that Flutter has
       // not drawn yet is never white or black (Bug 5).
       RECT rect = GetClientArea();
-      HBRUSH brush = CreateSolidBrush(dark_mode_ ? RGB(10, 13, 26) : RGB(244, 246, 251));
+      HBRUSH brush = CreateSolidBrush(dark_mode_ ? RGB(29, 30, 33) : RGB(244, 246, 251));
       FillRect(reinterpret_cast<HDC>(wparam), &rect, brush);
       DeleteObject(brush);
       return 1;
