@@ -17,7 +17,8 @@ class TitleBar {
       'dark': p.dark ? 1 : 0,
       'caption': p.bar.toARGB32(),
       'text': p.text.toARGB32(),
-      'border': (p.dark ? const Color.fromARGB(255, 40, 48, 84) : p.barBorder).toARGB32(),
+      'border':
+          (identical(p, StackPalette.darkPalette) ? const Color.fromARGB(255, 40, 48, 84) : p.barBorder).toARGB32(),
     }).catchError((Object _) {});
   }
 }

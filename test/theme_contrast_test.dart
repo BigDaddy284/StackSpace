@@ -18,8 +18,22 @@ void main() {
     expect(StackPalette.lightPalette.accentB, const Color.fromARGB(255, 150, 62, 240));
   });
 
-  for (final p in [StackPalette.darkPalette, StackPalette.lightPalette]) {
-    group('${p.brightness.name} palette', () {
+  test('Graphite uses the Graphite theme values', () {
+    const g = StackPalette.graphitePalette;
+    expect(g.bar, const Color(0xFF1B1C1F));
+    expect(g.panel, const Color(0xFF222327));
+    expect(g.canvas, const Color(0xFF2A2B2F));
+    expect(g.control, const Color(0xFF35373C));
+    expect(g.text, const Color(0xFFECECEE));
+    expect(g.accentB, const Color(0xFF8CC4FF));
+  });
+
+  for (final (name, p) in [
+    ('dark', StackPalette.darkPalette),
+    ('light', StackPalette.lightPalette),
+    ('graphite', StackPalette.graphitePalette),
+  ]) {
+    group('$name palette', () {
       test('Text and SubText reach 4.5:1 on every surface', () {
         for (final entry in p.surfaces.entries) {
           for (final (name, color) in [('text', p.text), ('subText', p.subText)]) {
@@ -35,10 +49,12 @@ void main() {
         }
       });
 
-      test('white text on the primary gradient reaches 4:1 across it', () {
+      test('white text on the primary button fill reaches 4:1 across it', () {
         // AA large-text / UI level at the purple end in dark mode (4.03), 4.5 at the blue end.
         expect(contrast(Colors.white, p.accentA), greaterThanOrEqualTo(4.5));
-        expect(contrast(Colors.white, p.accentB), greaterThanOrEqualTo(4.0));
+        for (final color in p.primaryGradient.colors) {
+          expect(contrast(Colors.white, color), greaterThanOrEqualTo(4.0));
+        }
       });
 
       test('accents, status colours and the pill outline reach 3:1', () {

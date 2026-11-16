@@ -9,6 +9,7 @@ import 'package:stack_space/ai/ollama_client.dart';
 import 'package:stack_space/app/app.dart';
 import 'package:stack_space/app/settings.dart';
 import 'package:stack_space/app/startup_log.dart';
+import 'package:stack_space/app/theme.dart';
 import 'package:stack_space/ui/home_page.dart';
 import 'support/fake_ollama.dart';
 import 'support/temp.dart';
@@ -53,7 +54,7 @@ void main() {
     await tester.pumpWidget(const StartupScreen(message: 'Loading settings…'));
     expect(find.text('Loading settings…'), findsOneWidget);
     final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
-    expect(scaffold.backgroundColor, const Color.fromARGB(255, 10, 13, 26));
+    expect(scaffold.backgroundColor, StackPalette.graphitePalette.window);
   });
 
   testWidgets('a workspace that cannot be opened shows a message with Try again instead of a spinner', (tester) async {

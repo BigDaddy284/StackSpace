@@ -164,7 +164,7 @@ class SsButton extends StatelessWidget {
         Gradient? fillGradient;
         Gradient? stroke;
         if (primary && enabled) {
-          fillGradient = p.accentGradient;
+          fillGradient = p.primaryGradient;
         } else if (checked && enabled) {
           fillGradient = p.checkedGradient;
           stroke = p.accentGradient;

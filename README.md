@@ -94,7 +94,7 @@ flutter test                                   # all tests
 flutter test test/workspace_tools_test.dart    # one file
 flutter test --plain-name "replace_text"       # one test
 flutter run -d windows
-flutter build windows --release                # build\windows\x64\runner\Release\stack_space.exe
+flutter build windows --release                # build\windows\x64\runner\Release\StackSpace.exe
 ```
 
 Building the Windows .exe needs a Windows machine with Visual Studio's
@@ -107,7 +107,7 @@ Building the Windows .exe needs a Windows machine with Visual Studio's
 - No databases, board or calendar views, and no sync or sharing: pages are plain files in
   your folder.
 - The app keeps two log files, `startup.log` and `native.log`, in
-  `%APPDATA%\com.stackspace\stack_space\`. They record each launch step by step, which can help
+  `%APPDATA%\com.stackspace\StackSpace\`. They record each launch step by step, which can help
   if you're looking into a problem yourself, such as a launch that opens as an empty window.
 
 ## Licence and AppFlowy
